@@ -1,48 +1,51 @@
-# 💻 Laptop Shop Website (Node.js + Express + TypeScript)
+# Laptop Shop API (Node.js + Express + TypeScript)
+
+REST API JSON (`/api/v1`) cho Laptop Shop. Giao diện storefront và admin nằm ở repo riêng [laptopshop-web](https://github.com/QuocDuy21-10/laptopshop-web).
 
 ## Chạy development
 
 ```bash
-cp .env.example .env          # điền DATABASE_URL, JWT_SECRET, SESSION_SECRET
+cp .env.example .env          # điền DATABASE_URL, JWT_SECRET
 npm install
 npx prisma generate
+docker compose up -d mysql redis
 npx prisma migrate dev
-docker compose up -d mysql redis   # hoặc dùng MySQL/Redis có sẵn
+npm run seed
 npm run dev
 ```
 
-Scripts: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm start` (chạy `dist/`).
+Scripts: `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:int` (cần `docker compose --profile test up -d mysql-test`), `npm run build`, `npm start`.
 Mở Swagger tại `/api-docs` khi đặt `ENABLE_DOCS=true`.
 
 ## Production
 
 ```bash
-cp .env.example .env   # đặt NODE_ENV, secrets, ADMIN_PASSWORD (>= 12 ký tự), MYSQL_*
+cp .env.example .env   # NODE_ENV, secrets, ADMIN_PASSWORD (>= 12 ký tự), CORS_ORIGINS, COOKIE_DOMAIN, MYSQL_*
 docker compose up -d --build
 ```
 
-- Bắt buộc: `DATABASE_URL`, `JWT_SECRET`, `SESSION_SECRET` (>= 16 ký tự), `ADMIN_PASSWORD` (>= 12 ký tự khi `NODE_ENV=production`). Thiếu hoặc sai thì app không khởi động.
-- Cookie session là `secure` ở production và app đặt `trust proxy = 1`: reverse proxy phải chạy HTTPS và gửi header `X-Forwarded-Proto`.
+- Bắt buộc: `DATABASE_URL`, `JWT_SECRET` (>= 16 ký tự), `ADMIN_PASSWORD` (>= 12 ký tự khi `NODE_ENV=production`). Thiếu hoặc sai thì app không khởi động.
+- Cookie đăng nhập là `Secure` ở production và app đặt `trust proxy = 1`: reverse proxy phải chạy HTTPS và gửi header `X-Forwarded-Proto`.
+- Frontend và API phải cùng site (ví dụ `shop.com` + `api.shop.com`); đặt origin của frontend vào `CORS_ORIGINS`.
 - `GET /healthz` (liveness) và `GET /readyz` (kiểm tra MySQL + Redis).
+- Container tự chạy `prisma migrate deploy` và seed (chỉ chèn vào bảng đang trống) khi khởi động. Nên backup database trước khi deploy migration `cleanup_legacy` (xoá bảng `Session`, cột `cart.sum` và `cart_detail.price`).
 - `SENTRY_DSN` tùy chọn; không đặt thì Sentry tắt. `ENABLE_DOCS` mặc định tắt.
-- Migration chạy tự động khi container khởi động (`prisma migrate deploy`).
 
 ## 🧩 Tính năng chính
 
-- ✅ Trang chủ hiển thị danh sách sản phẩm
+- ✅ API danh sách và chi tiết sản phẩm
 - 🔍 Tìm kiếm sản phẩm theo:
   - Giá cả
   - Số lượng
   - Nhà sản xuất
-- 📄 Trang chi tiết sản phẩm
 - 🛒 Giỏ hàng và đặt hàng
-- ✅ Xác thực người dùng với Passport.js
+- ✅ Xác thực JWT trong cookie HttpOnly, refresh token xoay vòng
 - 📦 CRUD:
   - Người dùng (User)
   - Sản phẩm (Product)
   - Đơn hàng (Order)
 - 🔐 Phân quyền truy cập (Admin / User)
-- ✅ Thông báo khi mua hàng thành công
+- ✅ Đặt hàng idempotent, huỷ đơn và hoàn kho
 
 ---
 
@@ -53,8 +56,7 @@ docker compose up -d --build
 | **Node.js**          | Backend server                                                         |
 | **Express.js**       | Web framework xử lý routing, middleware                                |
 | **TypeScript**       | Hỗ trợ viết code an toàn, dễ bảo trì                                   |
-| **EJS**              | Template engine hiển thị giao diện                                     |
-| **Passport.js**      | Xác thực người dùng (authentication & authorization)                   |
+| **JWT**              | Access token ngắn hạn + refresh token xoay vòng (lưu hash trong MySQL)  |
 | **Nodemon**          | Tự động reload server khi thay đổi code                                |
 | **Prisma ORM**       | Giao tiếp với database thông qua schema rõ ràng và migrations          |
 | **MySQL**            | Cơ sở dữ liệu chính để lưu thông tin người dùng, đơn hàng, sản phẩm    |
