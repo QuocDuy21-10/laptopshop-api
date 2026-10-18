@@ -1,0 +1,17 @@
+import { Prisma, PrismaClient } from "@prisma/client";
+import { mockDeep, mockReset } from "jest-mock-extended";
+
+// typed as any: property access on the typed deep mock makes TypeScript recurse (TS2615) for every model
+export const prismaMock: any = mockDeep<PrismaClient>();
+
+export const resetPrisma = () => {
+  mockReset(prismaMock);
+  // interactive transactions run their callback against the same mock
+  prismaMock.$transaction.mockImplementation(((arg: unknown) =>
+    typeof arg === "function" ? arg(prismaMock) : Promise.all(arg as Promise<unknown>[])) as any);
+};
+
+export const prismaError = (code: string) =>
+  new Prisma.PrismaClientKnownRequestError(code, { code, clientVersion: "6.3.0" });
+
+export const refreshTokenMock = prismaMock.refreshToken;

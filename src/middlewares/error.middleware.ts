@@ -1,17 +1,36 @@
 import type {} from "pino-http"; // adds req.log to the Request type
-import { ErrorRequestHandler, RequestHandler } from "express";
+import { ErrorRequestHandler, RequestHandler, Response } from "express";
+import { ZodError } from "zod";
 import { env } from "config/env";
 import { AppError } from "lib/errors";
 import { logger } from "lib/logger";
 
-const isApi = (url: string) => url === "/api" || url.startsWith("/api/");
+const sendError = (
+  res: Response,
+  status: number,
+  code: string,
+  message: string,
+  extra: Record<string, unknown> = {},
+) => {
+  res.status(status).json({ error: { code, message, ...extra } });
+};
 
-export const notFoundHandler: RequestHandler = (req, res) => {
-  if (isApi(req.originalUrl)) {
-    res.status(404).json({ data: null, message: "Not found" });
-    return;
+const toAppError = (err: any): AppError | undefined => {
+  if (err instanceof AppError) return err;
+  if (err instanceof ZodError) {
+    const details = err.issues.map((i) => ({ path: i.path.join("."), message: i.message }));
+    return new AppError("Validation failed", 400, "VALIDATION_ERROR", details);
   }
-  res.status(404).render("status/404.ejs");
+  if (err?.name === "MulterError") return new AppError(err.message, 400, "UPLOAD_ERROR");
+  // body-parser errors (malformed JSON, payload too large) carry a safe 4xx status
+  if (err?.expose && typeof err.status === "number" && err.status < 500) {
+    return new AppError(err.message, err.status);
+  }
+  return undefined;
+};
+
+export const notFoundHandler: RequestHandler = (_req, res) => {
+  sendError(res, 404, "NOT_FOUND", "Not found");
 };
 
 export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
@@ -19,20 +38,17 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     next(err);
     return;
   }
-  const status = err instanceof AppError ? err.status : err?.name === "MulterError" ? 400 : 500;
+  const known = toAppError(err);
+  const status = known?.status ?? 500;
   if (status >= 500) {
     (req.log ?? logger).error({ err }, "unhandled error");
   }
-  const message =
-    status >= 500 && env.NODE_ENV === "production" ? "Internal Server Error" : err.message;
 
-  if (isApi(req.originalUrl)) {
-    res.status(status).json({ data: null, message });
-    return;
-  }
-  res
-    .status(status)
-    .render(
-      status === 403 ? "status/403.ejs" : status === 404 ? "status/404.ejs" : "status/500.ejs",
-    );
+  const isProd = env.NODE_ENV === "production";
+  const message =
+    status >= 500 && isProd ? "Internal Server Error" : (known?.message ?? err.message);
+  const extra: Record<string, unknown> = {};
+  if (known?.details !== undefined) extra.details = known.details;
+  if (status >= 500 && !isProd) extra.stack = err.stack;
+  sendError(res, status, known?.code ?? "INTERNAL_ERROR", message, extra);
 };

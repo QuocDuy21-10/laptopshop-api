@@ -1,7 +1,7 @@
 import { prisma } from "config/client";
 import { env } from "config/env";
 import { logger } from "lib/logger";
-import { hashPassword } from "services/user.service";
+import { hashPassword } from "lib/password";
 import { ACCOUNT_TYPE } from "config/constant";
 
 const initDatabase = async () => {
