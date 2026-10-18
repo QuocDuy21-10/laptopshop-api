@@ -43,6 +43,7 @@
   "homepage": "https://github.com/QuocDuy21-10/nodejs-pro#readme",
   "dependencies": {
     "@prisma/client": "6.3.0",
+    "@sentry/node": "11.8.0",
     "bcrypt": "5.1.1",
     "compression": "1.8.2",
     "connect-redis": "10.0.0",

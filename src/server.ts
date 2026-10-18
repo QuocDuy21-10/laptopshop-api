@@ -1,3 +1,4 @@
+import "./instrument"; // must stay first: Sentry initialises on import
 import { RedisStore } from "connect-redis";
 import { env } from "config/env";
 import { prisma } from "config/client";
