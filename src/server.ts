@@ -21,7 +21,10 @@ const main = async () => {
   });
 
   const server = app.listen(env.PORT, () => {
+    const base = `http://localhost:${env.PORT}`;
     logger.info(`Server is running on port ${env.PORT}`);
+    logger.info(`API:     ${base}/api/v1`);
+    if (env.ENABLE_DOCS) logger.info(`Swagger: ${base}/api-docs`);
   });
 
   let shuttingDown = false;
