@@ -1,14 +1,31 @@
 # 💻 Laptop Shop Website (Node.js + Express + TypeScript)
 
-# 1. Cài đặt dependencies
+## Chạy development
+
+```bash
+cp .env.example .env          # điền DATABASE_URL, JWT_SECRET, SESSION_SECRET
 npm install
-
-# 2. Tạo database và generate Prisma Client
-npx prisma generate  
-npx prisma migrate dev --name init
-
-# 3. Chạy development
+npx prisma generate
+npx prisma migrate dev
+docker compose up -d mysql redis   # hoặc dùng MySQL/Redis có sẵn
 npm run dev
+```
+
+Scripts: `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, `npm start` (chạy `dist/`).
+Mở Swagger tại `/api-docs` khi đặt `ENABLE_DOCS=true`.
+
+## Production
+
+```bash
+cp .env.example .env   # đặt NODE_ENV, secrets, ADMIN_PASSWORD (>= 12 ký tự), MYSQL_*
+docker compose up -d --build
+```
+
+- Bắt buộc: `DATABASE_URL`, `JWT_SECRET`, `SESSION_SECRET` (>= 16 ký tự), `ADMIN_PASSWORD` (>= 12 ký tự khi `NODE_ENV=production`). Thiếu hoặc sai thì app không khởi động.
+- Cookie session là `secure` ở production và app đặt `trust proxy = 1`: reverse proxy phải chạy HTTPS và gửi header `X-Forwarded-Proto`.
+- `GET /healthz` (liveness) và `GET /readyz` (kiểm tra MySQL + Redis).
+- `SENTRY_DSN` tùy chọn; không đặt thì Sentry tắt. `ENABLE_DOCS` mặc định tắt.
+- Migration chạy tự động khi container khởi động (`prisma migrate deploy`).
 
 ## 🧩 Tính năng chính
 
