@@ -28,3 +28,11 @@ export const toOrderDto = (o: OrderRow) => ({
   })),
 });
 export type OrderDto = ReturnType<typeof toOrderDto>;
+
+export const adminOrderInclude = {
+  ...orderInclude,
+  user: { select: { id: true, username: true, fullName: true } },
+} satisfies Prisma.OrderInclude;
+export type AdminOrderRow = Prisma.OrderGetPayload<{ include: typeof adminOrderInclude }>;
+
+export const toAdminOrderDto = (o: AdminOrderRow) => ({ ...toOrderDto(o), user: o.user });

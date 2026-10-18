@@ -1,7 +1,20 @@
 import { RequestHandler } from "express";
 import { IdParams, PageQuery } from "lib/http";
-import { idempotencyKeyHeader, PlaceOrderBody } from "modules/orders/orders.schema";
-import { cancelMyOrder, getMyOrder, listMyOrders, placeOrder } from "modules/orders/orders.service";
+import {
+  AdminListOrdersQuery,
+  idempotencyKeyHeader,
+  PlaceOrderBody,
+  UpdateStatusBody,
+} from "modules/orders/orders.schema";
+import {
+  cancelMyOrder,
+  changeStatus,
+  getAnyOrder,
+  getMyOrder,
+  listAllOrders,
+  listMyOrders,
+  placeOrder,
+} from "modules/orders/orders.service";
 
 export const placeOrderHandler: RequestHandler = async (req, res) => {
   const key = idempotencyKeyHeader.parse(req.get("idempotency-key"));
@@ -20,4 +33,18 @@ export const getMyOrderHandler: RequestHandler = async (req, res) => {
 
 export const cancelMyOrderHandler: RequestHandler = async (req, res) => {
   res.json({ data: await cancelMyOrder(req.auth!.id, (res.locals.params as IdParams).id) });
+};
+
+export const listAllOrdersHandler: RequestHandler = async (_req, res) => {
+  const { items, meta } = await listAllOrders(res.locals.query as AdminListOrdersQuery);
+  res.json({ data: items, meta });
+};
+
+export const getAnyOrderHandler: RequestHandler = async (_req, res) => {
+  res.json({ data: await getAnyOrder((res.locals.params as IdParams).id) });
+};
+
+export const updateStatusHandler: RequestHandler = async (req, res) => {
+  const { id } = res.locals.params as IdParams;
+  res.json({ data: await changeStatus(id, (req.body as UpdateStatusBody).status) });
 };

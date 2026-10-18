@@ -2,8 +2,13 @@ import { prisma } from "config/client";
 import { AppError, notFound } from "lib/errors";
 import { pageArgs, pageMeta, PageQuery } from "lib/http";
 import { outOfStock } from "modules/cart/cart.service";
-import { orderInclude, toOrderDto } from "modules/orders/orders.mapper";
-import { PlaceOrderBody } from "modules/orders/orders.schema";
+import {
+  adminOrderInclude,
+  orderInclude,
+  toAdminOrderDto,
+  toOrderDto,
+} from "modules/orders/orders.mapper";
+import { AdminListOrdersQuery, PlaceOrderBody } from "modules/orders/orders.schema";
 import {
   canTransition,
   invalidTransition,
@@ -132,3 +137,23 @@ export const changeStatus = async (
 
 export const cancelMyOrder = (userId: number, orderId: number) =>
   changeStatus(orderId, ORDER_STATUS.CANCELLED, { userId, from: [ORDER_STATUS.PENDING] });
+
+export const listAllOrders = async (q: AdminListOrdersQuery) => {
+  const where = q.status ? { status: q.status } : {};
+  const [total, rows] = await Promise.all([
+    prisma.order.count({ where }),
+    prisma.order.findMany({
+      where,
+      include: adminOrderInclude,
+      orderBy: { id: "desc" },
+      ...pageArgs(q),
+    }),
+  ]);
+  return { items: rows.map(toAdminOrderDto), meta: pageMeta(q, total) };
+};
+
+export const getAnyOrder = async (id: number) => {
+  const order = await prisma.order.findUnique({ where: { id }, include: adminOrderInclude });
+  if (!order) throw notFound("Order");
+  return toAdminOrderDto(order);
+};
