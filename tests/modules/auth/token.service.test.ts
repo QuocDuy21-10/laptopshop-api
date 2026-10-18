@@ -1,7 +1,7 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
 
 import jwt from "jsonwebtoken";
-import { prismaMock, resetPrisma } from "../../helpers/prisma";
+import { refreshTokenMock, resetPrisma } from "../../helpers/prisma";
 import {
   hashToken,
   issueRefreshToken,
@@ -37,7 +37,7 @@ const stored = (over: Record<string, unknown> = {}) =>
     ...over,
   }) as any;
 
-const createArg = () => (prismaMock.refreshToken.create as unknown as jest.Mock).mock.calls[0][0];
+const createArg = () => refreshTokenMock.create.mock.calls[0][0];
 
 beforeEach(resetPrisma);
 
@@ -77,14 +77,14 @@ describe("refresh tokens", () => {
   });
 
   it("rotates within the same family", async () => {
-    prismaMock.refreshToken.findUnique.mockResolvedValue(stored());
-    prismaMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+    refreshTokenMock.findUnique.mockResolvedValue(stored());
+    refreshTokenMock.updateMany.mockResolvedValue({ count: 1 });
     const { user, refresh } = await rotateRefreshToken("old", {});
-    expect(prismaMock.refreshToken.findUnique.mock.calls[0][0].where).toEqual({
+    expect(refreshTokenMock.findUnique.mock.calls[0][0].where).toEqual({
       tokenHash: hashToken("old"),
     });
     expect(user.id).toBe(1);
-    expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledWith({
+    expect(refreshTokenMock.updateMany).toHaveBeenCalledWith({
       where: { id: 10, revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
@@ -93,7 +93,7 @@ describe("refresh tokens", () => {
   });
 
   it("rejects an unknown token", async () => {
-    prismaMock.refreshToken.findUnique.mockResolvedValue(null);
+    refreshTokenMock.findUnique.mockResolvedValue(null);
     await expect(rotateRefreshToken("x", {})).rejects.toMatchObject({
       status: 401,
       code: "INVALID_REFRESH_TOKEN",
@@ -101,39 +101,39 @@ describe("refresh tokens", () => {
   });
 
   it("rejects an expired token", async () => {
-    prismaMock.refreshToken.findUnique.mockResolvedValue(stored({ expiresAt: new Date(1) }));
+    refreshTokenMock.findUnique.mockResolvedValue(stored({ expiresAt: new Date(1) }));
     await expect(rotateRefreshToken("x", {})).rejects.toMatchObject({ status: 401 });
-    expect(prismaMock.refreshToken.create).not.toHaveBeenCalled();
+    expect(refreshTokenMock.create).not.toHaveBeenCalled();
   });
 
   it("revokes the whole family when a revoked token is reused", async () => {
-    prismaMock.refreshToken.findUnique.mockResolvedValue(stored({ revokedAt: new Date() }));
-    prismaMock.refreshToken.updateMany.mockResolvedValue({ count: 3 });
+    refreshTokenMock.findUnique.mockResolvedValue(stored({ revokedAt: new Date() }));
+    refreshTokenMock.updateMany.mockResolvedValue({ count: 3 });
     await expect(rotateRefreshToken("x", {})).rejects.toMatchObject({ status: 401 });
-    expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledWith({
+    expect(refreshTokenMock.updateMany).toHaveBeenCalledWith({
       where: { familyId: "fam-1", revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
-    expect(prismaMock.refreshToken.create).not.toHaveBeenCalled();
+    expect(refreshTokenMock.create).not.toHaveBeenCalled();
   });
 
   it("treats a lost rotation race as reuse", async () => {
-    prismaMock.refreshToken.findUnique.mockResolvedValue(stored());
-    prismaMock.refreshToken.updateMany
+    refreshTokenMock.findUnique.mockResolvedValue(stored());
+    refreshTokenMock.updateMany
       .mockResolvedValueOnce({ count: 0 })
       .mockResolvedValueOnce({ count: 2 });
     await expect(rotateRefreshToken("x", {})).rejects.toMatchObject({ status: 401 });
-    expect(prismaMock.refreshToken.updateMany).toHaveBeenLastCalledWith({
+    expect(refreshTokenMock.updateMany).toHaveBeenLastCalledWith({
       where: { familyId: "fam-1", revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
   });
 
   it("revokeByToken revokes the token's family", async () => {
-    prismaMock.refreshToken.findUnique.mockResolvedValue(stored());
-    prismaMock.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+    refreshTokenMock.findUnique.mockResolvedValue(stored());
+    refreshTokenMock.updateMany.mockResolvedValue({ count: 1 });
     await revokeByToken("x");
-    expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledWith({
+    expect(refreshTokenMock.updateMany).toHaveBeenCalledWith({
       where: { familyId: "fam-1", revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });

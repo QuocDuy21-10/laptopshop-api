@@ -12,3 +12,6 @@ export const resetPrisma = () => {
 
 export const prismaError = (code: string) =>
   new Prisma.PrismaClientKnownRequestError(code, { code, clientVersion: "6.3.0" });
+
+// typing the RefreshToken delegate of the deep mock makes TypeScript recurse (TS2615); use it untyped
+export const refreshTokenMock = prismaMock.refreshToken as any;
