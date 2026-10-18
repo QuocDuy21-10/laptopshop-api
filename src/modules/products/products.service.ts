@@ -13,6 +13,8 @@ import {
 
 export const listProducts = async (q: ListProductsQuery) => {
   const where: Prisma.ProductWhereInput = {
+    // MySQL utf8mb4_unicode_ci makes contains case-insensitive
+    ...(q.q ? { name: { contains: q.q } } : {}),
     ...(q.factory.length ? { factory: { in: q.factory } } : {}),
     ...(q.target.length ? { target: { in: q.target } } : {}),
     ...(q.price.length

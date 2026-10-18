@@ -34,6 +34,7 @@ export const listProductsQuery = pageQuery.extend({
   target: csvOf(TARGETS),
   price: csvOf(Object.keys(PRICE_RANGES)),
   sort: z.enum(["price_asc", "price_desc"]).optional(),
+  q: z.string().trim().min(1).max(100).optional(),
 });
 export type ListProductsQuery = z.infer<typeof listProductsQuery>;
 
