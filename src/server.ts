@@ -6,6 +6,7 @@ import initDatabase from "config/seed";
 import { createRedisClient } from "config/redis";
 import { createRedisLimitStore } from "middlewares/rate-limit";
 import { logger } from "lib/logger";
+import { registerDocs } from "docs/openapi";
 import { createApp } from "./app";
 
 const main = async () => {
@@ -18,6 +19,7 @@ const main = async () => {
       global: createRedisLimitStore(redis, "rl:global:"),
       auth: createRedisLimitStore(redis, "rl:auth:"),
     },
+    registerExtras: registerDocs,
     readyChecks: [() => prisma.$queryRaw`SELECT 1`, () => redis.ping()],
   });
 
