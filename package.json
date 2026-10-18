@@ -1,7 +1,7 @@
 {
-  "name": "nodejs-pro",
+  "name": "laptopshop-api",
   "version": "1.0.0",
-  "description": "nodejs-pro",
+  "description": "laptopshop-api",
   "main": "dist/server.js",
   "scripts": {
     "dev": "nodemon",
@@ -28,7 +28,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/QuocDuy21-10/nodejs-pro.git"
+    "url": "git+https://github.com/QuocDuy21-10/laptopshop-api.git"
   },
   "keywords": [
     "nodejs",
@@ -38,9 +38,9 @@
   "author": "duy",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/QuocDuy21-10/nodejs-pro/issues"
+    "url": "https://github.com/QuocDuy21-10/laptopshop-api/issues"
   },
-  "homepage": "https://github.com/QuocDuy21-10/nodejs-pro#readme",
+  "homepage": "https://github.com/QuocDuy21-10/laptopshop-api#readme",
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "7.3.4",
     "@prisma/client": "6.3.0",

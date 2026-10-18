@@ -35,6 +35,6 @@ jobs:
         with:
           context: .
           push: false
-          tags: nodejs-pro:ci
+          tags: laptopshop-api:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
