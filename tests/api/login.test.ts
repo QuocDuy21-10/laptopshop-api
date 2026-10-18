@@ -1,20 +1,18 @@
 import bcrypt from "bcrypt";
 import session from "express-session";
 import request from "supertest";
-import { mockDeep, DeepMockProxy } from "jest-mock-extended";
-import { PrismaClient } from "@prisma/client";
 
-jest.mock("config/client", () => ({ prisma: mockDeep<PrismaClient>() }));
+jest.mock("config/client", () => ({ prisma: { user: { findUnique: jest.fn() } } }));
 
 import { prisma } from "config/client";
 import { createApp } from "../../src/app";
 
-const prismaMock = prisma as unknown as DeepMockProxy<PrismaClient>;
+const findUnique = prisma.user.findUnique as unknown as jest.Mock;
 const app = createApp({ sessionStore: new session.MemoryStore() });
 
 describe("POST /api/login", () => {
   beforeEach(() => {
-    prismaMock.user.findUnique.mockResolvedValue({
+    findUnique.mockResolvedValue({
       id: 1,
       username: "admin@gmail.com",
       password: bcrypt.hashSync("secret-pass", 4),
@@ -39,7 +37,7 @@ describe("POST /api/login", () => {
   });
 
   it("returns 401 for an unknown user", async () => {
-    prismaMock.user.findUnique.mockResolvedValue(null);
+    findUnique.mockResolvedValue(null);
     const res = await request(app)
       .post("/api/login")
       .send({ username: "ghost@gmail.com", password: "x" });
