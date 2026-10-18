@@ -9,16 +9,13 @@
     "baseUrl": ".",
     "paths": {
       "config/*": ["./src/config/*"],
-      "controllers/*": ["./src/controllers/*"],
       "middlewares/*": ["./src/middlewares/*"],
       "models/*": ["./src/models/*"],
       "routes/*": ["./src/routes/*"],
-      "services/*": ["./src/services/*"],
-      "views/*": ["./src/views/*"],
-      "validation/*": ["./src/validation/*"],
       "lib/*": ["./src/lib/*"],
       "docs/*": ["./src/docs/*"],
+      "modules/*": ["./src/modules/*"],
     }
   },
-  "include": ["src", "tests", "jest.config.ts"]
+  "include": ["src", "tests", "jest.config.ts", "jest.int.config.ts"]
 }

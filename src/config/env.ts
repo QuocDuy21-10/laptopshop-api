@@ -9,12 +9,13 @@ const schema = z
     PORT: z.coerce.number().int().positive().default(8080),
     DATABASE_URL: z.string().min(1),
     JWT_SECRET: z.string().min(16),
-    JWT_EXPIRES_IN: z.string().default("1d"),
-    SESSION_SECRET: z.string().min(16),
+    JWT_ACCESS_TTL: z.string().default("15m"),
+    REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(7),
+    COOKIE_DOMAIN: z.preprocess(emptyToUndefined, z.string().optional()),
     REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
     CORS_ORIGINS: z
       .string()
-      .default("http://localhost:5173")
+      .default("http://localhost:3000")
       .transform((s) =>
         s
           .split(",")

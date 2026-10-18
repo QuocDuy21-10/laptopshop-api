@@ -1,8 +1,6 @@
 import "./instrument"; // must stay first: Sentry initialises on import
-import { RedisStore } from "connect-redis";
 import { env } from "config/env";
 import { prisma } from "config/client";
-import initDatabase from "config/seed";
 import { createRedisClient } from "config/redis";
 import { createRedisLimitStore } from "middlewares/rate-limit";
 import { logger } from "lib/logger";
@@ -14,7 +12,6 @@ const main = async () => {
   await redis.connect();
 
   const app = createApp({
-    sessionStore: new RedisStore({ client: redis, prefix: "sess:" }),
     limitStores: {
       global: createRedisLimitStore(redis, "rl:global:"),
       auth: createRedisLimitStore(redis, "rl:auth:"),
@@ -22,8 +19,6 @@ const main = async () => {
     registerExtras: registerDocs,
     readyChecks: [() => prisma.$queryRaw`SELECT 1`, () => redis.ping()],
   });
-
-  await initDatabase();
 
   const server = app.listen(env.PORT, () => {
     logger.info(`Server is running on port ${env.PORT}`);
