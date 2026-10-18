@@ -5,8 +5,6 @@ import { env } from "config/env";
 import { AppError } from "lib/errors";
 import { logger } from "lib/logger";
 
-const isApi = (url: string) => url === "/api" || url.startsWith("/api/");
-
 const sendError = (
   res: Response,
   status: number,
@@ -31,12 +29,8 @@ const toAppError = (err: any): AppError | undefined => {
   return undefined;
 };
 
-export const notFoundHandler: RequestHandler = (req, res) => {
-  if (isApi(req.originalUrl)) {
-    sendError(res, 404, "NOT_FOUND", "Not found");
-    return;
-  }
-  res.status(404).render("status/404.ejs");
+export const notFoundHandler: RequestHandler = (_req, res) => {
+  sendError(res, 404, "NOT_FOUND", "Not found");
 };
 
 export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
@@ -50,19 +44,11 @@ export const errorHandler: ErrorRequestHandler = (err, req, res, next) => {
     (req.log ?? logger).error({ err }, "unhandled error");
   }
 
-  if (isApi(req.originalUrl)) {
-    const isProd = env.NODE_ENV === "production";
-    const message =
-      status >= 500 && isProd ? "Internal Server Error" : (known?.message ?? err.message);
-    const extra: Record<string, unknown> = {};
-    if (known?.details !== undefined) extra.details = known.details;
-    if (status >= 500 && !isProd) extra.stack = err.stack;
-    sendError(res, status, known?.code ?? "INTERNAL_ERROR", message, extra);
-    return;
-  }
-  res
-    .status(status)
-    .render(
-      status === 403 ? "status/403.ejs" : status === 404 ? "status/404.ejs" : "status/500.ejs",
-    );
+  const isProd = env.NODE_ENV === "production";
+  const message =
+    status >= 500 && isProd ? "Internal Server Error" : (known?.message ?? err.message);
+  const extra: Record<string, unknown> = {};
+  if (known?.details !== undefined) extra.details = known.details;
+  if (status >= 500 && !isProd) extra.stack = err.stack;
+  sendError(res, status, known?.code ?? "INTERNAL_ERROR", message, extra);
 };

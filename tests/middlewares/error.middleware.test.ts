@@ -6,8 +6,6 @@ import { errorHandler, notFoundHandler } from "middlewares/error.middleware";
 
 const build = () => {
   const app = express();
-  app.set("view engine", "ejs");
-  app.set("views", __dirname + "/../../src/views");
   app.use(express.json());
   app.get("/api/boom", () => {
     throw new Error("secret detail");
@@ -77,15 +75,15 @@ describe("error handling", () => {
     expect(res.body.error.code).toBe("INTERNAL_ERROR");
   });
 
-  it("renders the 500 view for web routes", async () => {
+  it("returns JSON for non-/api routes too", async () => {
     const res = await request(build()).get("/web/boom");
     expect(res.status).toBe(500);
-    expect(res.text).toContain("500 Error");
+    expect(res.body.error.code).toBe("INTERNAL_ERROR");
   });
 
-  it("renders the 404 view for unknown web routes", async () => {
+  it("returns a JSON 404 for unknown non-/api routes", async () => {
     const res = await request(build()).get("/nope");
     expect(res.status).toBe(404);
-    expect(res.text).toContain("<html");
+    expect(res.body.error.code).toBe("NOT_FOUND");
   });
 });

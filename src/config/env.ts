@@ -12,7 +12,6 @@ const schema = z
     JWT_ACCESS_TTL: z.string().default("15m"),
     REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(7),
     COOKIE_DOMAIN: z.preprocess(emptyToUndefined, z.string().optional()),
-    SESSION_SECRET: z.string().min(16),
     REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
     CORS_ORIGINS: z
       .string()

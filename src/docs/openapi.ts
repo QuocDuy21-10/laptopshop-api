@@ -1,4 +1,5 @@
 import { Express } from "express";
+import helmet from "helmet";
 import swaggerUi from "swagger-ui-express";
 import { z } from "zod";
 import {
@@ -505,5 +506,18 @@ export const registerDocs = (app: Express) => {
   app.get("/api-docs.json", (_req, res) => {
     res.json(doc);
   });
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(doc));
+  app.use(
+    "/api-docs",
+    helmet.contentSecurityPolicy({
+      useDefaults: false,
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:"],
+      },
+    }),
+    swaggerUi.serve,
+    swaggerUi.setup(doc),
+  );
 };

@@ -4,7 +4,6 @@ const base = {
   NODE_ENV: "test",
   DATABASE_URL: "mysql://u:p@localhost:3306/db",
   JWT_SECRET: "x".repeat(16),
-  SESSION_SECRET: "y".repeat(16),
 };
 
 describe("parseEnv", () => {

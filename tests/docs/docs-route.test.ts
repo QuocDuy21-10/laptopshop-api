@@ -1,4 +1,3 @@
-import session from "express-session";
 import request from "supertest";
 
 jest.mock("config/client", () => ({ prisma: { user: { findUnique: jest.fn() } } }));
@@ -10,11 +9,14 @@ const buildApp = (enableDocs: "true" | "false") => {
   jest.isolateModules(() => {
     const { createApp } = require("../../src/app");
     const { registerDocs } = require("docs/openapi");
-    app = createApp({ sessionStore: new session.MemoryStore(), registerExtras: registerDocs });
+    app = createApp({ registerExtras: registerDocs });
   });
   delete process.env.ENABLE_DOCS;
   return app;
 };
+
+// each case re-requires the whole app and builds the document, which can exceed 5s on a cold cache
+jest.setTimeout(20_000);
 
 describe("docs routes", () => {
   it("serves the spec without a token when ENABLE_DOCS=true", async () => {
