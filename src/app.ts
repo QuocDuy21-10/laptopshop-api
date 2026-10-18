@@ -1,84 +1,79 @@
 // import data type
-/// <reference path="./types/index.d.ts" /> 
+/// <reference path="./types/index.d.ts" />
 
-import express from 'express';
-import 'dotenv/config'
-import passport from 'passport';
-import webRoutes from 'routes/web';   
-import initDatabase from 'config/seed';
-import configPassportLocal from 'middlewares/passport.local';
-import session from 'express-session';
-import { PrismaSessionStore } from '@quixo3/prisma-session-store';
-import  { PrismaClient } from '@prisma/client';
-import apiRoutes from 'routes/api';
-import cors from 'cors';
+import express, { Express } from "express";
+import session from "express-session";
+import passport from "passport";
+import cors from "cors";
+import hpp from "hpp";
+import pinoHttp from "pino-http";
+import { Store } from "express-rate-limit";
+import { env } from "config/env";
+import { logger } from "lib/logger";
+import webRoutes from "routes/web";
+import apiRoutes from "routes/api";
+import { registerHealthRoutes } from "routes/health";
+import configPassportLocal from "middlewares/passport.local";
+import { applySecurity } from "middlewares/security";
+import { createLimiters } from "middlewares/rate-limit";
+import { errorHandler, notFoundHandler } from "middlewares/error.middleware";
 
-const app = express();
-const PORT = process.env.PORT || 8080;
+export interface AppDeps {
+  sessionStore: session.Store;
+  limitStores?: { global?: Store; auth?: Store };
+  readyChecks?: Array<() => Promise<unknown>>;
+  // hook for optional features that must register before the final 404/error handlers
+  registerExtras?: (app: Express) => void;
+}
 
-// config cors
-app.use(cors({
-  origin: ['http://localhost:5173'],
-}));
+export const createApp = (deps: AppDeps): Express => {
+  const app = express();
+  const isProd = env.NODE_ENV === "production";
 
-//config view engine
-app.set('view engine', 'ejs');
-app.set('views',__dirname + '/views');
+  app.set("trust proxy", 1);
+  app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/healthz" } }));
+  applySecurity(app);
+  app.use(cors({ origin: env.CORS_ORIGINS }));
 
-//  config req.body
-app.use(express.json());
-app.use(express.urlencoded({extended: true}));
+  // health + static assets before session/limiter so they do not hit Redis
+  registerHealthRoutes(app, deps.readyChecks ?? []);
+  app.use(express.static("public"));
 
-// config static files: css, js, images
-app.use(express.static('public'));
+  app.set("view engine", "ejs");
+  app.set("views", __dirname + "/views");
 
-// config session
-app.use(session({
-   cookie: {
-     maxAge: 7 * 24 * 60 * 60 * 1000 // ms
-    },
-    secret: 'a santa at nasa',
-    resave: false,
-    saveUninitialized: false,
-    store: new PrismaSessionStore(
-      new PrismaClient(),
-      {
-        // clears expired sessions every 1 day
-        checkPeriod: 1 * 24 * 60 * 1000,  //ms
-        dbRecordIdIsSessionId: true,
-        dbRecordIdFunction: undefined,
-      }
-    ),
-}))
+  app.use(express.json({ limit: "100kb" }));
+  app.use(express.urlencoded({ extended: true, limit: "100kb" }));
+  app.use(hpp());
 
-// config passport
-app.use(passport.initialize());
-app.use(passport.authenticate('session'));
+  const { globalLimiter, authLimiter } = createLimiters(deps.limitStores);
+  app.use(globalLimiter);
+  app.post(["/login", "/api/login"], authLimiter);
 
-configPassportLocal();
+  app.use(
+    session({
+      cookie: { maxAge: 7 * 24 * 60 * 60 * 1000, httpOnly: true, sameSite: "lax", secure: isProd },
+      secret: env.SESSION_SECRET,
+      resave: false,
+      saveUninitialized: false,
+      store: deps.sessionStore,
+    }),
+  );
 
-// config global
-app.use((req, res, next) => {
+  app.use(passport.initialize());
+  app.use(passport.authenticate("session"));
+  configPassportLocal();
+
+  app.use((req, res, next) => {
     res.locals.user = req.user || null; // Pass user object to all views
     next();
-});
+  });
 
-// config routes
-webRoutes(app);
+  webRoutes(app);
+  apiRoutes(app);
+  deps.registerExtras?.(app);
 
-// api routes
-apiRoutes(app);
-
-// fake data
-initDatabase();
-
-// handle 404 not found
-app.use((req, res) => {
-    res.status(404).render('status/404.ejs');
-})
-
-app.listen(PORT, ()=> {
-    console.log(`Server is running on port ${PORT}`);
-    // console.log("env port", process.env.PORT);
-    // console.log(__dirname+'/views');
-})
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+  return app;
+};
