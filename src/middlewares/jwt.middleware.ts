@@ -1,24 +1,32 @@
-import jwt from 'jsonwebtoken';
-import 'dotenv/config'
+import jwt from "jsonwebtoken";
 import { Request, Response, NextFunction } from "express";
-import { any } from 'zod';
-const checkValidJWT = (req: Request, res: Response, next: NextFunction)=> {
-    const path = req.path;
-    const whiteList = ['/login', '/register', '/add-product-to-cart'];
-    if (whiteList.includes(path)) {
-        return next();
-    }
-    const token = req.headers['authorization']?.split(' ')[1]; // format: Bearer <token>
-    try {
-        const dataDecoded : any = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = dataDecoded;
-        next();
-    } catch (error) {
-        res.status(401).json({
-            data: null,
-            message: "Token không hợp lệ (không truyền lên hoặc hết hạn)"
-        });
-    }
-}
+import { env } from "config/env";
 
-export {checkValidJWT}
+const whiteList = ["/login", "/add-product-to-cart"];
+
+const unauthorized = (res: Response) =>
+  res.status(401).json({
+    data: null,
+    message: "Token không hợp lệ (không truyền lên hoặc hết hạn)",
+  });
+
+const checkValidJWT = (req: Request, res: Response, next: NextFunction) => {
+  if (whiteList.includes(req.path)) {
+    return next();
+  }
+  const header = req.headers.authorization;
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined; // format: Bearer <token>
+  if (!token) {
+    return unauthorized(res);
+  }
+  try {
+    req.user = jwt.verify(token, env.JWT_SECRET, {
+      algorithms: ["HS256"],
+    }) as unknown as Express.User;
+    next();
+  } catch {
+    unauthorized(res);
+  }
+};
+
+export { checkValidJWT };
