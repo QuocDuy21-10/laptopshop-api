@@ -32,7 +32,7 @@ Imports use bare path aliases from `tsconfig.json` (`config/*`, `middlewares/*`,
 ## Superpowers docs
 
 - Write every spec and implementation plan produced by the superpowers skills (`superpowers:brainstorming` → `docs/superpowers/specs/`, `superpowers:writing-plans` → `docs/superpowers/plans/`) in Vietnamese. Keep code, identifiers, file paths, commands, API routes and technical terms in their original form.
-- This applies to new specs and plans and to edits of existing ones; the file name keeps its date-and-topic slug as is.
+- Existing English specs and plans are not translated; only new ones follow this rule. File names keep their date-and-topic slug.
 
 ## Git workflow
 
