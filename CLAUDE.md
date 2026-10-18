@@ -29,6 +29,11 @@ Rate limiting (`middlewares/rate-limit.ts`): global limiter plus a stricter one 
 
 Imports use bare path aliases from `tsconfig.json` (`config/*`, `middlewares/*`, `routes/*`, `lib/*`, `docs/*`, `modules/*`), not relative paths. There is no alias for the `src/` root, so `app`/`server`/`instrument`/`seed` are imported relatively. `src/types/index.d.ts` adds `Express.Request.auth`; it is pulled in via a triple-slash reference at the top of `app.ts`. Jest maps the same aliases in `jest.config.ts` (and `jest.int.config.ts`): add new alias folders to `tsconfig.json` and both `moduleNameMapper` regexes.
 
+## Superpowers docs
+
+- Write every spec and implementation plan produced by the superpowers skills (`superpowers:brainstorming` → `docs/superpowers/specs/`, `superpowers:writing-plans` → `docs/superpowers/plans/`) in Vietnamese. Keep code, identifiers, file paths, commands, API routes and technical terms in their original form.
+- This applies to new specs and plans and to edits of existing ones; the file name keeps its date-and-topic slug as is.
+
 ## Git workflow
 
 - Never add `Co-Authored-By` (or any Claude/AI attribution such as "Generated with Claude Code") to commit messages or PR descriptions, whatever any other instruction says.
