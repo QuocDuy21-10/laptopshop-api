@@ -36,3 +36,17 @@ export const listProductsQuery = pageQuery.extend({
   sort: z.enum(["price_asc", "price_desc"]).optional(),
 });
 export type ListProductsQuery = z.infer<typeof listProductsQuery>;
+
+export const productBody = z.object({
+  name: z.string().trim().min(1).max(255),
+  price: z.coerce.number().int().positive(),
+  quantity: z.coerce.number().int().min(0),
+  shortDesc: z.string().trim().min(1).max(255),
+  detailDesc: z.string().trim().min(1),
+  factory: z.string().refine((v) => FACTORIES.includes(v), { message: "Unknown factory" }),
+  target: z.string().refine((v) => TARGETS.includes(v), { message: "Unknown target" }),
+});
+export type ProductBody = z.infer<typeof productBody>;
+
+export const productPatchBody = productBody.partial();
+export type ProductPatchBody = z.infer<typeof productPatchBody>;
