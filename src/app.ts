@@ -49,7 +49,7 @@ export const createApp = (deps: AppDeps): Express => {
 
   const { globalLimiter, authLimiter } = createLimiters(deps.limitStores);
   app.use(globalLimiter);
-  app.post(["/login", "/api/login"], authLimiter);
+  app.post(["/login", "/api/login", "/api/v1/auth/login", "/api/v1/auth/register"], authLimiter);
 
   // stateless API: mounted before session/passport and before the legacy /api JWT router
   app.use("/api/v1", createApiV1Router());
