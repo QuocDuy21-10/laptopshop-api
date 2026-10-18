@@ -6,7 +6,6 @@
     "sourceMap": true,
     "skipLibCheck": true,
     "outDir": "dist",
-    "rootDir": "src",
     "baseUrl": ".",
     "paths": {
       "config/*": ["./src/config/*"],
@@ -16,6 +15,10 @@
       "routes/*": ["./src/routes/*"],
       "services/*": ["./src/services/*"],
       "views/*": ["./src/views/*"],
+      "validation/*": ["./src/validation/*"],
+      "lib/*": ["./src/lib/*"],
+      "docs/*": ["./src/docs/*"],
     }
-  }
+  },
+  "include": ["src", "tests", "jest.config.ts"]
 }
