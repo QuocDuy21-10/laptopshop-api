@@ -37,6 +37,8 @@ const stored = (over: Record<string, unknown> = {}) =>
     ...over,
   }) as any;
 
+const createArg = () => (prismaMock.refreshToken.create as unknown as jest.Mock).mock.calls[0][0];
+
 beforeEach(resetPrisma);
 
 describe("access tokens", () => {
@@ -67,7 +69,7 @@ describe("access tokens", () => {
 describe("refresh tokens", () => {
   it("stores only the hash of a new token", async () => {
     const { token, expiresAt } = await issueRefreshToken(1, { userAgent: "jest", ip: "1.2.3.4" });
-    const data = (prismaMock.refreshToken.create.mock.calls[0][0] as any).data;
+    const data = createArg().data;
     expect(data.tokenHash).toBe(hashToken(token));
     expect(data.tokenHash).not.toBe(token);
     expect(data.userId).toBe(1);
@@ -86,7 +88,7 @@ describe("refresh tokens", () => {
       where: { id: 10, revokedAt: null },
       data: { revokedAt: expect.any(Date) },
     });
-    expect((prismaMock.refreshToken.create.mock.calls[0][0] as any).data.familyId).toBe("fam-1");
+    expect(createArg().data.familyId).toBe("fam-1");
     expect(refresh.token).not.toBe("old");
   });
 
