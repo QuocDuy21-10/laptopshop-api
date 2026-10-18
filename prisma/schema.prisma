@@ -32,8 +32,9 @@ model User {
   role        Role    @relation(fields: [roleId], references: [id])
   roleId      Int
 
-  Cart   Cart?
-  orders Order[]
+  Cart          Cart?
+  orders        Order[]
+  refreshTokens RefreshToken[]
 
   @@map("users")
 }
@@ -121,4 +122,21 @@ model OrderDetail {
   productId Int
 
   @@map("order_detail")
+}
+
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  tokenHash String    @unique @db.Char(64)
+  familyId  String    @db.Char(36)
+  expiresAt DateTime
+  revokedAt DateTime?
+  userAgent String?   @db.VarChar(255)
+  ip        String?   @db.VarChar(64)
+  createdAt DateTime  @default(now())
+
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId Int
+
+  @@index([familyId])
+  @@map("refresh_tokens")
 }
