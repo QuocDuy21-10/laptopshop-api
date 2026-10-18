@@ -1,5 +1,62 @@
-node_modules
-dist
+# --- Secrets & credentials (never commit) ---
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+secrets/
+
+# --- Database dumps & local data ---
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
+*.bak
+data/
+mysql-data/
+redis-data/
+
+# --- Dependencies & build output ---
+node_modules/
+dist/
+build/
+coverage/
+*.tsbuildinfo
+.eslintcache
+.npm/
+
+# --- Logs & runtime ---
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pids/
+*.pid
+*.seed
+
+# --- OS & editors ---
+.DS_Store
+**/.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/launch.json
+*.swp
+*.swo
+*~
+
+# --- Docker (local overrides) ---
+docker-compose.override.yml
+
+# --- User uploads at runtime (multer saves UUID-named files; seed images are tracked) ---
+public/images/*.*
+!public/images/noAvatar.jpg
+public/images/product/????????-????-????-????-????????????.*
+
+# --- Tooling ---
+.claude/settings.local.json
 docs/superpowers/
-coverage
