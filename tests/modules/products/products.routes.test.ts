@@ -53,6 +53,20 @@ describe("GET /api/v1/products", () => {
     });
   });
 
+  it("searches by name", async () => {
+    prismaMock.product.count.mockResolvedValue(0);
+    prismaMock.product.findMany.mockResolvedValue([]);
+    await request(buildApp()).get("/api/v1/products?q=%20asus%20");
+    expect(prismaMock.product.findMany.mock.calls[0][0].where).toEqual({
+      name: { contains: "asus" },
+    });
+  });
+
+  it("rejects a search longer than 100 characters", async () => {
+    const res = await request(buildApp()).get(`/api/v1/products?q=${"a".repeat(101)}`);
+    expect(res.status).toBe(400);
+  });
+
   it("rejects an unknown factory", async () => {
     const res = await request(buildApp()).get("/api/v1/products?factory=NOKIA");
     expect(res.status).toBe(400);
