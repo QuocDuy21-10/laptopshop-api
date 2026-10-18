@@ -11,11 +11,19 @@ describe("parseEnv", () => {
   it("applies defaults", () => {
     const e = parseEnv(base);
     expect(e.PORT).toBe(8080);
-    expect(e.JWT_EXPIRES_IN).toBe("1d");
-    expect(e.CORS_ORIGINS).toEqual(["http://localhost:5173"]);
+    expect(e.JWT_ACCESS_TTL).toBe("15m");
+    expect(e.REFRESH_TTL_DAYS).toBe(7);
+    expect(e.COOKIE_DOMAIN).toBeUndefined();
+    expect(e.CORS_ORIGINS).toEqual(["http://localhost:3000"]);
     expect(e.ADMIN_PASSWORD).toBe("123456");
     expect(e.ENABLE_DOCS).toBe(false);
     expect(e.SENTRY_DSN).toBeUndefined();
+  });
+
+  it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {
+    const e = parseEnv({ ...base, REFRESH_TTL_DAYS: "30", COOKIE_DOMAIN: ".shop.com" });
+    expect(e.REFRESH_TTL_DAYS).toBe(30);
+    expect(e.COOKIE_DOMAIN).toBe(".shop.com");
   });
 
   it("splits CORS_ORIGINS and treats empty SENTRY_DSN as unset", () => {

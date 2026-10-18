@@ -18,6 +18,7 @@
       "validation/*": ["./src/validation/*"],
       "lib/*": ["./src/lib/*"],
       "docs/*": ["./src/docs/*"],
+      "modules/*": ["./src/modules/*"],
     }
   },
   "include": ["src", "tests", "jest.config.ts"]

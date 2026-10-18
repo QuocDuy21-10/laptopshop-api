@@ -63,7 +63,7 @@ const handleUserLogin = async (username: string, password: string) => {
   };
 
   const secret = env.JWT_SECRET;
-  const expiresIn: any = env.JWT_EXPIRES_IN;
+  const expiresIn: any = env.JWT_ACCESS_TTL;
   // access token
   const access_token = jwt.sign(payload, secret, {
     expiresIn,

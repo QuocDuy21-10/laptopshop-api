@@ -12,6 +12,7 @@ import { env } from "config/env";
 import { logger } from "lib/logger";
 import webRoutes from "routes/web";
 import apiRoutes from "routes/api";
+import { createApiV1Router } from "routes/index";
 import { registerHealthRoutes } from "routes/health";
 import configPassportLocal from "middlewares/passport.local";
 import { applySecurity } from "middlewares/security";
@@ -33,7 +34,7 @@ export const createApp = (deps: AppDeps): Express => {
   app.set("trust proxy", 1);
   app.use(pinoHttp({ logger, autoLogging: { ignore: (req) => req.url === "/healthz" } }));
   applySecurity(app);
-  app.use(cors({ origin: env.CORS_ORIGINS }));
+  app.use(cors({ origin: env.CORS_ORIGINS, credentials: true }));
 
   // health + static assets before session/limiter so they do not hit Redis
   registerHealthRoutes(app, deps.readyChecks ?? []);
@@ -49,6 +50,9 @@ export const createApp = (deps: AppDeps): Express => {
   const { globalLimiter, authLimiter } = createLimiters(deps.limitStores);
   app.use(globalLimiter);
   app.post(["/login", "/api/login"], authLimiter);
+
+  // stateless API: mounted before session/passport and before the legacy /api JWT router
+  app.use("/api/v1", createApiV1Router());
 
   app.use(
     session({
