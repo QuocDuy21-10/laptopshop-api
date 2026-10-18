@@ -13,6 +13,7 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "test": "jest",
     "test:cov": "jest --coverage",
+    "test:int": "jest -c jest.int.config.ts --runInBand",
     "prisma:deploy": "prisma migrate deploy",
     "prepare": "husky"
   },
