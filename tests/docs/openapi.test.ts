@@ -1,29 +1,68 @@
 import { buildOpenApiDocument } from "docs/openapi";
 
+const V1_PATHS = [
+  "/api/v1/auth/register",
+  "/api/v1/auth/login",
+  "/api/v1/auth/refresh",
+  "/api/v1/auth/logout",
+  "/api/v1/users/me",
+  "/api/v1/products",
+  "/api/v1/products/filters",
+  "/api/v1/products/{id}",
+  "/api/v1/cart",
+  "/api/v1/cart/items",
+  "/api/v1/cart/items/{id}",
+  "/api/v1/orders",
+  "/api/v1/orders/me",
+  "/api/v1/orders/me/{id}",
+  "/api/v1/orders/me/{id}/cancel",
+  "/api/v1/admin/products",
+  "/api/v1/admin/products/{id}",
+  "/api/v1/admin/users",
+  "/api/v1/admin/users/{id}",
+  "/api/v1/admin/roles",
+  "/api/v1/admin/orders",
+  "/api/v1/admin/orders/{id}",
+  "/api/v1/admin/orders/{id}/status",
+  "/api/v1/admin/dashboard",
+];
+const secured = [{ cookieAuth: [] }, { bearerAuth: [] }];
+
 describe("openapi document", () => {
   const doc = buildOpenApiDocument();
+  const op = (path: string, method: string) => (doc.paths[path] as any)[method];
 
-  it("documents the existing /api routes", () => {
-    expect(Object.keys(doc.paths)).toEqual(
-      expect.arrayContaining([
-        "/api/login",
-        "/api/account",
-        "/api/users",
-        "/api/users/{id}",
-        "/api/add-product-to-cart",
-      ]),
+  it("documents exactly the v1 routes", () => {
+    expect(Object.keys(doc.paths).sort()).toEqual([...V1_PATHS].sort());
+  });
+
+  it("declares cookie and bearer auth", () => {
+    expect(doc.components?.securitySchemes?.cookieAuth).toMatchObject({
+      type: "apiKey",
+      in: "cookie",
+      name: "access_token",
+    });
+    expect(doc.components?.securitySchemes?.bearerAuth).toMatchObject({ type: "http" });
+  });
+
+  it("keeps public routes public and protects the rest", () => {
+    expect(op("/api/v1/products", "get").security).toBeUndefined();
+    expect(op("/api/v1/auth/login", "post").security).toBeUndefined();
+    expect(op("/api/v1/cart", "get").security).toEqual(secured);
+    expect(op("/api/v1/admin/dashboard", "get").security).toEqual(secured);
+    expect(op("/api/v1/admin/dashboard", "get").responses["403"]).toBeDefined();
+  });
+
+  it("documents the checkout idempotency header", () => {
+    const params = op("/api/v1/orders", "post").parameters as any[];
+    expect(params).toContainEqual(
+      expect.objectContaining({ in: "header", name: "Idempotency-Key", required: true }),
     );
   });
 
-  it("declares bearer auth and protects /api/account", () => {
-    expect(doc.components?.securitySchemes?.bearerAuth).toMatchObject({
-      type: "http",
-      scheme: "bearer",
-    });
-    expect((doc.paths["/api/account"] as any).get.security).toEqual([{ bearerAuth: [] }]);
-  });
-
-  it("login is public", () => {
-    expect((doc.paths["/api/login"] as any).post.security).toBeUndefined();
+  it("names the response schemas the frontend generates types from", () => {
+    expect(Object.keys(doc.components?.schemas ?? {})).toEqual(
+      expect.arrayContaining(["Error", "User", "Me", "Product", "Cart", "Order", "AdminOrder"]),
+    );
   });
 });

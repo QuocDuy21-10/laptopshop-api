@@ -5,102 +5,492 @@ import {
   extendZodWithOpenApi,
   OpenAPIRegistry,
   OpenApiGeneratorV3,
+  RouteConfig,
 } from "@asteasolutions/zod-to-openapi";
 import { env } from "config/env";
+import { idParams, pageQuery } from "lib/http";
+import { loginBody, registerBody } from "modules/auth/auth.schema";
+import { adminCreateUserBody, adminUpdateUserBody, updateMeBody } from "modules/users/users.schema";
+import { listProductsQuery, productBody, productPatchBody } from "modules/products/products.schema";
+import { addItemBody, updateItemBody } from "modules/cart/cart.schema";
+import {
+  adminListOrdersQuery,
+  placeOrderBody,
+  updateStatusBody,
+} from "modules/orders/orders.schema";
+import { ORDER_STATUSES } from "modules/orders/order-status";
 
 extendZodWithOpenApi(z);
 
 const registry = new OpenAPIRegistry();
+registry.registerComponent("securitySchemes", "cookieAuth", {
+  type: "apiKey",
+  in: "cookie",
+  name: "access_token",
+});
 registry.registerComponent("securitySchemes", "bearerAuth", {
   type: "http",
   scheme: "bearer",
   bearerFormat: "JWT",
 });
-const secured = [{ bearerAuth: [] }];
+const secured = [{ cookieAuth: [] }, { bearerAuth: [] }];
 
-const json = <T extends z.ZodTypeAny>(schema: T) => ({
-  content: { "application/json": { schema } },
+const ErrorBody = registry.register(
+  "Error",
+  z.object({
+    error: z.object({ code: z.string(), message: z.string(), details: z.unknown().optional() }),
+  }),
+);
+const Meta = z.object({
+  page: z.number(),
+  pageSize: z.number(),
+  total: z.number(),
+  totalPages: z.number(),
 });
-const idParam = z.object({ id: z.coerce.number().int() });
-const message = z.object({ data: z.string() });
+const userShape = {
+  id: z.number(),
+  username: z.string(),
+  fullName: z.string().nullable(),
+  address: z.string().nullable(),
+  phone: z.string().nullable(),
+  accountType: z.string().nullable(),
+  avatar: z.string().nullable(),
+  role: z.string(),
+};
+const User = registry.register("User", z.object(userShape));
+const Me = registry.register("Me", z.object({ ...userShape, cartItemCount: z.number() }));
+const Product = registry.register(
+  "Product",
+  z.object({
+    id: z.number(),
+    name: z.string(),
+    price: z.number(),
+    image: z.string().nullable(),
+    detailDesc: z.string().nullable(),
+    shortDesc: z.string().nullable(),
+    quantity: z.number(),
+    sold: z.number().nullable(),
+    factory: z.string().nullable(),
+    target: z.string().nullable(),
+  }),
+);
+const Option = z.object({ name: z.string(), value: z.string() });
+const Cart = registry.register(
+  "Cart",
+  z.object({
+    items: z.array(
+      z.object({ id: z.number(), quantity: z.number(), lineTotal: z.number(), product: Product }),
+    ),
+    itemCount: z.number(),
+    subtotal: z.number(),
+  }),
+);
+const orderShape = {
+  id: z.number(),
+  status: z.enum(ORDER_STATUSES),
+  totalPrice: z.number(),
+  paymentMethod: z.string(),
+  paymentStatus: z.string(),
+  receiverName: z.string(),
+  receiverAddress: z.string(),
+  receiverPhone: z.string(),
+  createdAt: z.string().datetime(),
+  items: z.array(
+    z.object({
+      productId: z.number(),
+      name: z.string(),
+      image: z.string().nullable(),
+      price: z.number(),
+      quantity: z.number(),
+    }),
+  ),
+};
+const Order = registry.register("Order", z.object(orderShape));
+const AdminOrder = registry.register(
+  "AdminOrder",
+  z.object({
+    ...orderShape,
+    user: z.object({ id: z.number(), username: z.string(), fullName: z.string().nullable() }),
+  }),
+);
+const Role = registry.register(
+  "Role",
+  z.object({ id: z.number(), name: z.string(), description: z.string().nullable() }),
+);
+const Dashboard = registry.register(
+  "Dashboard",
+  z.object({
+    userCount: z.number(),
+    productCount: z.number(),
+    orderCount: z.number(),
+    revenue: z.number(),
+    ordersByStatus: z.record(z.number()),
+  }),
+);
 
-const LoginBody = z.object({ username: z.string(), password: z.string() });
-const UserBody = z.object({
-  fullName: z.string(),
-  email: z.string().email(),
-  password: z.string(),
+const binary = z.string().openapi({ type: "string", format: "binary" });
+const data = (schema: z.ZodTypeAny) => z.object({ data: schema });
+const page = (schema: z.ZodTypeAny) => z.object({ data: z.array(schema), meta: Meta });
+const json = (schema: z.ZodTypeAny) => ({ content: { "application/json": { schema } } });
+const multipart = (schema: z.ZodTypeAny) => ({
+  content: { "multipart/form-data": { schema } },
 });
-const UpdateUserBody = z.object({ fullName: z.string(), phone: z.string(), address: z.string() });
-const CartBody = z.object({ quantity: z.number().int().positive(), productId: z.number().int() });
+const userData = data(z.object({ user: User }));
 
-registry.registerPath({
-  method: "post",
-  path: "/api/login",
-  summary: "Login, returns a JWT",
-  request: { body: json(LoginBody) },
-  responses: {
-    200: {
-      description: "OK",
-      ...json(z.object({ data: z.object({ access_token: z.string() }) })),
+type Op = {
+  method: RouteConfig["method"];
+  path: string;
+  summary: string;
+  tag: string;
+  auth?: "user" | "admin";
+  request?: RouteConfig["request"];
+  ok: [status: number, description: string, schema?: z.ZodTypeAny];
+  errors?: Record<number, string>;
+};
+
+const op = (o: Op) => {
+  const errors: Record<number, string> = {
+    ...(o.auth ? { 401: "Not authenticated" } : {}),
+    ...(o.auth === "admin" ? { 403: "Not an admin" } : {}),
+    ...o.errors,
+  };
+  const [status, description, schema] = o.ok;
+  registry.registerPath({
+    method: o.method,
+    path: o.path,
+    summary: o.summary,
+    tags: [o.tag],
+    ...(o.auth ? { security: secured } : {}),
+    request: o.request,
+    responses: {
+      [status]: schema ? { description, ...json(schema) } : { description },
+      ...Object.fromEntries(
+        Object.entries(errors).map(([code, d]) => [code, { description: d, ...json(ErrorBody) }]),
+      ),
     },
-    401: { description: "Invalid credentials" },
-  },
-});
-registry.registerPath({
-  method: "get",
-  path: "/api/account",
-  summary: "Current account",
-  security: secured,
-  responses: { 200: { description: "OK" }, 401: { description: "Missing or invalid token" } },
-});
-registry.registerPath({
-  method: "get",
-  path: "/api/users",
-  summary: "List users",
-  security: secured,
-  responses: { 200: { description: "OK" }, 401: { description: "Unauthorized" } },
-});
-registry.registerPath({
+  });
+};
+
+const v1 = "/api/v1";
+const id = { params: idParams };
+const productForm = (schema: z.AnyZodObject) =>
+  multipart(schema.extend({ image: binary.optional() }));
+const avatarForm = (schema: z.AnyZodObject) =>
+  multipart(schema.extend({ avatar: binary.optional() }));
+
+// auth
+op({
   method: "post",
-  path: "/api/users",
-  summary: "Create user",
-  security: secured,
-  request: { body: json(UserBody) },
-  responses: {
-    201: { description: "Created", ...json(message) },
-    400: { description: "Validation errors" },
-  },
+  path: `${v1}/auth/register`,
+  summary: "Register and start a session",
+  tag: "auth",
+  request: { body: json(registerBody) },
+  ok: [201, "Registered; sets auth cookies", userData],
+  errors: { 400: "Invalid input", 409: "Email taken" },
 });
-registry.registerPath({
+op({
+  method: "post",
+  path: `${v1}/auth/login`,
+  summary: "Log in",
+  tag: "auth",
+  request: { body: json(loginBody) },
+  ok: [200, "Logged in; sets auth cookies", userData],
+  errors: { 401: "Invalid credentials", 429: "Too many attempts" },
+});
+op({
+  method: "post",
+  path: `${v1}/auth/refresh`,
+  summary: "Rotate the refresh token (cookie)",
+  tag: "auth",
+  ok: [200, "New cookies", userData],
+  errors: { 401: "Invalid refresh token" },
+});
+op({
+  method: "post",
+  path: `${v1}/auth/logout`,
+  summary: "Log out",
+  tag: "auth",
+  ok: [204, "Logged out; cookies cleared"],
+});
+
+// users
+op({
   method: "get",
-  path: "/api/users/{id}",
-  summary: "Get user",
-  security: secured,
-  request: { params: idParam },
-  responses: { 200: { description: "OK" }, 401: { description: "Unauthorized" } },
+  path: `${v1}/users/me`,
+  summary: "Current user",
+  tag: "users",
+  auth: "user",
+  ok: [200, "OK", data(Me)],
 });
-registry.registerPath({
-  method: "put",
-  path: "/api/users/{id}",
-  summary: "Update user",
-  security: secured,
-  request: { params: idParam, body: json(UpdateUserBody) },
-  responses: { 200: { description: "OK", ...json(message) } },
+op({
+  method: "patch",
+  path: `${v1}/users/me`,
+  summary: "Update profile",
+  tag: "users",
+  auth: "user",
+  request: { body: avatarForm(updateMeBody) },
+  ok: [200, "OK", data(User)],
+  errors: { 400: "Invalid input" },
 });
-registry.registerPath({
+
+// products
+op({
+  method: "get",
+  path: `${v1}/products`,
+  summary: "List products",
+  tag: "products",
+  request: { query: listProductsQuery },
+  ok: [200, "OK", page(Product)],
+  errors: { 400: "Invalid filter" },
+});
+op({
+  method: "get",
+  path: `${v1}/products/filters`,
+  summary: "Filter options",
+  tag: "products",
+  ok: [
+    200,
+    "OK",
+    data(z.object({ factoryOptions: z.array(Option), targetOptions: z.array(Option) })),
+  ],
+});
+op({
+  method: "get",
+  path: `${v1}/products/{id}`,
+  summary: "Product detail",
+  tag: "products",
+  request: id,
+  ok: [200, "OK", data(Product)],
+  errors: { 404: "Not found" },
+});
+
+// cart
+op({
+  method: "get",
+  path: `${v1}/cart`,
+  summary: "Current cart",
+  tag: "cart",
+  auth: "user",
+  ok: [200, "OK", data(Cart)],
+});
+op({
+  method: "post",
+  path: `${v1}/cart/items`,
+  summary: "Add to cart",
+  tag: "cart",
+  auth: "user",
+  request: { body: json(addItemBody) },
+  ok: [200, "Updated cart", data(Cart)],
+  errors: { 404: "Product not found", 409: "Out of stock" },
+});
+op({
+  method: "patch",
+  path: `${v1}/cart/items/{id}`,
+  summary: "Set line quantity",
+  tag: "cart",
+  auth: "user",
+  request: { ...id, body: json(updateItemBody) },
+  ok: [200, "Updated cart", data(Cart)],
+  errors: { 404: "Not found", 409: "Out of stock" },
+});
+op({
   method: "delete",
-  path: "/api/users/{id}",
-  summary: "Delete user",
-  security: secured,
-  request: { params: idParam },
-  responses: { 200: { description: "OK", ...json(message) } },
+  path: `${v1}/cart/items/{id}`,
+  summary: "Remove line",
+  tag: "cart",
+  auth: "user",
+  request: id,
+  ok: [204, "Removed"],
+  errors: { 404: "Not found" },
 });
-registry.registerPath({
+
+// orders
+op({
   method: "post",
-  path: "/api/add-product-to-cart",
-  summary: "Add product to cart (session user)",
-  request: { body: json(CartBody) },
-  responses: { 200: { description: "New cart total", ...json(z.object({ data: z.number() })) } },
+  path: `${v1}/orders`,
+  summary: "Checkout the cart",
+  tag: "orders",
+  auth: "user",
+  request: {
+    headers: z.object({ "Idempotency-Key": z.string().min(1).max(64) }),
+    body: json(placeOrderBody),
+  },
+  ok: [201, "Created (200 when the key was already used)", data(Order)],
+  errors: { 400: "Invalid input", 409: "Cart empty or out of stock" },
+});
+op({
+  method: "get",
+  path: `${v1}/orders/me`,
+  summary: "My orders",
+  tag: "orders",
+  auth: "user",
+  request: { query: pageQuery },
+  ok: [200, "OK", page(Order)],
+});
+op({
+  method: "get",
+  path: `${v1}/orders/me/{id}`,
+  summary: "My order",
+  tag: "orders",
+  auth: "user",
+  request: id,
+  ok: [200, "OK", data(Order)],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "post",
+  path: `${v1}/orders/me/{id}/cancel`,
+  summary: "Cancel my pending order",
+  tag: "orders",
+  auth: "user",
+  request: id,
+  ok: [200, "Cancelled", data(Order)],
+  errors: { 404: "Not found", 409: "Not cancellable" },
+});
+
+// admin
+op({
+  method: "get",
+  path: `${v1}/admin/products`,
+  summary: "List products",
+  tag: "admin",
+  auth: "admin",
+  request: { query: listProductsQuery },
+  ok: [200, "OK", page(Product)],
+});
+op({
+  method: "post",
+  path: `${v1}/admin/products`,
+  summary: "Create product",
+  tag: "admin",
+  auth: "admin",
+  request: { body: productForm(productBody) },
+  ok: [201, "Created", data(Product)],
+  errors: { 400: "Invalid input" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/products/{id}`,
+  summary: "Product",
+  tag: "admin",
+  auth: "admin",
+  request: id,
+  ok: [200, "OK", data(Product)],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/products/{id}`,
+  summary: "Update product",
+  tag: "admin",
+  auth: "admin",
+  request: { ...id, body: productForm(productPatchBody) },
+  ok: [200, "OK", data(Product)],
+  errors: { 400: "Invalid input", 404: "Not found" },
+});
+op({
+  method: "delete",
+  path: `${v1}/admin/products/{id}`,
+  summary: "Delete product",
+  tag: "admin",
+  auth: "admin",
+  request: id,
+  ok: [204, "Deleted"],
+  errors: { 404: "Not found", 409: "Product is in orders" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/users`,
+  summary: "List users",
+  tag: "admin",
+  auth: "admin",
+  request: { query: pageQuery },
+  ok: [200, "OK", page(User)],
+});
+op({
+  method: "post",
+  path: `${v1}/admin/users`,
+  summary: "Create user",
+  tag: "admin",
+  auth: "admin",
+  request: { body: avatarForm(adminCreateUserBody) },
+  ok: [201, "Created", data(User)],
+  errors: { 400: "Invalid input or role", 409: "Email taken" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/users/{id}`,
+  summary: "User",
+  tag: "admin",
+  auth: "admin",
+  request: id,
+  ok: [200, "OK", data(User)],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/users/{id}`,
+  summary: "Update user",
+  tag: "admin",
+  auth: "admin",
+  request: { ...id, body: avatarForm(adminUpdateUserBody) },
+  ok: [200, "OK", data(User)],
+  errors: { 400: "Invalid input or role", 404: "Not found" },
+});
+op({
+  method: "delete",
+  path: `${v1}/admin/users/{id}`,
+  summary: "Delete user",
+  tag: "admin",
+  auth: "admin",
+  request: id,
+  ok: [204, "Deleted"],
+  errors: { 404: "Not found", 409: "Self or user with orders" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/roles`,
+  summary: "List roles",
+  tag: "admin",
+  auth: "admin",
+  ok: [200, "OK", data(z.array(Role))],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/orders`,
+  summary: "List orders",
+  tag: "admin",
+  auth: "admin",
+  request: { query: adminListOrdersQuery },
+  ok: [200, "OK", page(AdminOrder)],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/orders/{id}`,
+  summary: "Order",
+  tag: "admin",
+  auth: "admin",
+  request: id,
+  ok: [200, "OK", data(AdminOrder)],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/orders/{id}/status`,
+  summary: "Change order status",
+  tag: "admin",
+  auth: "admin",
+  request: { ...id, body: json(updateStatusBody) },
+  ok: [200, "OK", data(Order)],
+  errors: { 404: "Not found", 409: "Invalid transition" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/dashboard`,
+  summary: "Dashboard",
+  tag: "admin",
+  auth: "admin",
+  ok: [200, "OK", data(Dashboard)],
 });
 
 export const buildOpenApiDocument = () =>
