@@ -1,4 +1,5 @@
 import { prisma } from "config/client";
+import { logger } from "lib/logger";
 
 const getProducts = async (page: number, pageSize: number) => {
   const skip = (page - 1) * pageSize;
@@ -16,11 +17,7 @@ const getProductById = async (id: number) => {
   });
   return product;
 };
-const addProductToCart = async (
-  quantity: number,
-  productId: number,
-  user: Express.User
-) => {
+const addProductToCart = async (quantity: number, productId: number, user: Express.User) => {
   const cart = await prisma.cart.findUnique({
     where: {
       userId: user.id,
@@ -107,11 +104,7 @@ const getProductInCart = async (userId: number) => {
   }
   return [];
 };
-const deleteProductInCart = async (
-  cartDetailId: number,
-  userId: number,
-  sumCart: number
-) => {
+const deleteProductInCart = async (cartDetailId: number, userId: number, sumCart: number) => {
   // delete cart detail
   const currentCartDetail = await prisma.cartDetail.findUnique({
     where: {
@@ -147,7 +140,7 @@ const deleteProductInCart = async (
 
 const updateCartDetailBeforeCheckout = async (
   data: { id: string; quantity: string }[],
-  cartId: number
+  cartId: number,
 ) => {
   let quantity = 0;
   for (let i = 0; i < data.length; i++) {
@@ -177,7 +170,7 @@ const handlePlaceOrder = async (
   receiverName: string,
   receiverAddress: string,
   receiverPhone: string,
-  totalPrice: number
+  totalPrice: number,
 ) => {
   try {
     // tạo transaction
@@ -235,9 +228,7 @@ const handlePlaceOrder = async (
           });
 
           if (!product || product.quantity < cart.cartDetails[i].quantity) {
-            throw new Error(
-              `Sản phẩm ${product?.name} không tồn tại hoặc không đủ số lượng`
-            );
+            throw new Error(`Sản phẩm ${product?.name} không tồn tại hoặc không đủ số lượng`);
           }
           // update quantity, sold
           await tx.product.update({
@@ -257,7 +248,7 @@ const handlePlaceOrder = async (
       }
     });
   } catch (error) {
-    console.log(error);
+    logger.error({ err: error }, "handlePlaceOrder failed");
     return error.message;
   }
 };
