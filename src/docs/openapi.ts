@@ -442,7 +442,7 @@ op({
   auth: "admin",
   request: { ...id, body: avatarForm(adminUpdateUserBody) },
   ok: [200, "OK", data(User)],
-  errors: { 400: "Invalid input or role", 404: "Not found" },
+  errors: { 400: "Invalid input or role", 404: "Not found", 409: "Cannot change own role" },
 });
 op({
   method: "delete",

@@ -66,13 +66,38 @@ export const createUser = async (input: AdminCreateUserBody, avatar?: string) =>
   }
 };
 
-export const updateUser = async (id: number, input: AdminUpdateUserBody, avatar?: string) => {
-  if (input.roleId) await ensureRole(input.roleId);
+export const updateUser = async (
+  actorId: number,
+  id: number,
+  input: AdminUpdateUserBody,
+  avatar?: string,
+) => {
+  let roleChanged = false;
+  if (input.roleId) {
+    await ensureRole(input.roleId);
+    const current = await prisma.user.findUnique({ where: { id }, select: { roleId: true } });
+    roleChanged = current?.roleId !== input.roleId;
+  }
+  // an admin can never demote themselves, so at least one admin always remains
+  // shortcut: two admins demoting each other at the same moment can still leave none; recover with seed/ADMIN_PASSWORD, lock the admin rows (SELECT ... FOR UPDATE) once there are many admins
+  if (roleChanged && actorId === id) {
+    throw new AppError("You cannot change your own role", 409, "CANNOT_CHANGE_OWN_ROLE");
+  }
   try {
-    const user = await prisma.user.update({
-      where: { id },
-      data: { ...input, ...(avatar ? { avatar } : {}) },
-      select: userSelect,
+    const user = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: { id },
+        data: { ...input, ...(avatar ? { avatar } : {}) },
+        select: userSelect,
+      });
+      // the role is baked into tokens; forcing a new login applies the new role once the access token expires
+      if (roleChanged) {
+        await tx.refreshToken.updateMany({
+          where: { userId: id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
+      }
+      return updated;
     });
     return toUserDto(user);
   } catch (e) {

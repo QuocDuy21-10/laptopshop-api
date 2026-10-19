@@ -36,7 +36,8 @@ export const createUserHandler: RequestHandler = async (req, res) => {
 
 export const updateUserHandler: RequestHandler = async (req, res) => {
   const { id } = res.locals.params as IdParams;
-  res.json({ data: await updateUser(id, req.body as AdminUpdateUserBody, req.file?.filename) });
+  const input = req.body as AdminUpdateUserBody;
+  res.json({ data: await updateUser(req.auth!.id, id, input, req.file?.filename) });
 };
 
 export const deleteUserHandler: RequestHandler = async (req, res) => {
