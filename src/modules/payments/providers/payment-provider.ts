@@ -1,6 +1,9 @@
 export type PaymentInstructionInput = {
   amount: number;
   transferCode: string;
+  bankCode: string;
+  accountNumber: string;
+  accountName: string;
 };
 
 export type PaymentInstructions = {
@@ -37,5 +40,6 @@ export interface PaymentProvider {
   listTransactions(input: ListTransactionsInput): Promise<{
     items: NormalizedPaymentTransaction[];
     cursor: string | null;
+    hasMore: boolean;
   }>;
 }

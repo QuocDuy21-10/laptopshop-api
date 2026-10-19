@@ -37,15 +37,23 @@ const parseDate = (value: unknown) => {
 
 const parseTransaction = (data: Record<string, unknown>): NormalizedPaymentTransaction => {
   const eventId = String(data.id ?? "");
-  const reference = String(data.referenceCode ?? data.reference_number ?? eventId);
+  const referenceValue = data.referenceCode ?? data.reference_number;
+  const reference = referenceValue ? String(referenceValue) : eventId;
   const amount = Number(data.transferAmount ?? data.amount_in ?? 0);
-  if (!eventId || !reference || !Number.isSafeInteger(amount) || amount < 0) {
+  const directionValue = data.transferType ?? data.transfer_type;
+  if (
+    !eventId ||
+    !reference ||
+    !Number.isSafeInteger(amount) ||
+    amount <= 0 ||
+    (directionValue !== "in" && directionValue !== "out")
+  ) {
     throw new AppError("Invalid webhook payload", 400, "INVALID_WEBHOOK_PAYLOAD");
   }
   return {
     providerEventId: eventId,
     providerTransactionKey: reference,
-    direction: data.transferType === "out" || data.transfer_type === "out" ? "OUT" : "IN",
+    direction: directionValue === "out" ? "OUT" : "IN",
     amount,
     currency: "VND",
     transferCode: data.code ? String(data.code) : null,
@@ -68,19 +76,19 @@ export class SePayPaymentProvider implements PaymentProvider {
 
   buildInstructions(input: PaymentInstructionInput): PaymentInstructions {
     const url = new URL("https://vietqr.app/img");
-    url.searchParams.set("acc", this.config.accountNumber);
-    url.searchParams.set("bank", this.config.bankCode);
+    url.searchParams.set("acc", input.accountNumber);
+    url.searchParams.set("bank", input.bankCode);
     url.searchParams.set("amount", String(input.amount));
     url.searchParams.set("des", input.transferCode);
     url.searchParams.set("template", "compact");
     url.searchParams.set("showinfo", "true");
-    url.searchParams.set("holder", this.config.accountName);
+    url.searchParams.set("holder", input.accountName);
     url.searchParams.set("store", "LaptopShop");
     return {
       qrImageUrl: url.toString(),
-      bankCode: this.config.bankCode,
-      accountNumber: this.config.accountNumber,
-      accountName: this.config.accountName,
+      bankCode: input.bankCode,
+      accountNumber: input.accountNumber,
+      accountName: input.accountName,
       transferCode: input.transferCode,
     };
   }
@@ -128,8 +136,8 @@ export class SePayPaymentProvider implements PaymentProvider {
     const items = (body.data ?? []).map(parseTransaction);
     return {
       items,
-      cursor:
-        items.length && body.meta?.pagination?.has_more ? items.at(-1)!.providerEventId : null,
+      cursor: items.length ? items.at(-1)!.providerEventId : (cursor ?? null),
+      hasMore: Boolean(body.meta?.pagination?.has_more),
     };
   }
 }

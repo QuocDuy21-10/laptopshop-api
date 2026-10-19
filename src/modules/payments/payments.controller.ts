@@ -31,11 +31,9 @@ export const checkoutAttemptHandler: RequestHandler = async (req, res) => {
   const key = idempotencyKeyHeader.parse(req.get("idempotency-key"));
   const order = await getCheckoutAttempt(req.auth!.id, key);
   if (!order) {
-    res
-      .status(404)
-      .json({
-        error: { code: "CHECKOUT_ATTEMPT_NOT_FOUND", message: "Checkout attempt not found" },
-      });
+    res.status(404).json({
+      error: { code: "CHECKOUT_ATTEMPT_NOT_FOUND", message: "Checkout attempt not found" },
+    });
     return;
   }
   res.json({ data: order });
@@ -48,8 +46,8 @@ export const paymentWebhookHandler: RequestHandler = async (req, res) => {
     throw new AppError("Payment provider is unavailable", 404, "PAYMENT_PROVIDER_NOT_FOUND");
   const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
   const transaction = selected.verifyWebhook({ rawBody, headers: req.headers, now: new Date() });
-  const result = await ingestPaymentTransaction(transaction, "WEBHOOK", rawBody);
-  res.status(200).json({ ok: true, duplicate: result.duplicate });
+  await ingestPaymentTransaction(transaction, "WEBHOOK", rawBody);
+  res.status(200).json({ success: true });
 };
 
 export const listPaymentEventsHandler: RequestHandler = async (_req, res) => {

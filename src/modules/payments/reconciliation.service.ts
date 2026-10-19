@@ -1,4 +1,5 @@
 import { prisma } from "config/client";
+import { env } from "config/env";
 import { logger } from "lib/logger";
 import { ingestPaymentTransaction } from "modules/payments/payments.service";
 import { paymentProvider } from "modules/payments/payment-provider.factory";
@@ -8,8 +9,8 @@ export const reconcilePayments = async () => {
   if (provider.id === "fake") return 0;
   const now = new Date();
   const checkpoint = await prisma.paymentProviderCheckpoint.upsert({
-    where: { provider_mode: { provider: provider.id, mode: "sepay" } },
-    create: { provider: provider.id, mode: "sepay", lastStartedAt: now },
+    where: { provider_mode: { provider: provider.id, mode: env.SEPAY_MODE } },
+    create: { provider: provider.id, mode: env.SEPAY_MODE, lastStartedAt: now },
     update: { lastStartedAt: now },
   });
   let cursor = checkpoint.cursor;
@@ -22,8 +23,8 @@ export const reconcilePayments = async () => {
         await ingestPaymentTransaction(transaction, "RECONCILIATION");
         count += 1;
       }
-      hasMore = Boolean(page.cursor);
-      cursor = page.cursor;
+      hasMore = page.hasMore;
+      if (page.cursor) cursor = page.cursor;
     }
     await prisma.paymentProviderCheckpoint.update({
       where: { id: checkpoint.id },

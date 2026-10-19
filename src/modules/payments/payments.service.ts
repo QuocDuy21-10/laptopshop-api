@@ -22,10 +22,15 @@ export const listPaymentMethods = () => [
 
 const instructionsFor = (payment: PaymentRow) =>
   payment.status === PAYMENT_STATUS.PENDING
-    ? paymentProvider().buildInstructions({
-        amount: payment.amount,
-        transferCode: payment.transferCode,
-      })
+    ? new Date() < payment.expiresAt
+      ? paymentProvider().buildInstructions({
+          amount: payment.amount,
+          transferCode: payment.transferCode,
+          bankCode: payment.bankCode,
+          accountNumber: payment.accountNumber,
+          accountName: payment.accountName,
+        })
+      : null
     : null;
 
 export const getMyPayment = async (userId: number, orderId: number) => {

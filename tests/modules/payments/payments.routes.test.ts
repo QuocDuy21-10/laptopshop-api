@@ -18,8 +18,8 @@ const paymentRow = {
   bankCode: "VCB",
   accountNumber: "0123456789",
   accountName: "LAPTOP SHOP",
-  expiresAt: new Date("2026-10-19T10:15:00.000Z"),
-  cancelAfter: new Date("2026-10-19T10:17:00.000Z"),
+  expiresAt: new Date(Date.now() + 15 * 60_000),
+  cancelAfter: new Date(Date.now() + 17 * 60_000),
   paidAt: null,
   cancelledAt: null,
   order: { id: 50, userId: USER.id, status: "PENDING", paymentStatus: "PAYMENT_UNPAID" },
@@ -48,6 +48,18 @@ describe("GET /api/v1/orders/me/:id/payment", () => {
       .set("Cookie", cookieFor(USER));
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe("PAYMENT_NOT_FOUND");
+  });
+
+  it("hides QR instructions after the payment deadline", async () => {
+    prismaMock.payment.findFirst.mockResolvedValue({
+      ...paymentRow,
+      expiresAt: new Date(Date.now() - 1000),
+    });
+    const res = await request(buildApp())
+      .get("/api/v1/orders/me/50/payment")
+      .set("Cookie", cookieFor(USER));
+    expect(res.status).toBe(200);
+    expect(res.body.data.instructions).toBeNull();
   });
 });
 
@@ -99,7 +111,7 @@ describe("POST /api/v1/webhooks/payments/:provider", () => {
       .set("Content-Type", "application/json")
       .send(raw);
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({ ok: true, duplicate: false });
+    expect(res.body).toEqual({ success: true });
     expect(prismaMock.paymentWebhookEvent.create.mock.calls[0][0].data).toMatchObject({
       provider: "fake",
       providerTransactionKey: "FT-1",
