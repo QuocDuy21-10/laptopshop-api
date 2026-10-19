@@ -4,15 +4,19 @@ import { AppError, isNotFound, notFound } from "lib/errors";
 import { pageArgs, pageMeta } from "lib/http";
 import { toProductDto } from "modules/products/products.mapper";
 import {
-  ListProductsQuery,
+  AdminListProductsQuery,
+  LOW_STOCK_THRESHOLD,
   PRICE_RANGES,
   PriceRange,
   ProductBody,
   ProductPatchBody,
 } from "modules/products/products.schema";
 
-export const listProducts = async (q: ListProductsQuery) => {
+// public callers always see only active products; admin may filter either way
+export const listProducts = async (q: AdminListProductsQuery, admin = false) => {
   const where: Prisma.ProductWhereInput = {
+    ...(admin ? (q.isActive === undefined ? {} : { isActive: q.isActive }) : { isActive: true }),
+    ...(q.stock === "low" ? { quantity: { lte: LOW_STOCK_THRESHOLD } } : {}),
     // MySQL utf8mb4_unicode_ci makes contains case-insensitive
     ...(q.q ? { name: { contains: q.q } } : {}),
     ...(q.factory.length ? { factory: { in: q.factory } } : {}),
@@ -31,9 +35,9 @@ export const listProducts = async (q: ListProductsQuery) => {
   return { items: rows.map(toProductDto), meta: pageMeta(q, total) };
 };
 
-export const getProduct = async (id: number) => {
+export const getProduct = async (id: number, admin = false) => {
   const product = await prisma.product.findUnique({ where: { id } });
-  if (!product) throw notFound("Product");
+  if (!product || (!admin && !product.isActive)) throw notFound("Product");
   return toProductDto(product);
 };
 
@@ -69,7 +73,7 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
 export const deleteProduct = async (id: number) => {
   const ordered = await prisma.orderDetail.count({ where: { productId: id } });
   if (ordered > 0) {
-    throw new AppError("Product is in orders; set quantity to 0 instead", 409, "PRODUCT_IN_USE");
+    throw new AppError("Product is in orders; hide it instead", 409, "PRODUCT_IN_USE");
   }
   try {
     await prisma.$transaction([

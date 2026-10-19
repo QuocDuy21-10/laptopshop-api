@@ -15,6 +15,7 @@ const product = {
   sold: 0,
   factory: "ASUS",
   target: "GAMING",
+  isActive: true,
 };
 
 beforeEach(resetPrisma);
@@ -28,7 +29,7 @@ describe("GET /api/v1/products", () => {
     expect(res.body.data[0].image).toBe("/images/product/a.png");
     expect(res.body.meta).toEqual({ page: 1, pageSize: 10, total: 1, totalPages: 1 });
     expect(prismaMock.product.findMany).toHaveBeenCalledWith({
-      where: {},
+      where: { isActive: true },
       orderBy: { id: "asc" },
       skip: 0,
       take: 10,
@@ -43,6 +44,7 @@ describe("GET /api/v1/products", () => {
     );
     expect(prismaMock.product.findMany).toHaveBeenCalledWith({
       where: {
+        isActive: true,
         factory: { in: ["ASUS", "DELL"] },
         target: { in: ["GAMING"] },
         OR: [{ price: { lt: 10_000_000 } }, { price: { gt: 20_000_000 } }],
@@ -58,6 +60,7 @@ describe("GET /api/v1/products", () => {
     prismaMock.product.findMany.mockResolvedValue([]);
     await request(buildApp()).get("/api/v1/products?q=%20asus%20");
     expect(prismaMock.product.findMany.mock.calls[0][0].where).toEqual({
+      isActive: true,
       name: { contains: "asus" },
     });
   });
@@ -83,6 +86,12 @@ describe("GET /api/v1/products/:id", () => {
     const res = await request(buildApp()).get("/api/v1/products/1");
     expect(res.status).toBe(200);
     expect(res.body.data.name).toBe("Asus");
+  });
+
+  it("returns 404 for a hidden product", async () => {
+    prismaMock.product.findUnique.mockResolvedValue({ ...product, isActive: false });
+    const res = await request(buildApp()).get("/api/v1/products/1");
+    expect(res.status).toBe(404);
   });
 
   it("returns 404 when missing", async () => {

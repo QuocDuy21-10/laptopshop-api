@@ -12,7 +12,12 @@ import { env } from "config/env";
 import { idParams, pageQuery } from "lib/http";
 import { loginBody, registerBody } from "modules/auth/auth.schema";
 import { adminCreateUserBody, adminUpdateUserBody, updateMeBody } from "modules/users/users.schema";
-import { listProductsQuery, productBody, productPatchBody } from "modules/products/products.schema";
+import {
+  adminListProductsQuery,
+  listProductsQuery,
+  productBody,
+  productPatchBody,
+} from "modules/products/products.schema";
 import { addItemBody, updateItemBody } from "modules/cart/cart.schema";
 import {
   adminListOrdersQuery,
@@ -73,6 +78,7 @@ const Product = registry.register(
     sold: z.number().nullable(),
     factory: z.string().nullable(),
     target: z.string().nullable(),
+    isActive: z.boolean(),
   }),
 );
 const Option = z.object({ name: z.string(), value: z.string() });
@@ -282,7 +288,7 @@ op({
   auth: "user",
   request: { body: json(addItemBody) },
   ok: [200, "Updated cart", data(Cart)],
-  errors: { 404: "Product not found", 409: "Out of stock" },
+  errors: { 404: "Product not found", 409: "Out of stock or no longer sold" },
 });
 op({
   method: "patch",
@@ -292,7 +298,7 @@ op({
   auth: "user",
   request: { ...id, body: json(updateItemBody) },
   ok: [200, "Updated cart", data(Cart)],
-  errors: { 404: "Not found", 409: "Out of stock" },
+  errors: { 404: "Not found", 409: "Out of stock or no longer sold" },
 });
 op({
   method: "delete",
@@ -317,7 +323,7 @@ op({
     body: json(placeOrderBody),
   },
   ok: [201, "Created (200 when the key was already used)", data(Order)],
-  errors: { 400: "Invalid input", 409: "Cart empty or out of stock" },
+  errors: { 400: "Invalid input", 409: "Cart empty, out of stock or product no longer sold" },
 });
 op({
   method: "get",
@@ -356,7 +362,7 @@ op({
   summary: "List products",
   tag: "admin",
   auth: "admin",
-  request: { query: listProductsQuery },
+  request: { query: adminListProductsQuery },
   ok: [200, "OK", page(Product)],
 });
 op({
@@ -397,7 +403,7 @@ op({
   auth: "admin",
   request: id,
   ok: [204, "Deleted"],
-  errors: { 404: "Not found", 409: "Product is in orders" },
+  errors: { 404: "Not found", 409: "Product is in orders; hide it instead" },
 });
 op({
   method: "get",

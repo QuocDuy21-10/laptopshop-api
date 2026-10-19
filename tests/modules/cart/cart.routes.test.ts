@@ -45,7 +45,7 @@ describe("GET /api/v1/cart", () => {
 
 describe("POST /api/v1/cart/items", () => {
   it("adds to the line for this cart and product", async () => {
-    prismaMock.product.findUnique.mockResolvedValue({ quantity: 5 });
+    prismaMock.product.findUnique.mockResolvedValue({ quantity: 5, isActive: true });
     prismaMock.cart.upsert.mockResolvedValue({ id: 11 });
     prismaMock.cartDetail.upsert.mockResolvedValue({ quantity: 3 });
     const res = await request(buildApp())
@@ -61,7 +61,7 @@ describe("POST /api/v1/cart/items", () => {
   });
 
   it("returns 409 OUT_OF_STOCK when the line would exceed stock", async () => {
-    prismaMock.product.findUnique.mockResolvedValue({ quantity: 5 });
+    prismaMock.product.findUnique.mockResolvedValue({ quantity: 5, isActive: true });
     prismaMock.cart.upsert.mockResolvedValue({ id: 11 });
     prismaMock.cartDetail.upsert.mockResolvedValue({ quantity: 6 });
     const res = await request(buildApp())
@@ -70,6 +70,20 @@ describe("POST /api/v1/cart/items", () => {
       .send({ productId: 3, quantity: 2 });
     expect(res.status).toBe(409);
     expect(res.body.error).toMatchObject({ code: "OUT_OF_STOCK", details: { productId: 3 } });
+  });
+
+  it("returns 409 PRODUCT_UNAVAILABLE for a hidden product", async () => {
+    prismaMock.product.findUnique.mockResolvedValue({ quantity: 5, isActive: false });
+    const res = await request(buildApp())
+      .post("/api/v1/cart/items")
+      .set("Cookie", auth())
+      .send({ productId: 3, quantity: 1 });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatchObject({
+      code: "PRODUCT_UNAVAILABLE",
+      details: { productId: 3 },
+    });
+    expect(prismaMock.cartDetail.upsert).not.toHaveBeenCalled();
   });
 
   it("returns 404 for an unknown product", async () => {
@@ -107,7 +121,7 @@ describe("PATCH /api/v1/cart/items/:id", () => {
   it("returns 409 when the quantity exceeds stock", async () => {
     prismaMock.cartDetail.findFirst.mockResolvedValue({
       productId: 3,
-      product: { quantity: 5 },
+      product: { quantity: 5, isActive: true },
     });
     const res = await request(buildApp())
       .patch("/api/v1/cart/items/7")
@@ -116,10 +130,24 @@ describe("PATCH /api/v1/cart/items/:id", () => {
     expect(res.status).toBe(409);
   });
 
+  it("returns 409 PRODUCT_UNAVAILABLE for a hidden product", async () => {
+    prismaMock.cartDetail.findFirst.mockResolvedValue({
+      productId: 3,
+      product: { quantity: 5, isActive: false },
+    });
+    const res = await request(buildApp())
+      .patch("/api/v1/cart/items/7")
+      .set("Cookie", auth())
+      .send({ quantity: 1 });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("PRODUCT_UNAVAILABLE");
+    expect(prismaMock.cartDetail.update).not.toHaveBeenCalled();
+  });
+
   it("sets the quantity", async () => {
     prismaMock.cartDetail.findFirst.mockResolvedValue({
       productId: 3,
-      product: { quantity: 5 },
+      product: { quantity: 5, isActive: true },
     });
     const res = await request(buildApp())
       .patch("/api/v1/cart/items/7")

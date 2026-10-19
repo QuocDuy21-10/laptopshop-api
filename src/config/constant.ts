@@ -1,8 +1,8 @@
 export const ACCOUNT_TYPE = {
-    SYSTEM: 'SYSTEM',
-    GOOGLE: 'GOOGLE',
-    GITHUB: 'GITHUB'
-}
+  SYSTEM: "SYSTEM",
+  GOOGLE: "GOOGLE",
+  GITHUB: "GITHUB",
+};
 
 export const factoryOptions = [
   { name: "Apple (MacBook)", value: "APPLE" },

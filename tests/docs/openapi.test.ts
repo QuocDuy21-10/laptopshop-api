@@ -60,6 +60,12 @@ describe("openapi document", () => {
     );
   });
 
+  it("documents product visibility and the admin product filters", () => {
+    expect((doc.components?.schemas?.Product as any).properties).toHaveProperty("isActive");
+    const names = (op("/api/v1/admin/products", "get").parameters as any[]).map((p) => p.name);
+    expect(names).toEqual(expect.arrayContaining(["isActive", "stock"]));
+  });
+
   it("names the response schemas the frontend generates types from", () => {
     expect(Object.keys(doc.components?.schemas ?? {})).toEqual(
       expect.arrayContaining(["Error", "User", "Me", "Product", "Cart", "Order", "AdminOrder"]),

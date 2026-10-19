@@ -16,6 +16,7 @@ const product = {
   sold: 0,
   factory: "ASUS",
   target: "GAMING",
+  isActive: true,
 };
 const fields = {
   name: "Asus",
@@ -40,6 +41,41 @@ describe("admin guard", () => {
       .get("/api/v1/admin/products")
       .set("Cookie", cookieFor(USER));
     expect(res.status).toBe(403);
+  });
+});
+
+describe("GET /api/v1/admin/products", () => {
+  beforeEach(() => {
+    prismaMock.product.count.mockResolvedValue(0);
+    prismaMock.product.findMany.mockResolvedValue([]);
+  });
+
+  it("includes hidden products when no visibility filter is sent", async () => {
+    const res = await asAdmin(request(buildApp()).get("/api/v1/admin/products"));
+    expect(res.status).toBe(200);
+    expect(prismaMock.product.findMany.mock.calls[0][0].where).toEqual({});
+  });
+
+  it("filters by visibility and low stock", async () => {
+    await asAdmin(request(buildApp()).get("/api/v1/admin/products?isActive=false&stock=low"));
+    expect(prismaMock.product.findMany.mock.calls[0][0].where).toEqual({
+      isActive: false,
+      quantity: { lte: 5 },
+    });
+  });
+
+  it("rejects an unknown visibility value", async () => {
+    const res = await asAdmin(request(buildApp()).get("/api/v1/admin/products?isActive=maybe"));
+    expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /api/v1/admin/products/:id", () => {
+  it("returns a hidden product", async () => {
+    prismaMock.product.findUnique.mockResolvedValue({ ...product, isActive: false });
+    const res = await asAdmin(request(buildApp()).get("/api/v1/admin/products/1"));
+    expect(res.status).toBe(200);
+    expect(res.body.data.isActive).toBe(false);
   });
 });
 
@@ -77,6 +113,25 @@ describe("PATCH /api/v1/admin/products/:id", () => {
       where: { id: 1 },
       data: { quantity: 0 },
     });
+  });
+
+  it("hides a product from a multipart string", async () => {
+    prismaMock.product.update.mockResolvedValue({ ...product, isActive: false });
+    const res = await asAdmin(request(buildApp()).patch("/api/v1/admin/products/1")).field(
+      "isActive",
+      "false",
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.product.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { isActive: false },
+    });
+  });
+
+  it("accepts a JSON boolean", async () => {
+    prismaMock.product.update.mockResolvedValue(product);
+    await asAdmin(request(buildApp()).patch("/api/v1/admin/products/1")).send({ isActive: true });
+    expect(prismaMock.product.update.mock.calls[0][0].data).toEqual({ isActive: true });
   });
 
   it("returns 404 for a missing product", async () => {

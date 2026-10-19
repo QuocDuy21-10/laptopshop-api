@@ -84,3 +84,20 @@ describe("cancellation under concurrency", () => {
     expect(after.sold).toBe(0);
   });
 });
+
+describe("hidden products", () => {
+  it("refuses to check out a product hidden after it was added to the cart", async () => {
+    const product = await createProduct(3);
+    const user = await createUser();
+    await putInCart(user.id, product.id, 1);
+    await prisma.product.update({ where: { id: product.id }, data: { isActive: false } });
+
+    await expect(placeOrder(user.id, "k", receiver)).rejects.toMatchObject({
+      code: "PRODUCT_UNAVAILABLE",
+    });
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).quantity).toBe(
+      3,
+    );
+    expect(await prisma.order.count()).toBe(0);
+  });
+});

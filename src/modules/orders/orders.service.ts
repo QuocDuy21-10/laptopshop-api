@@ -1,7 +1,7 @@
 import { prisma } from "config/client";
 import { AppError, notFound } from "lib/errors";
 import { pageArgs, pageMeta, PageQuery } from "lib/http";
-import { outOfStock } from "modules/cart/cart.service";
+import { outOfStock, productUnavailable } from "modules/cart/cart.service";
 import {
   adminOrderInclude,
   orderInclude,
@@ -31,13 +31,15 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
       // productId order gives every checkout the same lock order, so concurrent checkouts cannot deadlock
       const lines = await tx.cartDetail.findMany({
         where: { cart: { userId } },
-        include: { product: { select: { price: true } } },
+        include: { product: { select: { price: true, isActive: true } } },
         orderBy: { productId: "asc" },
       });
       if (lines.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
       for (const line of lines) {
+        if (!line.product.isActive) throw productUnavailable(line.productId);
+        // isActive in the condition also covers a product hidden after the read above
         const { count } = await tx.product.updateMany({
-          where: { id: line.productId, quantity: { gte: line.quantity } },
+          where: { id: line.productId, isActive: true, quantity: { gte: line.quantity } },
           data: { quantity: { decrement: line.quantity }, sold: { increment: line.quantity } },
         });
         if (count === 0) throw outOfStock(line.productId);
