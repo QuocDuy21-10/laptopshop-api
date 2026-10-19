@@ -19,6 +19,7 @@ import {
 } from "modules/users/users.schema";
 import {
   adminListProductsQuery,
+  compareQuery,
   listProductsQuery,
   productBody,
   productPatchBody,
@@ -84,6 +85,16 @@ const Product = registry.register(
     factory: z.string().nullable(),
     target: z.string().nullable(),
     isActive: z.boolean(),
+    cpu: z.string().nullable(),
+    gpu: z.string().nullable(),
+    ramGb: z.number().int().nullable(),
+    storageGb: z.number().int().nullable(),
+    screenSizeInch: z.number().nullable(),
+    screenResolution: z.string().nullable(),
+    refreshRateHz: z.number().int().nullable(),
+    batteryWh: z.number().int().nullable(),
+    weightGrams: z.number().int().nullable(),
+    warrantyMonths: z.number().int().nullable(),
   }),
 );
 const Option = z.object({ name: z.string(), value: z.string() });
@@ -266,6 +277,15 @@ op({
     "OK",
     data(z.object({ factoryOptions: z.array(Option), targetOptions: z.array(Option) })),
   ],
+});
+op({
+  method: "get",
+  path: `${v1}/products/compare`,
+  summary: "Compare 2 to 4 products",
+  tag: "products",
+  request: { query: compareQuery },
+  ok: [200, "Products in the requested order", data(z.array(Product))],
+  errors: { 400: "Invalid ids", 404: "Some products missing or hidden (details.missingIds)" },
 });
 op({
   method: "get",

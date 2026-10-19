@@ -8,6 +8,7 @@ const V1_PATHS = [
   "/api/v1/users/me",
   "/api/v1/products",
   "/api/v1/products/filters",
+  "/api/v1/products/compare",
   "/api/v1/products/{id}",
   "/api/v1/cart",
   "/api/v1/cart/items",
@@ -64,6 +65,31 @@ describe("openapi document", () => {
     expect((doc.components?.schemas?.Product as any).properties).toHaveProperty("isActive");
     const names = (op("/api/v1/admin/products", "get").parameters as any[]).map((p) => p.name);
     expect(names).toEqual(expect.arrayContaining(["isActive", "stock"]));
+  });
+
+  it("documents the product hardware specs", () => {
+    const props = (doc.components?.schemas?.Product as any).properties;
+    for (const key of [
+      "cpu",
+      "gpu",
+      "ramGb",
+      "storageGb",
+      "screenSizeInch",
+      "screenResolution",
+      "refreshRateHz",
+      "batteryWh",
+      "weightGrams",
+      "warrantyMonths",
+    ]) {
+      expect(props).toHaveProperty(key);
+    }
+  });
+
+  it("documents the public compare endpoint", () => {
+    const compare = op("/api/v1/products/compare", "get");
+    expect(compare.security).toBeUndefined();
+    expect((compare.parameters as any[]).map((p) => p.name)).toContain("ids");
+    expect(compare.responses["404"]).toBeDefined();
   });
 
   it("documents the admin order search filters", () => {

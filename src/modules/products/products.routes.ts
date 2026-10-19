@@ -4,11 +4,13 @@ import fileUploadMiddleware from "middlewares/multer";
 import { validate } from "middlewares/validate";
 import {
   adminListProductsQuery,
+  compareQuery,
   listProductsQuery,
   productBody,
   productPatchBody,
 } from "modules/products/products.schema";
 import {
+  compareProductsHandler,
   createProductHandler,
   deleteProductHandler,
   getAdminProductHandler,
@@ -23,6 +25,8 @@ export const productRoutes = Router();
 
 productRoutes.get("/", validate({ query: listProductsQuery }), listProductsHandler);
 productRoutes.get("/filters", getFiltersHandler);
+// must stay above "/:id", which would otherwise capture "compare"
+productRoutes.get("/compare", validate({ query: compareQuery }), compareProductsHandler);
 productRoutes.get("/:id", validate({ params: idParams }), getProductHandler);
 
 const productImageUpload = fileUploadMiddleware("image", "images/product");

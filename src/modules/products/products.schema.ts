@@ -18,6 +18,18 @@ export const LOW_STOCK_THRESHOLD = 5;
 // multipart and query strings arrive as "true"/"false"; z.coerce.boolean would turn "false" into true
 const flag = z.union([z.boolean(), z.enum(["true", "false"]).transform((v) => v === "true")]);
 
+// multipart sends "" for a cleared field; z.coerce.number would turn it into 0
+const blankToNull = (v: unknown) => (v === "" ? null : v);
+const specText = (max: number) =>
+  z.preprocess(blankToNull, z.string().trim().min(1).max(max).nullable()).optional();
+const specNumber = (min: number, max: number, int = true) =>
+  z
+    .preprocess(
+      blankToNull,
+      (int ? z.coerce.number().int() : z.coerce.number()).min(min).max(max).nullable(),
+    )
+    .optional();
+
 const csvOf = (allowed: readonly string[]) =>
   z
     .string()
@@ -57,8 +69,29 @@ export const productBody = z.object({
   detailDesc: z.string().trim().min(1),
   factory: z.string().refine((v) => FACTORIES.includes(v), { message: "Unknown factory" }),
   target: z.string().refine((v) => TARGETS.includes(v), { message: "Unknown target" }),
+  cpu: specText(255),
+  gpu: specText(255),
+  ramGb: specNumber(1, 256),
+  storageGb: specNumber(1, 16384),
+  screenSizeInch: specNumber(10, 20, false),
+  screenResolution: specText(50),
+  refreshRateHz: specNumber(30, 500),
+  batteryWh: specNumber(1, 200),
+  weightGrams: specNumber(300, 10000),
+  warrantyMonths: specNumber(0, 120),
 });
 export type ProductBody = z.infer<typeof productBody>;
 
 export const productPatchBody = productBody.partial().extend({ isActive: flag.optional() });
 export type ProductPatchBody = z.infer<typeof productPatchBody>;
+
+// ids are capped at 9 digits so they always fit the INT primary key
+export const compareQuery = z.object({
+  ids: z
+    .string()
+    .regex(/^\s*[1-9]\d{0,8}\s*(,\s*[1-9]\d{0,8}\s*)*$/, "Comma-separated product ids")
+    .transform((s) => s.split(",").map(Number))
+    .refine((ids) => ids.length >= 2 && ids.length <= 4, { message: "Compare 2 to 4 products" })
+    .refine((ids) => new Set(ids).size === ids.length, { message: "Duplicate product ids" }),
+});
+export type CompareQuery = z.infer<typeof compareQuery>;

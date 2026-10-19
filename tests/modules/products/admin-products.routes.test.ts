@@ -100,9 +100,67 @@ describe("POST /api/v1/admin/products", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("stores hardware specs sent as multipart fields", async () => {
+    prismaMock.product.create.mockResolvedValue(product);
+    const specs = {
+      cpu: "Intel Core i5-11400H",
+      gpu: "NVIDIA RTX 2050 4GB",
+      ramGb: "16",
+      storageGb: "512",
+      screenSizeInch: "15.6",
+      screenResolution: "1920x1080",
+      refreshRateHz: "144",
+      batteryWh: "48",
+      weightGrams: "2300",
+      warrantyMonths: "24",
+    };
+    let req = asAdmin(request(buildApp()).post("/api/v1/admin/products"));
+    for (const [k, v] of Object.entries({ ...fields, ...specs })) req = req.field(k, v);
+    const res = await req;
+    expect(res.status).toBe(201);
+    expect(prismaMock.product.create.mock.calls[0][0].data).toEqual({
+      ...fields,
+      price: 100,
+      quantity: 5,
+      cpu: "Intel Core i5-11400H",
+      gpu: "NVIDIA RTX 2050 4GB",
+      ramGb: 16,
+      storageGb: 512,
+      screenSizeInch: 15.6,
+      screenResolution: "1920x1080",
+      refreshRateHz: 144,
+      batteryWh: 48,
+      weightGrams: 2300,
+      warrantyMonths: 24,
+    });
+  });
+
+  it.each([
+    ["ramGb", "0"],
+    ["ramGb", "8.5"],
+    ["screenSizeInch", "30"],
+    ["weightGrams", "abc"],
+  ])("rejects %s=%s", async (key, value) => {
+    let req = asAdmin(request(buildApp()).post("/api/v1/admin/products"));
+    for (const [k, v] of Object.entries({ ...fields, [key]: value })) req = req.field(k, v);
+    expect((await req).status).toBe(400);
+  });
 });
 
 describe("PATCH /api/v1/admin/products/:id", () => {
+  it("clears specs sent as empty multipart strings instead of storing 0", async () => {
+    prismaMock.product.update.mockResolvedValue(product);
+    const res = await asAdmin(request(buildApp()).patch("/api/v1/admin/products/1"))
+      .field("ramGb", "")
+      .field("cpu", "");
+    expect(res.status).toBe(200);
+    expect(prismaMock.product.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { ramGb: null, cpu: null },
+    });
+  });
+
   it("updates only the sent fields", async () => {
     prismaMock.product.update.mockResolvedValue({ ...product, quantity: 0 });
     const res = await asAdmin(request(buildApp()).patch("/api/v1/admin/products/1")).send({
