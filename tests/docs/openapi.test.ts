@@ -25,6 +25,7 @@ const V1_PATHS = [
   "/api/v1/admin/orders/{id}",
   "/api/v1/admin/orders/{id}/status",
   "/api/v1/admin/dashboard",
+  "/api/v1/admin/dashboard/sales",
 ];
 const secured = [{ cookieAuth: [] }, { bearerAuth: [] }];
 
