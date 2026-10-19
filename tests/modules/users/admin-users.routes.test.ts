@@ -68,6 +68,45 @@ describe("PATCH /api/v1/admin/users/:id", () => {
   });
 });
 
+describe("PATCH /api/v1/admin/users/:id role changes", () => {
+  it("refuses to change the caller's own role", async () => {
+    prismaMock.role.findUnique.mockResolvedValue({ id: 2 });
+    prismaMock.user.findUnique.mockResolvedValue({ roleId: 1 });
+    const res = await asAdmin(request(buildApp()).patch(`/api/v1/admin/users/${ADMIN.id}`)).send({
+      roleId: 2,
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("CANNOT_CHANGE_OWN_ROLE");
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it("lets the caller save their own profile when the role is unchanged", async () => {
+    prismaMock.role.findUnique.mockResolvedValue({ id: 1 });
+    prismaMock.user.findUnique.mockResolvedValue({ roleId: 1 });
+    prismaMock.user.update.mockResolvedValue(row);
+    const res = await asAdmin(request(buildApp()).patch(`/api/v1/admin/users/${ADMIN.id}`)).send({
+      fullName: "X",
+      roleId: 1,
+    });
+    expect(res.status).toBe(200);
+    expect(prismaMock.refreshToken.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("revokes the sessions of a user whose role changes", async () => {
+    prismaMock.role.findUnique.mockResolvedValue({ id: 1 });
+    prismaMock.user.findUnique.mockResolvedValue({ roleId: 2 });
+    prismaMock.user.update.mockResolvedValue(row);
+    const res = await asAdmin(request(buildApp()).patch("/api/v1/admin/users/5")).send({
+      roleId: 1,
+    });
+    expect(res.status).toBe(200);
+    expect(prismaMock.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: { userId: 5, revokedAt: null },
+      data: { revokedAt: expect.any(Date) },
+    });
+  });
+});
+
 describe("DELETE /api/v1/admin/users/:id", () => {
   it("refuses to delete the caller", async () => {
     const res = await asAdmin(request(buildApp()).delete(`/api/v1/admin/users/${ADMIN.id}`));
