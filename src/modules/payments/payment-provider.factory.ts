@@ -9,7 +9,10 @@ const config = () => ({
   bankCode: env.SEPAY_BANK_CODE ?? "VCB",
   accountNumber: env.SEPAY_ACCOUNT_NUMBER ?? "0123456789",
   accountName: env.SEPAY_ACCOUNT_NAME ?? "LAPTOP SHOP",
-  ...(env.PAYMENT_PROVIDER === "fake" ? { apiBaseUrl: "http://127.0.0.1" } : {}),
+  apiBaseUrl:
+    env.SEPAY_MODE === "test"
+      ? "https://userapi-sandbox.sepay.vn/v2"
+      : "https://userapi.sepay.vn/v2",
 });
 
 export const paymentProvider = (): PaymentProvider =>

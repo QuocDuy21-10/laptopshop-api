@@ -189,16 +189,21 @@ export const expirePayments = async (now = new Date()) => {
   let expired = 0;
   for (const payment of payments) {
     await prisma.$transaction(async (tx) => {
+      const orderUpdated = await tx.order.updateMany({
+        where: {
+          id: payment.orderId,
+          status: ORDER_STATUS.PENDING,
+          paymentStatus: ORDER_PAYMENT_STATUS.UNPAID,
+        },
+        data: { status: ORDER_STATUS.CANCELLED, paymentStatus: ORDER_PAYMENT_STATUS.FAILED },
+      });
+      if (orderUpdated.count === 0) return;
       const updated = await tx.payment.updateMany({
         where: { id: payment.id, status: PAYMENT_STATUS.PENDING },
         data: { status: PAYMENT_STATUS.EXPIRED, cancelledAt: now },
       });
-      if (updated.count === 0) return;
-      const orderUpdated = await tx.order.updateMany({
-        where: { id: payment.orderId, status: ORDER_STATUS.PENDING },
-        data: { status: ORDER_STATUS.CANCELLED, paymentStatus: ORDER_PAYMENT_STATUS.FAILED },
-      });
-      if (orderUpdated.count === 0) return;
+      if (updated.count === 0)
+        throw new AppError("Payment changed while expiring", 409, "PAYMENT_EXPIRY_RACE");
       for (const line of payment.order.orderDetails)
         await moveStock(tx, {
           productId: line.productId,

@@ -40,18 +40,19 @@ describe("admin payment event review", () => {
   });
 
   it("requires a note to resolve an event", async () => {
+    const id = "11111111-1111-4111-8111-111111111111";
     prismaMock.paymentWebhookEvent.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.paymentWebhookEvent.findUnique.mockResolvedValue({
-      id: "event-1",
+      id,
       status: "RESOLVED",
     });
     const res = await request(buildApp())
-      .post("/api/v1/admin/payment-events/event-1/resolve")
+      .post(`/api/v1/admin/payment-events/${id}/resolve`)
       .set("Cookie", cookieFor(ADMIN))
       .send({ note: "Đã kiểm tra với ngân hàng" });
     expect(res.status).toBe(200);
     expect(prismaMock.paymentWebhookEvent.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: "event-1", status: "REVIEW_REQUIRED" } }),
+      expect.objectContaining({ where: { id, status: "REVIEW_REQUIRED" } }),
     );
   });
 });

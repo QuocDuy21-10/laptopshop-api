@@ -8,8 +8,8 @@ export const reconcilePayments = async () => {
   if (provider.id === "fake") return 0;
   const now = new Date();
   const checkpoint = await prisma.paymentProviderCheckpoint.upsert({
-    where: { provider_mode: { provider: provider.id, mode: "live" } },
-    create: { provider: provider.id, mode: "live", lastStartedAt: now },
+    where: { provider_mode: { provider: provider.id, mode: "sepay" } },
+    create: { provider: provider.id, mode: "sepay", lastStartedAt: now },
     update: { lastStartedAt: now },
   });
   let cursor = checkpoint.cursor;
@@ -41,6 +41,14 @@ export const reconcilePayments = async () => {
   }
 };
 
+export const purgeEncryptedPaymentPayloads = async (now = new Date()) => {
+  const cutoff = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+  return prisma.paymentWebhookEvent.updateMany({
+    where: { receivedAt: { lt: cutoff }, rawPayload: { not: null } },
+    data: { rawPayload: null, rawPayloadIv: null, rawPayloadTag: null, encryptionKeyId: null },
+  });
+};
+
 export const startPaymentWorker = () => {
   const runExpiry = async () => {
     try {
@@ -52,15 +60,27 @@ export const startPaymentWorker = () => {
   };
   void runExpiry();
   void reconcilePayments().catch(() => undefined);
+  void purgeEncryptedPaymentPayloads().catch((error) =>
+    logger.error({ err: error }, "payment payload purge failed"),
+  );
   const expiryTimer = setInterval(() => void runExpiry(), 30_000);
   const reconciliationTimer = setInterval(
     () => void reconcilePayments().catch(() => undefined),
     15 * 60_000,
   );
+  const purgeTimer = setInterval(
+    () =>
+      void purgeEncryptedPaymentPayloads().catch((error) =>
+        logger.error({ err: error }, "payment payload purge failed"),
+      ),
+    24 * 60 * 60_000,
+  );
   expiryTimer.unref();
   reconciliationTimer.unref();
+  purgeTimer.unref();
   return () => {
     clearInterval(expiryTimer);
     clearInterval(reconciliationTimer);
+    clearInterval(purgeTimer);
   };
 };

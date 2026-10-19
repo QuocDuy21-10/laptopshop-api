@@ -21,6 +21,7 @@ describe("parseEnv", () => {
     expect(e.PAYMENT_PROVIDER).toBe("fake");
     expect(e.PAYMENT_TTL_MINUTES).toBe(15);
     expect(e.PAYMENT_GRACE_SECONDS).toBe(120);
+    expect(e.SEPAY_MODE).toBe("test");
   });
 
   it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {
@@ -58,6 +59,7 @@ describe("parseEnv", () => {
       PAYMENT_PROVIDER: "sepay",
       PAYMENT_TTL_MINUTES: "20",
       PAYMENT_GRACE_SECONDS: "180",
+      SEPAY_MODE: "live",
       PAYMENT_EVENT_ENCRYPTION_KEY: "a".repeat(64),
       SEPAY_WEBHOOK_SECRET: "webhook-secret",
       SEPAY_API_TOKEN: "api-token",
@@ -69,6 +71,7 @@ describe("parseEnv", () => {
     expect(e.PAYMENT_PROVIDER).toBe("sepay");
     expect(e.PAYMENT_TTL_MINUTES).toBe(20);
     expect(e.PAYMENT_GRACE_SECONDS).toBe(180);
+    expect(e.SEPAY_MODE).toBe("live");
   });
 
   it("rejects fake provider in production and missing live secrets", () => {

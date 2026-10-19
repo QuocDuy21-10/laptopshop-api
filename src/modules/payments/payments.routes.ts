@@ -11,7 +11,11 @@ import {
   getPaymentEventHandler,
   resolvePaymentEventHandler,
 } from "modules/payments/payments.controller";
-import { paymentEventQuery, paymentProviderParam } from "modules/payments/payments.schema";
+import {
+  paymentEventIdParams,
+  paymentEventQuery,
+  paymentProviderParam,
+} from "modules/payments/payments.schema";
 
 export const paymentRoutes = Router();
 paymentRoutes.use(authenticate);
@@ -27,8 +31,12 @@ paymentWebhookRoutes.post(
 
 export const adminPaymentRoutes = Router();
 adminPaymentRoutes.get("/", validate({ query: paymentEventQuery }), listPaymentEventsHandler);
-adminPaymentRoutes.get("/:id", getPaymentEventHandler);
-adminPaymentRoutes.post("/:id/resolve", resolvePaymentEventHandler);
+adminPaymentRoutes.get("/:id", validate({ params: paymentEventIdParams }), getPaymentEventHandler);
+adminPaymentRoutes.post(
+  "/:id/resolve",
+  validate({ params: paymentEventIdParams }),
+  resolvePaymentEventHandler,
+);
 
 export const orderPaymentRoutes = Router();
 orderPaymentRoutes.use(authenticate);

@@ -174,6 +174,22 @@ describe("bank transfer payments", () => {
     );
     expect(await expirePayments(expiredAt)).toBe(0);
   });
+
+  it("does not expire a payment after fulfillment already left pending", async () => {
+    const product = await createProduct(2, 1000);
+    const user = await createUser();
+    await putInCart(user.id, product.id, 1);
+    const { order } = await placeOrder(user.id, "qr-4", {
+      ...receiver,
+      paymentMethod: "BANK_TRANSFER",
+    });
+    await prisma.order.update({ where: { id: order.id }, data: { status: "SHIPPING" } });
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
+    expect(await expirePayments(new Date(payment.cancelAfter.getTime() + 1))).toBe(0);
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe(
+      "PENDING",
+    );
+  });
 });
 
 describe("order status history", () => {

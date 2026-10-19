@@ -33,6 +33,7 @@ const schema = z
       .default("false")
       .transform((v) => v === "true"),
     PAYMENT_PROVIDER: z.enum(["fake", "sepay"]).default("fake"),
+    SEPAY_MODE: z.enum(["test", "live"]).default("test"),
     PAYMENT_TTL_MINUTES: z.coerce.number().int().positive().default(15),
     PAYMENT_GRACE_SECONDS: z.coerce.number().int().nonnegative().default(120),
     PAYMENT_EVENT_ENCRYPTION_KEY: z.preprocess(emptyToUndefined, z.string().length(64).optional()),
@@ -56,6 +57,13 @@ const schema = z
         code: z.ZodIssueCode.custom,
         path: ["PAYMENT_PROVIDER"],
         message: "PAYMENT_PROVIDER=sepay is required in production",
+      });
+    }
+    if (e.NODE_ENV === "production" && e.BANK_TRANSFER_ENABLED && e.SEPAY_MODE !== "live") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["SEPAY_MODE"],
+        message: "SEPAY_MODE=live is required in production",
       });
     }
     if (e.BANK_TRANSFER_ENABLED) {
