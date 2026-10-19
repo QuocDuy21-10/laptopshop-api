@@ -30,6 +30,7 @@ import {
   placeOrderBody,
   updateStatusBody,
 } from "modules/orders/orders.schema";
+import { salesQuery } from "modules/dashboard/dashboard.schema";
 import { ORDER_STATUSES } from "modules/orders/order-status";
 
 extendZodWithOpenApi(z);
@@ -163,6 +164,22 @@ const Dashboard = registry.register(
     revenue: z.number(),
     ordersByStatus: z.record(z.number()),
     lowStockCount: z.number(),
+  }),
+);
+
+const SalesReport = registry.register(
+  "SalesReport",
+  z.object({
+    daily: z.array(z.object({ date: z.string(), revenue: z.number(), orders: z.number() })),
+    topProducts: z.array(
+      z.object({
+        productId: z.number(),
+        name: z.string(),
+        quantity: z.number(),
+        revenue: z.number(),
+      }),
+    ),
+    totals: z.object({ revenue: z.number(), orders: z.number() }),
   }),
 );
 
@@ -538,6 +555,16 @@ op({
   tag: "admin",
   auth: "admin",
   ok: [200, "OK", data(Dashboard)],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/dashboard/sales`,
+  summary: "Revenue per Vietnam day and top products for completed orders",
+  tag: "admin",
+  auth: "admin",
+  request: { query: salesQuery },
+  ok: [200, "OK", data(SalesReport)],
+  errors: { 400: "Invalid range" },
 });
 
 export const buildOpenApiDocument = () =>
