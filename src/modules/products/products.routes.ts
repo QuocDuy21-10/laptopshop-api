@@ -3,6 +3,7 @@ import { idParams } from "lib/http";
 import fileUploadMiddleware from "middlewares/multer";
 import { validate } from "middlewares/validate";
 import {
+  adminExportProductsQuery,
   adminListProductsQuery,
   listProductsQuery,
   productBody,
@@ -11,6 +12,7 @@ import {
 import {
   createProductHandler,
   deleteProductHandler,
+  exportProductsHandler,
   getAdminProductHandler,
   getFiltersHandler,
   getProductHandler,
@@ -35,6 +37,11 @@ adminProductRoutes.post(
   productImageUpload,
   validate({ body: productBody }),
   createProductHandler,
+);
+adminProductRoutes.get(
+  "/export.csv",
+  validate({ query: adminExportProductsQuery }),
+  exportProductsHandler,
 );
 adminProductRoutes.get("/:id", validate({ params: idParams }), getAdminProductHandler);
 adminProductRoutes.patch(

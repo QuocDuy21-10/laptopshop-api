@@ -66,3 +66,6 @@ export const productPatchBody = productBody
   .partial()
   .extend({ isActive: flag.optional() });
 export type ProductPatchBody = z.infer<typeof productPatchBody>;
+
+export const adminExportProductsQuery = adminListProductsQuery.omit({ page: true, pageSize: true });
+export type AdminExportProductsQuery = z.infer<typeof adminExportProductsQuery>;

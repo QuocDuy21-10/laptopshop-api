@@ -25,3 +25,6 @@ export type AdminListOrdersQuery = z.infer<typeof adminListOrdersQuery>;
 
 export const updateStatusBody = z.object({ status: z.enum(ORDER_STATUSES) });
 export type UpdateStatusBody = z.infer<typeof updateStatusBody>;
+
+export const adminExportOrdersQuery = adminListOrdersQuery.omit({ page: true, pageSize: true });
+export type AdminExportOrdersQuery = z.infer<typeof adminExportOrdersQuery>;

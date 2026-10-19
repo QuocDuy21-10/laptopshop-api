@@ -2,7 +2,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
 import { AppError, notFound } from "lib/errors";
 import { pageArgs, pageMeta, PageQuery } from "lib/http";
-import { assertDayRange, createdAtRange } from "lib/shop-time";
+import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
+import { assertDayRange, createdAtRange, formatShopDateTime } from "lib/shop-time";
 import { productUnavailable } from "modules/cart/cart.service";
 import { moveStock } from "modules/inventory/inventory.service";
 import {
@@ -13,7 +14,11 @@ import {
   toAdminOrderDto,
   toOrderDto,
 } from "modules/orders/orders.mapper";
-import { AdminListOrdersQuery, PlaceOrderBody } from "modules/orders/orders.schema";
+import {
+  AdminExportOrdersQuery,
+  AdminListOrdersQuery,
+  PlaceOrderBody,
+} from "modules/orders/orders.schema";
 import {
   canTransition,
   invalidTransition,
@@ -179,7 +184,7 @@ export const cancelMyOrder = (userId: number, orderId: number) =>
     from: [ORDER_STATUS.PENDING],
   });
 
-export const adminOrderWhere = (q: AdminListOrdersQuery): Prisma.OrderWhereInput => {
+export const adminOrderWhere = (q: AdminExportOrdersQuery): Prisma.OrderWhereInput => {
   assertDayRange(q.from, q.to);
   // up to 9 digits always fits the INT id column; longer digit strings are phone numbers
   const id = q.q && /^\d{1,9}$/.test(q.q) ? Number(q.q) : undefined;
@@ -214,4 +219,36 @@ export const getAnyOrder = async (id: number) => {
   const order = await prisma.order.findUnique({ where: { id }, include: adminOrderDetailInclude });
   if (!order) throw notFound("Order");
   return toAdminOrderDetailDto(order);
+};
+
+type ExportOrderRow = Prisma.OrderGetPayload<{
+  include: { user: { select: { username: true; fullName: true } } };
+}>;
+
+const ORDER_COLUMNS: CsvColumn<ExportOrderRow>[] = [
+  { header: "Mã đơn", value: (o) => o.id },
+  { header: "Ngày đặt", value: (o) => formatShopDateTime(o.createdAt) },
+  {
+    header: "Ngày hoàn thành",
+    value: (o) => (o.completedAt ? formatShopDateTime(o.completedAt) : null),
+  },
+  { header: "Khách hàng", value: (o) => o.user.fullName ?? o.user.username },
+  { header: "Email", value: (o) => o.user.username },
+  { header: "Người nhận", value: (o) => o.receiverName },
+  { header: "SĐT", value: (o) => o.receiverPhone },
+  { header: "Địa chỉ", value: (o) => o.receiverAddress },
+  { header: "Tổng tiền", value: (o) => o.totalPrice },
+  { header: "Trạng thái", value: (o) => o.status },
+  { header: "Thanh toán", value: (o) => o.paymentStatus },
+];
+
+export const exportOrders = async (q: AdminExportOrdersQuery) => {
+  const where = adminOrderWhere(q);
+  assertExportSize(await prisma.order.count({ where }));
+  const rows = await prisma.order.findMany({
+    where,
+    include: { user: { select: { username: true, fullName: true } } },
+    orderBy: { id: "desc" },
+  });
+  return toCsv(ORDER_COLUMNS, rows);
 };

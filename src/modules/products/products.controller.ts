@@ -1,7 +1,9 @@
 import { RequestHandler } from "express";
 import { factoryOptions, targetOptions } from "config/constant";
+import { sendCsv } from "lib/csv";
 import { IdParams } from "lib/http";
 import {
+  AdminExportProductsQuery,
   AdminListProductsQuery,
   ListProductsQuery,
   ProductBody,
@@ -10,6 +12,7 @@ import {
 import {
   createProduct,
   deleteProduct,
+  exportProducts,
   getProduct,
   listProducts,
   updateProduct,
@@ -50,4 +53,8 @@ export const updateProductHandler: RequestHandler = async (req, res) => {
 export const deleteProductHandler: RequestHandler = async (_req, res) => {
   await deleteProduct((res.locals.params as IdParams).id);
   res.sendStatus(204);
+};
+
+export const exportProductsHandler: RequestHandler = async (_req, res) => {
+  sendCsv(res, "products", await exportProducts(res.locals.query as AdminExportProductsQuery));
 };

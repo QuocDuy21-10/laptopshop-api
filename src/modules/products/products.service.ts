@@ -1,10 +1,12 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, Product } from "@prisma/client";
 import { prisma } from "config/client";
 import { AppError, isNotFound, notFound } from "lib/errors";
+import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
 import { pageArgs, pageMeta } from "lib/http";
 import { moveStock } from "modules/inventory/inventory.service";
 import { toProductDto } from "modules/products/products.mapper";
 import {
+  AdminExportProductsQuery,
   AdminListProductsQuery,
   LOW_STOCK_THRESHOLD,
   PRICE_RANGES,
@@ -14,18 +16,24 @@ import {
 } from "modules/products/products.schema";
 
 // public callers always see only active products; admin may filter either way
+// public callers always see only active products; admin may filter either way
+export const productWhere = (
+  q: AdminExportProductsQuery,
+  admin: boolean,
+): Prisma.ProductWhereInput => ({
+  ...(admin ? (q.isActive === undefined ? {} : { isActive: q.isActive }) : { isActive: true }),
+  ...(q.stock === "low" ? { quantity: { lte: LOW_STOCK_THRESHOLD } } : {}),
+  // MySQL utf8mb4_unicode_ci makes contains case-insensitive
+  ...(q.q ? { name: { contains: q.q } } : {}),
+  ...(q.factory.length ? { factory: { in: q.factory } } : {}),
+  ...(q.target.length ? { target: { in: q.target } } : {}),
+  ...(q.price.length
+    ? { OR: q.price.map((range) => ({ price: PRICE_RANGES[range as PriceRange] })) }
+    : {}),
+});
+
 export const listProducts = async (q: AdminListProductsQuery, admin = false) => {
-  const where: Prisma.ProductWhereInput = {
-    ...(admin ? (q.isActive === undefined ? {} : { isActive: q.isActive }) : { isActive: true }),
-    ...(q.stock === "low" ? { quantity: { lte: LOW_STOCK_THRESHOLD } } : {}),
-    // MySQL utf8mb4_unicode_ci makes contains case-insensitive
-    ...(q.q ? { name: { contains: q.q } } : {}),
-    ...(q.factory.length ? { factory: { in: q.factory } } : {}),
-    ...(q.target.length ? { target: { in: q.target } } : {}),
-    ...(q.price.length
-      ? { OR: q.price.map((range) => ({ price: PRICE_RANGES[range as PriceRange] })) }
-      : {}),
-  };
+  const where = productWhere(q, admin);
   const orderBy: Prisma.ProductOrderByWithRelationInput = q.sort
     ? { price: q.sort === "price_asc" ? "asc" : "desc" }
     : { id: "asc" };
@@ -98,4 +106,21 @@ export const deleteProduct = async (id: number) => {
     if (isNotFound(e)) throw notFound("Product");
     throw e;
   }
+};
+
+const PRODUCT_COLUMNS: CsvColumn<Product>[] = [
+  { header: "Mã", value: (p) => p.id },
+  { header: "Tên", value: (p) => p.name },
+  { header: "Hãng", value: (p) => p.factory },
+  { header: "Nhu cầu", value: (p) => p.target },
+  { header: "Giá", value: (p) => p.price },
+  { header: "Tồn kho", value: (p) => p.quantity },
+  { header: "Đã bán", value: (p) => p.sold ?? 0 },
+  { header: "Đang bán", value: (p) => (p.isActive ? 1 : 0) },
+];
+
+export const exportProducts = async (q: AdminExportProductsQuery) => {
+  const where = productWhere(q, true);
+  assertExportSize(await prisma.product.count({ where }));
+  return toCsv(PRODUCT_COLUMNS, await prisma.product.findMany({ where, orderBy: { id: "asc" } }));
 };
