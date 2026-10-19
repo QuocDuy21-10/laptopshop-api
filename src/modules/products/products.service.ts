@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
 import { AppError, isNotFound, notFound } from "lib/errors";
 import { pageArgs, pageMeta } from "lib/http";
+import { moveStock } from "modules/inventory/inventory.service";
 import { toProductDto } from "modules/products/products.mapper";
 import {
   AdminListProductsQuery,
@@ -41,21 +42,33 @@ export const getProduct = async (id: number, admin = false) => {
   return toProductDto(product);
 };
 
-export const createProduct = async (input: ProductBody, image?: string) =>
-  toProductDto(
-    await prisma.product.create({
+export const createProduct = async (
+  input: ProductBody,
+  image: string | undefined,
+  actorId: number,
+) =>
+  prisma.$transaction(async (tx) => {
+    const created = await tx.product.create({
       data: {
         name: input.name,
         price: input.price,
-        quantity: input.quantity,
+        quantity: 0,
         shortDesc: input.shortDesc,
         detailDesc: input.detailDesc,
         factory: input.factory,
         target: input.target,
         ...(image ? { image } : {}),
       },
-    }),
-  );
+    });
+    if (input.quantity === 0) return toProductDto(created);
+    await moveStock(tx, {
+      productId: created.id,
+      delta: input.quantity,
+      reason: "INITIAL",
+      actorId,
+    });
+    return toProductDto(await tx.product.findUniqueOrThrow({ where: { id: created.id } }));
+  });
 
 export const updateProduct = async (id: number, input: ProductPatchBody, image?: string) => {
   try {
@@ -78,6 +91,7 @@ export const deleteProduct = async (id: number) => {
   try {
     await prisma.$transaction([
       prisma.cartDetail.deleteMany({ where: { productId: id } }),
+      prisma.stockMovement.deleteMany({ where: { productId: id } }),
       prisma.product.delete({ where: { id } }),
     ]);
   } catch (e) {

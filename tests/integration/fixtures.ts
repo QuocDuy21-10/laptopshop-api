@@ -1,6 +1,7 @@
 import { prisma } from "config/client";
 
 export const resetDb = async () => {
+  await prisma.stockMovement.deleteMany();
   await prisma.orderStatusHistory.deleteMany();
   await prisma.orderDetail.deleteMany();
   await prisma.order.deleteMany();
@@ -28,7 +29,20 @@ export const createUser = async () => {
 };
 
 export const createProduct = (quantity: number, price = 1000) =>
-  prisma.product.create({ data: { name: `product-${quantity}-${price}`, price, quantity } });
+  prisma.product.create({
+    data: {
+      name: `product-${quantity}-${price}`,
+      price,
+      quantity,
+      ...(quantity ? { stockMovements: { create: { delta: quantity, reason: "OPENING" } } } : {}),
+    },
+  });
+
+export const ledgerMatches = async (productId: number) => {
+  const product = await prisma.product.findUniqueOrThrow({ where: { id: productId } });
+  const sum = await prisma.stockMovement.aggregate({ where: { productId }, _sum: { delta: true } });
+  return product.quantity === (sum._sum.delta ?? 0);
+};
 
 export const putInCart = (userId: number, productId: number, quantity: number) =>
   prisma.cart.upsert({

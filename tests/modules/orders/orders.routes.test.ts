@@ -47,7 +47,10 @@ const post = () =>
     .set("Cookie", cookieFor(USER))
     .set("Idempotency-Key", "k1");
 
-beforeEach(resetPrisma);
+beforeEach(() => {
+  resetPrisma();
+  prismaMock.stockMovement.create.mockResolvedValue({ id: 900 });
+});
 
 describe("POST /api/v1/orders", () => {
   it("requires an Idempotency-Key header", async () => {
@@ -97,6 +100,20 @@ describe("POST /api/v1/orders", () => {
     expect(prismaMock.orderStatusHistory.create).toHaveBeenCalledWith({
       data: { orderId: 50, fromStatus: null, toStatus: "PENDING", actorId: USER.id },
     });
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith({
+      data: {
+        productId: 1,
+        delta: -2,
+        reason: "ORDER",
+        orderId: undefined,
+        actorId: USER.id,
+        note: undefined,
+      },
+    });
+    expect(prismaMock.stockMovement.updateMany).toHaveBeenCalledWith({
+      where: { id: { in: [900, 900] } },
+      data: { orderId: 50 },
+    });
   });
 
   it("returns 409 PRODUCT_UNAVAILABLE and creates nothing when a line is hidden", async () => {
@@ -118,13 +135,14 @@ describe("POST /api/v1/orders", () => {
   it("returns 409 OUT_OF_STOCK and creates nothing when stock is short", async () => {
     prismaMock.order.findUnique.mockResolvedValue(null);
     prismaMock.cartDetail.findMany.mockResolvedValue(lines);
+    prismaMock.order.create.mockResolvedValue(orderRow());
     prismaMock.product.updateMany
       .mockResolvedValueOnce({ count: 1 })
       .mockResolvedValueOnce({ count: 0 });
     const res = await post().send(receiver);
     expect(res.status).toBe(409);
     expect(res.body.error).toMatchObject({ code: "OUT_OF_STOCK", details: { productId: 2 } });
-    expect(prismaMock.order.create).not.toHaveBeenCalled();
+    expect(prismaMock.cartDetail.deleteMany).not.toHaveBeenCalled();
   });
 
   it("replays an existing order for a reused key", async () => {
@@ -202,6 +220,16 @@ describe("POST /api/v1/orders/me/:id/cancel", () => {
     });
     expect(prismaMock.orderStatusHistory.create).toHaveBeenCalledWith({
       data: { orderId: 50, fromStatus: "PENDING", toStatus: "CANCELLED", actorId: USER.id },
+    });
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith({
+      data: {
+        productId: 1,
+        delta: 2,
+        reason: "ORDER_CANCEL",
+        orderId: 50,
+        actorId: USER.id,
+        note: undefined,
+      },
     });
   });
 

@@ -82,6 +82,7 @@ describe("GET /api/v1/admin/products/:id", () => {
 describe("POST /api/v1/admin/products", () => {
   it("creates a product from multipart fields", async () => {
     prismaMock.product.create.mockResolvedValue(product);
+    prismaMock.product.findUniqueOrThrow.mockResolvedValue(product);
     let req = asAdmin(request(buildApp()).post("/api/v1/admin/products"));
     for (const [k, v] of Object.entries(fields)) req = req.field(k, v);
     const res = await req;
@@ -89,7 +90,17 @@ describe("POST /api/v1/admin/products", () => {
     expect(prismaMock.product.create.mock.calls[0][0].data).toEqual({
       ...fields,
       price: 100,
-      quantity: 5,
+      quantity: 0,
+    });
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith({
+      data: {
+        productId: 1,
+        delta: 5,
+        reason: "INITIAL",
+        orderId: undefined,
+        actorId: ADMIN.id,
+        note: undefined,
+      },
     });
   });
 
@@ -104,15 +115,24 @@ describe("POST /api/v1/admin/products", () => {
 
 describe("PATCH /api/v1/admin/products/:id", () => {
   it("updates only the sent fields", async () => {
-    prismaMock.product.update.mockResolvedValue({ ...product, quantity: 0 });
+    prismaMock.product.update.mockResolvedValue({ ...product, price: 200 });
     const res = await asAdmin(request(buildApp()).patch("/api/v1/admin/products/1")).send({
-      quantity: 0,
+      price: 200,
     });
     expect(res.status).toBe(200);
     expect(prismaMock.product.update).toHaveBeenCalledWith({
       where: { id: 1 },
-      data: { quantity: 0 },
+      data: { price: 200 },
     });
+  });
+
+  it("ignores a quantity sent to the product endpoint", async () => {
+    prismaMock.product.update.mockResolvedValue(product);
+    await asAdmin(request(buildApp()).patch("/api/v1/admin/products/1")).send({
+      name: "X",
+      quantity: 99,
+    });
+    expect(prismaMock.product.update.mock.calls[0][0].data).toEqual({ name: "X" });
   });
 
   it("hides a product from a multipart string", async () => {
@@ -156,6 +176,7 @@ describe("DELETE /api/v1/admin/products/:id", () => {
     const res = await asAdmin(request(buildApp()).delete("/api/v1/admin/products/1"));
     expect(res.status).toBe(204);
     expect(prismaMock.cartDetail.deleteMany).toHaveBeenCalledWith({ where: { productId: 1 } });
+    expect(prismaMock.stockMovement.deleteMany).toHaveBeenCalledWith({ where: { productId: 1 } });
     expect(prismaMock.product.delete).toHaveBeenCalledWith({ where: { id: 1 } });
   });
 });

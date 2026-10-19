@@ -167,6 +167,15 @@ const initDatabase = async () => {
     await prisma.product.createMany({
       data: products,
     });
+
+    // seeded stock is the ledger's opening balance
+    const stocked = await prisma.product.findMany({
+      where: { quantity: { gt: 0 } },
+      select: { id: true, quantity: true },
+    });
+    await prisma.stockMovement.createMany({
+      data: stocked.map((p) => ({ productId: p.id, delta: p.quantity, reason: "OPENING" })),
+    });
   }
 
   if (countRole !== 0 && countUser !== 0 && countProduct !== 0) {

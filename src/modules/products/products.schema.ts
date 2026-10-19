@@ -60,5 +60,9 @@ export const productBody = z.object({
 });
 export type ProductBody = z.infer<typeof productBody>;
 
-export const productPatchBody = productBody.partial().extend({ isActive: flag.optional() });
+// stock only changes through inventory adjustments, so the edit endpoint drops quantity
+export const productPatchBody = productBody
+  .omit({ quantity: true })
+  .partial()
+  .extend({ isActive: flag.optional() });
 export type ProductPatchBody = z.infer<typeof productPatchBody>;
