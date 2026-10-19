@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { pageQuery } from "lib/http";
 
 export const updateMeBody = z.object({
   fullName: z.string().trim().min(1).max(255).optional(),
@@ -21,3 +22,9 @@ export const adminUpdateUserBody = adminCreateUserBody
   .pick({ fullName: true, phone: true, address: true, roleId: true })
   .partial();
 export type AdminUpdateUserBody = z.infer<typeof adminUpdateUserBody>;
+
+export const adminListUsersQuery = pageQuery.extend({
+  q: z.string().trim().min(1).max(100).optional(),
+  role: z.string().trim().min(1).max(100).optional(),
+});
+export type AdminListUsersQuery = z.infer<typeof adminListUsersQuery>;

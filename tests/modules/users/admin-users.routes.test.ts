@@ -33,6 +33,25 @@ describe("GET /api/v1/admin/users", () => {
   });
 });
 
+describe("GET /api/v1/admin/users filters", () => {
+  it("searches by email, name or phone and filters by role", async () => {
+    prismaMock.user.count.mockResolvedValue(0);
+    prismaMock.user.findMany.mockResolvedValue([]);
+    const res = await asAdmin(request(buildApp()).get("/api/v1/admin/users?q=an&role=USER"));
+    expect(res.status).toBe(200);
+    const where = {
+      OR: [
+        { username: { contains: "an" } },
+        { fullName: { contains: "an" } },
+        { phone: { contains: "an" } },
+      ],
+      role: { name: "USER" },
+    };
+    expect(prismaMock.user.findMany.mock.calls[0][0].where).toEqual(where);
+    expect(prismaMock.user.count).toHaveBeenCalledWith({ where });
+  });
+});
+
 describe("POST /api/v1/admin/users", () => {
   it("hashes the password", async () => {
     prismaMock.role.findUnique.mockResolvedValue({ id: 2 });

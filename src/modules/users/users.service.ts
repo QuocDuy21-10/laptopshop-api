@@ -1,10 +1,16 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
 import { ACCOUNT_TYPE } from "config/constant";
 import { AppError, isNotFound, isUniqueViolation, notFound } from "lib/errors";
-import { pageArgs, pageMeta, PageQuery } from "lib/http";
+import { pageArgs, pageMeta } from "lib/http";
 import { hashPassword } from "lib/password";
 import { toUserDto, userSelect } from "modules/users/users.mapper";
-import { AdminCreateUserBody, AdminUpdateUserBody, UpdateMeBody } from "modules/users/users.schema";
+import {
+  AdminCreateUserBody,
+  AdminListUsersQuery,
+  AdminUpdateUserBody,
+  UpdateMeBody,
+} from "modules/users/users.schema";
 
 export const getMe = async (userId: number) => {
   const [user, cart] = await Promise.all([
@@ -29,10 +35,22 @@ const ensureRole = async (roleId: number) => {
   if (!role) throw new AppError("Unknown role", 400, "INVALID_ROLE");
 };
 
-export const listUsers = async (q: PageQuery) => {
+export const listUsers = async (q: AdminListUsersQuery) => {
+  const where: Prisma.UserWhereInput = {
+    ...(q.q
+      ? {
+          OR: [
+            { username: { contains: q.q } },
+            { fullName: { contains: q.q } },
+            { phone: { contains: q.q } },
+          ],
+        }
+      : {}),
+    ...(q.role ? { role: { name: q.role } } : {}),
+  };
   const [total, rows] = await Promise.all([
-    prisma.user.count(),
-    prisma.user.findMany({ select: userSelect, orderBy: { id: "asc" }, ...pageArgs(q) }),
+    prisma.user.count({ where }),
+    prisma.user.findMany({ where, select: userSelect, orderBy: { id: "asc" }, ...pageArgs(q) }),
   ]);
   return { items: rows.map(toUserDto), meta: pageMeta(q, total) };
 };

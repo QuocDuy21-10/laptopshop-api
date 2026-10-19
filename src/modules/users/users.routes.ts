@@ -1,9 +1,14 @@
 import { Router } from "express";
-import { idParams, pageQuery } from "lib/http";
+import { idParams } from "lib/http";
 import { authenticate } from "middlewares/authenticate";
 import fileUploadMiddleware from "middlewares/multer";
 import { validate } from "middlewares/validate";
-import { adminCreateUserBody, adminUpdateUserBody, updateMeBody } from "modules/users/users.schema";
+import {
+  adminCreateUserBody,
+  adminListUsersQuery,
+  adminUpdateUserBody,
+  updateMeBody,
+} from "modules/users/users.schema";
 import {
   createUserHandler,
   deleteUserHandler,
@@ -30,7 +35,7 @@ const avatarUpload = fileUploadMiddleware("avatar");
 
 export const adminUserRoutes = Router();
 
-adminUserRoutes.get("/", validate({ query: pageQuery }), listUsersHandler);
+adminUserRoutes.get("/", validate({ query: adminListUsersQuery }), listUsersHandler);
 adminUserRoutes.post("/", avatarUpload, validate({ body: adminCreateUserBody }), createUserHandler);
 adminUserRoutes.get("/:id", validate({ params: idParams }), getUserHandler);
 adminUserRoutes.patch(
