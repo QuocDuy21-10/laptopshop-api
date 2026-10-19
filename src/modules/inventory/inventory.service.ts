@@ -1,7 +1,17 @@
 import { Prisma } from "@prisma/client";
-import { isNotFound, notFound } from "lib/errors";
+import { prisma } from "config/client";
+import { AppError, isNotFound, notFound } from "lib/errors";
+import { pageArgs, pageMeta } from "lib/http";
+import { assertDayRange, createdAtRange } from "lib/shop-time";
 import { outOfStock } from "modules/cart/cart.service";
-import { STOCK_REASON, StockReason } from "modules/inventory/inventory.schema";
+import { movementInclude, toMovementDto } from "modules/inventory/inventory.mapper";
+import {
+  AdjustmentBody,
+  ListMovementsQuery,
+  STOCK_REASON,
+  StockReason,
+} from "modules/inventory/inventory.schema";
+import { toProductDto } from "modules/products/products.mapper";
 
 export type StockMove = {
   productId: number;
@@ -53,4 +63,67 @@ export const moveStock = async (tx: Prisma.TransactionClient, m: StockMove) => {
       note: m.note,
     },
   });
+};
+
+const invalid = (path: string, message: string) =>
+  new AppError("Validation failed", 400, "VALIDATION_ERROR", [{ path, message }]);
+
+// shortcut: no Idempotency-Key, the UI locks the button while sending; add a key + unique (actorId, key) if retries ever double-apply
+export const adjustStock = async (actorId: number, body: AdjustmentBody) => {
+  if (body.reason === STOCK_REASON.RESTOCK && body.delta < 0) {
+    throw invalid("delta", "a restock must add stock");
+  }
+  if (body.reason === STOCK_REASON.CORRECTION && !body.note) {
+    throw invalid("note", "a correction needs a note");
+  }
+  return prisma.$transaction(async (tx) => {
+    const exists = await tx.product.findUnique({
+      where: { id: body.productId },
+      select: { id: true },
+    });
+    if (!exists) throw notFound("Product");
+    const created = await moveStock(tx, {
+      productId: body.productId,
+      delta: body.delta,
+      reason: body.reason,
+      actorId,
+      note: body.note || undefined,
+    });
+    const product = await tx.product.findUniqueOrThrow({ where: { id: body.productId } });
+    const movement = await tx.stockMovement.findUniqueOrThrow({
+      where: { id: created.id },
+      include: movementInclude,
+    });
+    return { product: toProductDto(product), movement: toMovementDto(movement) };
+  });
+};
+
+export const movementWhere = (
+  q: Omit<ListMovementsQuery, "page" | "pageSize">,
+): Prisma.StockMovementWhereInput => {
+  assertDayRange(q.from, q.to);
+  return {
+    ...(q.productId ? { productId: q.productId } : {}),
+    ...(q.reason ? { reason: q.reason } : {}),
+    ...createdAtRange(q.from, q.to),
+  };
+};
+
+export const newestFirst: Prisma.StockMovementOrderByWithRelationInput[] = [
+  { createdAt: "desc" },
+  { id: "desc" },
+];
+
+export const listMovements = async (q: ListMovementsQuery) => {
+  const where = movementWhere(q);
+  const [total, rows] = await Promise.all([
+    prisma.stockMovement.count({ where }),
+    prisma.stockMovement.findMany({
+      where,
+      include: movementInclude,
+      orderBy: newestFirst,
+      ...pageArgs(q),
+    }),
+  ]);
+  return { items: rows.map(toMovementDto), meta: pageMeta(q, total) };
 };

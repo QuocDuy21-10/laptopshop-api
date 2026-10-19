@@ -1,4 +1,5 @@
 import { prisma } from "config/client";
+import { adjustStock } from "modules/inventory/inventory.service";
 import { changeStatus, placeOrder } from "modules/orders/orders.service";
 import { createProduct, createUser, ledgerMatches, putInCart, receiver, resetDb } from "./fixtures";
 
@@ -40,5 +41,19 @@ describe("stock ledger", () => {
       { reason: "ORDER", delta: -1 },
       { reason: "ORDER_CANCEL", delta: 1 },
     ]);
+  });
+
+  it("lets only one of two concurrent corrections take the last units", async () => {
+    const product = await createProduct(3);
+    const admin = await createUser();
+    const results = await Promise.allSettled([
+      adjustStock(admin.id, { productId: product.id, delta: -2, reason: "CORRECTION", note: "a" }),
+      adjustStock(admin.id, { productId: product.id, delta: -2, reason: "CORRECTION", note: "b" }),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).quantity).toBe(
+      1,
+    );
+    expect(await ledgerMatches(product.id)).toBe(true);
   });
 });
