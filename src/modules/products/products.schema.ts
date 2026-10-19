@@ -84,3 +84,14 @@ export type ProductBody = z.infer<typeof productBody>;
 
 export const productPatchBody = productBody.partial().extend({ isActive: flag.optional() });
 export type ProductPatchBody = z.infer<typeof productPatchBody>;
+
+// ids are capped at 9 digits so they always fit the INT primary key
+export const compareQuery = z.object({
+  ids: z
+    .string()
+    .regex(/^\s*[1-9]\d{0,8}\s*(,\s*[1-9]\d{0,8}\s*)*$/, "Comma-separated product ids")
+    .transform((s) => s.split(",").map(Number))
+    .refine((ids) => ids.length >= 2 && ids.length <= 4, { message: "Compare 2 to 4 products" })
+    .refine((ids) => new Set(ids).size === ids.length, { message: "Duplicate product ids" }),
+});
+export type CompareQuery = z.infer<typeof compareQuery>;

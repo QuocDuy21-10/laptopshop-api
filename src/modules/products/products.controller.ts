@@ -3,11 +3,13 @@ import { factoryOptions, targetOptions } from "config/constant";
 import { IdParams } from "lib/http";
 import {
   AdminListProductsQuery,
+  CompareQuery,
   ListProductsQuery,
   ProductBody,
   ProductPatchBody,
 } from "modules/products/products.schema";
 import {
+  compareProducts,
   createProduct,
   deleteProduct,
   getProduct,
@@ -22,6 +24,10 @@ export const listProductsHandler: RequestHandler = async (_req, res) => {
 
 export const getProductHandler: RequestHandler = async (_req, res) => {
   res.json({ data: await getProduct((res.locals.params as IdParams).id) });
+};
+
+export const compareProductsHandler: RequestHandler = async (_req, res) => {
+  res.json({ data: await compareProducts((res.locals.query as CompareQuery).ids) });
 };
 
 export const listAdminProductsHandler: RequestHandler = async (_req, res) => {

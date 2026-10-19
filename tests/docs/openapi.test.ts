@@ -8,6 +8,7 @@ const V1_PATHS = [
   "/api/v1/users/me",
   "/api/v1/products",
   "/api/v1/products/filters",
+  "/api/v1/products/compare",
   "/api/v1/products/{id}",
   "/api/v1/cart",
   "/api/v1/cart/items",
@@ -82,6 +83,13 @@ describe("openapi document", () => {
     ]) {
       expect(props).toHaveProperty(key);
     }
+  });
+
+  it("documents the public compare endpoint", () => {
+    const compare = op("/api/v1/products/compare", "get");
+    expect(compare.security).toBeUndefined();
+    expect((compare.parameters as any[]).map((p) => p.name)).toContain("ids");
+    expect(compare.responses["404"]).toBeDefined();
   });
 
   it("documents the admin order search filters", () => {

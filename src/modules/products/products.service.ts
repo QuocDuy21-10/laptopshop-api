@@ -41,6 +41,16 @@ export const getProduct = async (id: number, admin = false) => {
   return toProductDto(product);
 };
 
+export const compareProducts = async (ids: number[]) => {
+  const rows = await prisma.product.findMany({ where: { id: { in: ids }, isActive: true } });
+  const byId = new Map(rows.map((p) => [p.id, p]));
+  const missingIds = ids.filter((id) => !byId.has(id));
+  if (missingIds.length) {
+    throw new AppError("Product not found", 404, "NOT_FOUND", { missingIds });
+  }
+  return ids.map((id) => toProductDto(byId.get(id)!));
+};
+
 export const createProduct = async (input: ProductBody, image?: string) =>
   toProductDto(
     await prisma.product.create({

@@ -114,3 +114,49 @@ describe("GET /api/v1/products/filters", () => {
     expect(res.body.data.targetOptions.length).toBeGreaterThan(0);
   });
 });
+
+describe("GET /api/v1/products/compare", () => {
+  it("returns active products in the requested order", async () => {
+    prismaMock.product.findMany.mockResolvedValue([
+      { ...product, id: 2 },
+      { ...product, id: 7 },
+      { ...product, id: 1 },
+    ]);
+    const res = await request(buildApp()).get("/api/v1/products/compare?ids=7,1,2");
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((p: { id: number }) => p.id)).toEqual([7, 1, 2]);
+    expect(res.body.data[0].image).toBe("/images/product/a.png");
+    expect(prismaMock.product.findMany).toHaveBeenCalledWith({
+      where: { id: { in: [7, 1, 2] }, isActive: true },
+    });
+  });
+
+  it("accepts spaces around ids", async () => {
+    prismaMock.product.findMany.mockResolvedValue([product, { ...product, id: 2 }]);
+    const res = await request(buildApp()).get("/api/v1/products/compare?ids=1,%202");
+    expect(res.status).toBe(200);
+  });
+
+  it("returns 404 listing the missing or hidden ids", async () => {
+    prismaMock.product.findMany.mockResolvedValue([product]);
+    const res = await request(buildApp()).get("/api/v1/products/compare?ids=1,3,9");
+    expect(res.status).toBe(404);
+    expect(res.body.error).toMatchObject({ code: "NOT_FOUND", details: { missingIds: [3, 9] } });
+  });
+
+  it.each([
+    ["no ids", ""],
+    ["one id", "?ids=1"],
+    ["five ids", "?ids=1,2,3,4,5"],
+    ["duplicate ids", "?ids=1,1"],
+    ["a non-numeric id", "?ids=1,abc"],
+    ["a zero id", "?ids=0,1"],
+    ["an empty id", "?ids=1,,2"],
+    ["a repeated ids param", "?ids=1&ids=2"],
+  ])("returns 400 for %s", async (_name, qs) => {
+    const res = await request(buildApp()).get(`/api/v1/products/compare${qs}`);
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(prismaMock.product.findMany).not.toHaveBeenCalled();
+  });
+});
