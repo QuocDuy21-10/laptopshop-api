@@ -35,4 +35,31 @@ export const adminOrderInclude = {
 } satisfies Prisma.OrderInclude;
 export type AdminOrderRow = Prisma.OrderGetPayload<{ include: typeof adminOrderInclude }>;
 
-export const toAdminOrderDto = (o: AdminOrderRow) => ({ ...toOrderDto(o), user: o.user });
+export const toAdminOrderDto = (o: AdminOrderRow) => ({
+  ...toOrderDto(o),
+  completedAt: o.completedAt,
+  user: o.user,
+});
+
+const actorSelect = { select: { id: true, fullName: true, username: true } } as const;
+
+export const adminOrderDetailInclude = {
+  ...adminOrderInclude,
+  history: { orderBy: { createdAt: "asc" }, include: { actor: actorSelect } },
+} satisfies Prisma.OrderInclude;
+export type AdminOrderDetailRow = Prisma.OrderGetPayload<{
+  include: typeof adminOrderDetailInclude;
+}>;
+
+export const toActor = (a: { id: number; fullName: string | null; username: string } | null) =>
+  a ? { id: a.id, name: a.fullName ?? a.username } : null;
+
+export const toAdminOrderDetailDto = (o: AdminOrderDetailRow) => ({
+  ...toAdminOrderDto(o),
+  history: o.history.map((h) => ({
+    fromStatus: h.fromStatus,
+    toStatus: h.toStatus,
+    actor: toActor(h.actor),
+    createdAt: h.createdAt,
+  })),
+});

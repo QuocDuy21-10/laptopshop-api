@@ -94,6 +94,9 @@ describe("POST /api/v1/orders", () => {
       where: { cart: { userId: USER.id } },
     });
     expect(prismaMock.cart.deleteMany).toHaveBeenCalledWith({ where: { userId: USER.id } });
+    expect(prismaMock.orderStatusHistory.create).toHaveBeenCalledWith({
+      data: { orderId: 50, fromStatus: null, toStatus: "PENDING", actorId: USER.id },
+    });
   });
 
   it("returns 409 PRODUCT_UNAVAILABLE and creates nothing when a line is hidden", async () => {
@@ -197,6 +200,9 @@ describe("POST /api/v1/orders/me/:id/cancel", () => {
       where: { id: 1 },
       data: { quantity: { increment: 2 }, sold: { decrement: 2 } },
     });
+    expect(prismaMock.orderStatusHistory.create).toHaveBeenCalledWith({
+      data: { orderId: 50, fromStatus: "PENDING", toStatus: "CANCELLED", actorId: USER.id },
+    });
   });
 
   it("returns 409 when another request changed the status first", async () => {
@@ -205,5 +211,6 @@ describe("POST /api/v1/orders/me/:id/cancel", () => {
     const res = await cancel();
     expect(res.status).toBe(409);
     expect(prismaMock.product.update).not.toHaveBeenCalled();
+    expect(prismaMock.orderStatusHistory.create).not.toHaveBeenCalled();
   });
 });

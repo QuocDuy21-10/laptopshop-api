@@ -75,6 +75,12 @@ describe("openapi document", () => {
     expect((doc.components?.schemas?.Dashboard as any).properties).toHaveProperty("lowStockCount");
   });
 
+  it("documents the order history on the admin order detail", () => {
+    const detail = doc.components?.schemas?.AdminOrderDetail as any;
+    expect(detail.properties).toHaveProperty("history");
+    expect((doc.components?.schemas?.AdminOrder as any).properties).toHaveProperty("completedAt");
+  });
+
   it("names the response schemas the frontend generates types from", () => {
     expect(Object.keys(doc.components?.schemas ?? {})).toEqual(
       expect.arrayContaining(["Error", "User", "Me", "Product", "Cart", "Order", "AdminOrder"]),
