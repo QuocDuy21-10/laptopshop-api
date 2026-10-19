@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
 import { AppError, notFound } from "lib/errors";
 import { pageArgs, pageMeta, PageQuery } from "lib/http";
@@ -138,8 +139,41 @@ export const changeStatus = async (
 export const cancelMyOrder = (userId: number, orderId: number) =>
   changeStatus(orderId, ORDER_STATUS.CANCELLED, { userId, from: [ORDER_STATUS.PENDING] });
 
+// shop days are Vietnam days (UTC+7, no DST); createdAt is stored in UTC
+const SHOP_UTC_OFFSET = "+07:00";
+const DAY_MS = 86_400_000;
+const dayStart = (day: string) => new Date(`${day}T00:00:00${SHOP_UTC_OFFSET}`);
+
+const adminOrderWhere = (q: AdminListOrdersQuery): Prisma.OrderWhereInput => {
+  if (q.from && q.to && q.from > q.to) {
+    throw new AppError("from must not be after to", 400, "VALIDATION_ERROR", [
+      { path: "from", message: "must not be after to" },
+    ]);
+  }
+  // up to 9 digits always fits the INT id column; longer digit strings are phone numbers
+  const id = q.q && /^\d{1,9}$/.test(q.q) ? Number(q.q) : undefined;
+  const search = q.q
+    ? id
+      ? [{ id }, { receiverPhone: { contains: q.q } }]
+      : [{ receiverName: { contains: q.q } }, { receiverPhone: { contains: q.q } }]
+    : undefined;
+  return {
+    ...(q.status ? { status: q.status } : {}),
+    ...(q.userId ? { userId: q.userId } : {}),
+    ...(search ? { OR: search } : {}),
+    ...(q.from || q.to
+      ? {
+          createdAt: {
+            ...(q.from ? { gte: dayStart(q.from) } : {}),
+            ...(q.to ? { lt: new Date(dayStart(q.to).getTime() + DAY_MS) } : {}),
+          },
+        }
+      : {}),
+  };
+};
+
 export const listAllOrders = async (q: AdminListOrdersQuery) => {
-  const where = q.status ? { status: q.status } : {};
+  const where = adminOrderWhere(q);
   const [total, rows] = await Promise.all([
     prisma.order.count({ where }),
     prisma.order.findMany({

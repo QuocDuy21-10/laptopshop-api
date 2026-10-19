@@ -36,6 +36,60 @@ describe("GET /api/v1/admin/orders", () => {
     expect(prismaMock.order.findMany.mock.calls[0][0].where).toEqual({ status: "SHIPPING" });
   });
 
+  const whereOf = async (qs: string) => {
+    prismaMock.order.count.mockResolvedValue(0);
+    prismaMock.order.findMany.mockResolvedValue([]);
+    const res = await asAdmin(request(buildApp()).get(`/api/v1/admin/orders?${qs}`));
+    expect(res.status).toBe(200);
+    return prismaMock.order.findMany.mock.calls[0][0].where;
+  };
+
+  it("searches a numeric q by order id or receiver phone", async () => {
+    expect(await whereOf("q=50")).toEqual({
+      OR: [{ id: 50 }, { receiverPhone: { contains: "50" } }],
+    });
+  });
+
+  it("searches a text q by receiver name or phone", async () => {
+    expect(await whereOf("q=%20An%20")).toEqual({
+      OR: [{ receiverName: { contains: "An" } }, { receiverPhone: { contains: "An" } }],
+    });
+  });
+
+  it("does not treat a number too long for an id as an id", async () => {
+    expect(await whereOf("q=0900000000")).toEqual({
+      OR: [
+        { receiverName: { contains: "0900000000" } },
+        { receiverPhone: { contains: "0900000000" } },
+      ],
+    });
+  });
+
+  it("filters by Vietnam calendar days, inclusive of the end day", async () => {
+    expect(await whereOf("from=2026-10-01&to=2026-10-19")).toEqual({
+      createdAt: {
+        gte: new Date("2026-09-30T17:00:00.000Z"),
+        lt: new Date("2026-10-19T17:00:00.000Z"),
+      },
+    });
+  });
+
+  it("filters by buyer", async () => {
+    expect(await whereOf("userId=7&status=PENDING")).toEqual({ status: "PENDING", userId: 7 });
+  });
+
+  it("rejects a range that ends before it starts", async () => {
+    const res = await asAdmin(
+      request(buildApp()).get("/api/v1/admin/orders?from=2026-10-19&to=2026-10-01"),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an impossible date", async () => {
+    const res = await asAdmin(request(buildApp()).get("/api/v1/admin/orders?from=2026-02-30"));
+    expect(res.status).toBe(400);
+  });
+
   it("rejects an unknown status", async () => {
     const res = await asAdmin(request(buildApp()).get("/api/v1/admin/orders?status=LOST"));
     expect(res.status).toBe(400);

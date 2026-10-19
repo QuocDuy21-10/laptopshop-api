@@ -102,6 +102,8 @@ model Order {
   orderDetails OrderDetail[]
 
   @@unique([userId, idempotencyKey])
+  @@index([status, createdAt])
+  @@index([createdAt])
   @@map("orders")
 }
 
