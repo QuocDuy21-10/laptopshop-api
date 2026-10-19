@@ -33,7 +33,6 @@ Imports use bare path aliases from `tsconfig.json` (`config/*`, `middlewares/*`,
 
 - Write every spec and implementation plan produced by the superpowers skills (`superpowers:brainstorming` → `docs/superpowers/specs/`, `superpowers:writing-plans` → `docs/superpowers/plans/`) in Vietnamese. Keep code, identifiers, file paths, commands, API routes and technical terms in their original form.
 - Existing English specs and plans are not translated; only new ones follow this rule. File names keep their date-and-topic slug.
-- After finishing a spec and plan, also write a local testing guide in Markdown (Vietnamese, same date-and-topic slug) to `docs/superpowers/test-guides/`, in the same commit. Backend work: step-by-step manual testing through Swagger UI at `/api-docs` (`ENABLE_DOCS=true`): how to log in/authorize, which endpoints to call, example request bodies, and the expected status and response. Frontend work: step-by-step testing on the local UI (how to start it, which pages/flows to click through, and the expected result). Cover the error cases from the spec too.
 
 ## Git workflow
 
