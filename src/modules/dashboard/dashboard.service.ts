@@ -1,8 +1,9 @@
 import { prisma } from "config/client";
+import { LOW_STOCK_THRESHOLD } from "modules/products/products.schema";
 import { ORDER_STATUS, ORDER_STATUSES, OrderStatus } from "modules/orders/order-status";
 
 export const getDashboard = async () => {
-  const [userCount, productCount, orderCount, revenue, grouped] = await Promise.all([
+  const [userCount, productCount, orderCount, revenue, grouped, lowStockCount] = await Promise.all([
     prisma.user.count(),
     prisma.product.count(),
     prisma.order.count(),
@@ -11,6 +12,7 @@ export const getDashboard = async () => {
       _sum: { totalPrice: true },
     }),
     prisma.order.groupBy({ by: ["status"], _count: { _all: true } }),
+    prisma.product.count({ where: { isActive: true, quantity: { lte: LOW_STOCK_THRESHOLD } } }),
   ]);
   const ordersByStatus = Object.fromEntries(ORDER_STATUSES.map((s) => [s, 0])) as Record<
     OrderStatus,
@@ -23,5 +25,6 @@ export const getDashboard = async () => {
     orderCount,
     revenue: revenue._sum.totalPrice ?? 0,
     ordersByStatus,
+    lowStockCount,
   };
 };
