@@ -2,10 +2,13 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
 import { AppError, notFound } from "lib/errors";
 import { pageArgs, pageMeta, PageQuery } from "lib/http";
+import { assertDayRange, createdAtRange } from "lib/shop-time";
 import { outOfStock, productUnavailable } from "modules/cart/cart.service";
 import {
+  adminOrderDetailInclude,
   adminOrderInclude,
   orderInclude,
+  toAdminOrderDetailDto,
   toAdminOrderDto,
   toOrderDto,
 } from "modules/orders/orders.mapper";
@@ -66,6 +69,14 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
         },
         include: orderInclude,
       });
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId: created.id,
+          fromStatus: null,
+          toStatus: ORDER_STATUS.PENDING,
+          actorId: userId,
+        },
+      });
       await tx.cartDetail.deleteMany({ where: { cart: { userId } } });
       await tx.cart.deleteMany({ where: { userId } });
       return created;
@@ -102,7 +113,7 @@ export const getMyOrder = async (userId: number, id: number) => {
 export const changeStatus = async (
   orderId: number,
   to: OrderStatus,
-  scope: { userId?: number; from?: OrderStatus[] } = {},
+  scope: { actorId: number; userId?: number; from?: OrderStatus[] },
 ) =>
   prisma.$transaction(async (tx) => {
     const order = await tx.order.findFirst({
@@ -117,10 +128,16 @@ export const changeStatus = async (
       where: { id: orderId, status: order.status },
       data: {
         status: to,
-        ...(to === ORDER_STATUS.COMPLETED ? { paymentStatus: PAYMENT_STATUS.SUCCESS } : {}),
+        ...(to === ORDER_STATUS.COMPLETED
+          ? { paymentStatus: PAYMENT_STATUS.SUCCESS, completedAt: new Date() }
+          : {}),
       },
     });
     if (count === 0) throw invalidTransition(order.status, to);
+    // same transaction as the status change, so history never misses or invents a transition
+    await tx.orderStatusHistory.create({
+      data: { orderId, fromStatus: order.status, toStatus: to, actorId: scope.actorId },
+    });
     if (to === ORDER_STATUS.CANCELLED) {
       const lines = await tx.orderDetail.findMany({
         where: { orderId },
@@ -139,19 +156,14 @@ export const changeStatus = async (
   });
 
 export const cancelMyOrder = (userId: number, orderId: number) =>
-  changeStatus(orderId, ORDER_STATUS.CANCELLED, { userId, from: [ORDER_STATUS.PENDING] });
+  changeStatus(orderId, ORDER_STATUS.CANCELLED, {
+    actorId: userId,
+    userId,
+    from: [ORDER_STATUS.PENDING],
+  });
 
-// shop days are Vietnam days (UTC+7, no DST); createdAt is stored in UTC
-const SHOP_UTC_OFFSET = "+07:00";
-const DAY_MS = 86_400_000;
-const dayStart = (day: string) => new Date(`${day}T00:00:00${SHOP_UTC_OFFSET}`);
-
-const adminOrderWhere = (q: AdminListOrdersQuery): Prisma.OrderWhereInput => {
-  if (q.from && q.to && q.from > q.to) {
-    throw new AppError("from must not be after to", 400, "VALIDATION_ERROR", [
-      { path: "from", message: "must not be after to" },
-    ]);
-  }
+export const adminOrderWhere = (q: AdminListOrdersQuery): Prisma.OrderWhereInput => {
+  assertDayRange(q.from, q.to);
   // up to 9 digits always fits the INT id column; longer digit strings are phone numbers
   const id = q.q && /^\d{1,9}$/.test(q.q) ? Number(q.q) : undefined;
   const search = q.q
@@ -163,14 +175,7 @@ const adminOrderWhere = (q: AdminListOrdersQuery): Prisma.OrderWhereInput => {
     ...(q.status ? { status: q.status } : {}),
     ...(q.userId ? { userId: q.userId } : {}),
     ...(search ? { OR: search } : {}),
-    ...(q.from || q.to
-      ? {
-          createdAt: {
-            ...(q.from ? { gte: dayStart(q.from) } : {}),
-            ...(q.to ? { lt: new Date(dayStart(q.to).getTime() + DAY_MS) } : {}),
-          },
-        }
-      : {}),
+    ...createdAtRange(q.from, q.to),
   };
 };
 
@@ -189,7 +194,7 @@ export const listAllOrders = async (q: AdminListOrdersQuery) => {
 };
 
 export const getAnyOrder = async (id: number) => {
-  const order = await prisma.order.findUnique({ where: { id }, include: adminOrderInclude });
+  const order = await prisma.order.findUnique({ where: { id }, include: adminOrderDetailInclude });
   if (!order) throw notFound("Order");
-  return toAdminOrderDto(order);
+  return toAdminOrderDetailDto(order);
 };

@@ -15,6 +15,7 @@ const orderRow = (over: Record<string, unknown> = {}) => ({
   paymentRef: null,
   idempotencyKey: "k",
   createdAt: new Date("2026-10-18T00:00:00Z"),
+  completedAt: null,
   receiverName: "R",
   receiverAddress: "A",
   receiverPhone: "0900000000",
@@ -107,7 +108,14 @@ describe("PATCH /api/v1/admin/orders/:id/status", () => {
     expect(res.status).toBe(200);
     expect(prismaMock.order.updateMany).toHaveBeenCalledWith({
       where: { id: 50, status: "SHIPPING" },
-      data: { status: "COMPLETED", paymentStatus: "PAYMENT_SUCCESS" },
+      data: {
+        status: "COMPLETED",
+        paymentStatus: "PAYMENT_SUCCESS",
+        completedAt: expect.any(Date),
+      },
+    });
+    expect(prismaMock.orderStatusHistory.create).toHaveBeenCalledWith({
+      data: { orderId: 50, fromStatus: "SHIPPING", toStatus: "COMPLETED", actorId: ADMIN.id },
     });
   });
 
@@ -118,5 +126,59 @@ describe("PATCH /api/v1/admin/orders/:id/status", () => {
     });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("INVALID_STATUS_TRANSITION");
+  });
+});
+
+describe("GET /api/v1/admin/orders/:id", () => {
+  it("returns the status history with the actor's name", async () => {
+    prismaMock.order.findUnique.mockResolvedValue(
+      orderRow({
+        history: [
+          {
+            id: 1,
+            orderId: 50,
+            fromStatus: null,
+            toStatus: "PENDING",
+            actorId: 1,
+            createdAt: new Date("2026-10-18T00:00:00Z"),
+            actor: { id: 1, fullName: null, username: "a@b.co" },
+          },
+          {
+            id: 2,
+            orderId: 50,
+            fromStatus: "PENDING",
+            toStatus: "SHIPPING",
+            actorId: null,
+            createdAt: new Date("2026-10-18T01:00:00Z"),
+            actor: null,
+          },
+        ],
+      }),
+    );
+    const res = await asAdmin(request(buildApp()).get("/api/v1/admin/orders/50"));
+    expect(res.status).toBe(200);
+    expect(res.body.data.history).toEqual([
+      {
+        fromStatus: null,
+        toStatus: "PENDING",
+        actor: { id: 1, name: "a@b.co" },
+        createdAt: "2026-10-18T00:00:00.000Z",
+      },
+      {
+        fromStatus: "PENDING",
+        toStatus: "SHIPPING",
+        actor: null,
+        createdAt: "2026-10-18T01:00:00.000Z",
+      },
+    ]);
+    expect(prismaMock.order.findUnique.mock.calls[0][0].include.history).toBeDefined();
+  });
+
+  it("keeps history out of the list", async () => {
+    prismaMock.order.count.mockResolvedValue(1);
+    prismaMock.order.findMany.mockResolvedValue([orderRow()]);
+    const res = await asAdmin(request(buildApp()).get("/api/v1/admin/orders"));
+    expect(res.body.data[0]).not.toHaveProperty("history");
+    expect(res.body.data[0].completedAt).toBeNull();
   });
 });

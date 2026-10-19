@@ -73,8 +73,8 @@ describe("cancellation under concurrency", () => {
     const { order } = await placeOrder(user.id, "k", receiver);
 
     const results = await Promise.allSettled([
-      changeStatus(order.id, "CANCELLED"),
-      changeStatus(order.id, "CANCELLED"),
+      changeStatus(order.id, "CANCELLED", { actorId: user.id }),
+      changeStatus(order.id, "CANCELLED", { actorId: user.id }),
     ]);
 
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
@@ -99,5 +99,28 @@ describe("hidden products", () => {
       3,
     );
     expect(await prisma.order.count()).toBe(0);
+  });
+});
+
+describe("order status history", () => {
+  it("records each transition and the completion time", async () => {
+    const product = await createProduct(5);
+    const user = await createUser();
+    await putInCart(user.id, product.id, 1);
+    const { order } = await placeOrder(user.id, "h", receiver);
+    await changeStatus(order.id, "SHIPPING", { actorId: user.id });
+    await changeStatus(order.id, "COMPLETED", { actorId: user.id });
+
+    const history = await prisma.orderStatusHistory.findMany({
+      where: { orderId: order.id },
+      orderBy: { id: "asc" },
+    });
+    expect(history.map((h) => [h.fromStatus, h.toStatus])).toEqual([
+      [null, "PENDING"],
+      ["PENDING", "SHIPPING"],
+      ["SHIPPING", "COMPLETED"],
+    ]);
+    const saved = await prisma.order.findUniqueOrThrow({ where: { id: order.id } });
+    expect(saved.completedAt).toBeInstanceOf(Date);
   });
 });

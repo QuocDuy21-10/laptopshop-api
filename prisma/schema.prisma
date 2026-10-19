@@ -28,6 +28,7 @@ model User {
   Cart          Cart?
   orders        Order[]
   refreshTokens RefreshToken[]
+  statusChanges OrderStatusHistory[]
 
   @@map("users")
 }
@@ -107,10 +108,12 @@ model Order {
   paymentRef     String?
   idempotencyKey String?  @db.VarChar(64)
   createdAt      DateTime @default(now())
+  completedAt    DateTime?
 
   user         User          @relation(fields: [userId], references: [id])
   userId       Int
   orderDetails OrderDetail[]
+  history      OrderStatusHistory[]
 
   @@unique([userId, idempotencyKey])
   @@index([status, createdAt])
@@ -147,4 +150,20 @@ model RefreshToken {
 
   @@index([familyId])
   @@map("refresh_tokens")
+}
+
+model OrderStatusHistory {
+  id         Int      @id @default(autoincrement())
+  fromStatus String?  @db.VarChar(20)
+  toStatus   String   @db.VarChar(20)
+  createdAt  DateTime @default(now())
+
+  order   Order @relation(fields: [orderId], references: [id])
+  orderId Int
+
+  actor   User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actorId Int?
+
+  @@index([orderId, createdAt])
+  @@map("order_status_history")
 }

@@ -1,6 +1,7 @@
 import { prisma } from "config/client";
 
 export const resetDb = async () => {
+  await prisma.orderStatusHistory.deleteMany();
   await prisma.orderDetail.deleteMany();
   await prisma.order.deleteMany();
   await prisma.cartDetail.deleteMany();

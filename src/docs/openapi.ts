@@ -129,11 +129,25 @@ const orderShape = {
   ),
 };
 const Order = registry.register("Order", z.object(orderShape));
-const AdminOrder = registry.register(
-  "AdminOrder",
+const adminOrderShape = {
+  ...orderShape,
+  completedAt: z.string().datetime().nullable(),
+  user: z.object({ id: z.number(), username: z.string(), fullName: z.string().nullable() }),
+};
+const Actor = z.object({ id: z.number(), name: z.string() }).nullable();
+const AdminOrder = registry.register("AdminOrder", z.object(adminOrderShape));
+const AdminOrderDetail = registry.register(
+  "AdminOrderDetail",
   z.object({
-    ...orderShape,
-    user: z.object({ id: z.number(), username: z.string(), fullName: z.string().nullable() }),
+    ...adminOrderShape,
+    history: z.array(
+      z.object({
+        fromStatus: z.string().nullable(),
+        toStatus: z.string(),
+        actor: Actor,
+        createdAt: z.string().datetime(),
+      }),
+    ),
   }),
 );
 const Role = registry.register(
@@ -504,7 +518,7 @@ op({
   tag: "admin",
   auth: "admin",
   request: id,
-  ok: [200, "OK", data(AdminOrder)],
+  ok: [200, "OK", data(AdminOrderDetail)],
   errors: { 404: "Not found" },
 });
 op({

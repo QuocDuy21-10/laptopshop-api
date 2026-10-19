@@ -46,5 +46,6 @@ export const getAnyOrderHandler: RequestHandler = async (_req, res) => {
 
 export const updateStatusHandler: RequestHandler = async (req, res) => {
   const { id } = res.locals.params as IdParams;
-  res.json({ data: await changeStatus(id, (req.body as UpdateStatusBody).status) });
+  const { status } = req.body as UpdateStatusBody;
+  res.json({ data: await changeStatus(id, status, { actorId: req.auth!.id }) });
 };
