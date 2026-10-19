@@ -114,6 +114,7 @@ describe("POST /api/v1/admin/products", () => {
 
   it("stores hardware specs sent as multipart fields", async () => {
     prismaMock.product.create.mockResolvedValue(product);
+    prismaMock.product.findUniqueOrThrow.mockResolvedValue(product);
     const specs = {
       cpu: "Intel Core i5-11400H",
       gpu: "NVIDIA RTX 2050 4GB",
@@ -133,7 +134,7 @@ describe("POST /api/v1/admin/products", () => {
     expect(prismaMock.product.create.mock.calls[0][0].data).toEqual({
       ...fields,
       price: 100,
-      quantity: 5,
+      quantity: 0,
       cpu: "Intel Core i5-11400H",
       gpu: "NVIDIA RTX 2050 4GB",
       ramGb: 16,
