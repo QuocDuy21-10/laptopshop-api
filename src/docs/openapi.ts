@@ -11,7 +11,12 @@ import {
 import { env } from "config/env";
 import { idParams, pageQuery } from "lib/http";
 import { loginBody, registerBody } from "modules/auth/auth.schema";
-import { adminCreateUserBody, adminUpdateUserBody, updateMeBody } from "modules/users/users.schema";
+import {
+  adminCreateUserBody,
+  adminListUsersQuery,
+  adminUpdateUserBody,
+  updateMeBody,
+} from "modules/users/users.schema";
 import {
   adminListProductsQuery,
   listProductsQuery,
@@ -411,7 +416,7 @@ op({
   summary: "List users",
   tag: "admin",
   auth: "admin",
-  request: { query: pageQuery },
+  request: { query: adminListUsersQuery },
   ok: [200, "OK", page(User)],
 });
 op({

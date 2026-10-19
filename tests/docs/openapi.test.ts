@@ -66,6 +66,11 @@ describe("openapi document", () => {
     expect(names).toEqual(expect.arrayContaining(["isActive", "stock"]));
   });
 
+  it("documents the admin order search filters", () => {
+    const names = (op("/api/v1/admin/orders", "get").parameters as any[]).map((p) => p.name);
+    expect(names).toEqual(expect.arrayContaining(["status", "q", "from", "to", "userId"]));
+  });
+
   it("names the response schemas the frontend generates types from", () => {
     expect(Object.keys(doc.components?.schemas ?? {})).toEqual(
       expect.arrayContaining(["Error", "User", "Me", "Product", "Cart", "Order", "AdminOrder"]),

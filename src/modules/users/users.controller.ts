@@ -1,6 +1,11 @@
 import { RequestHandler } from "express";
-import { IdParams, PageQuery } from "lib/http";
-import { AdminCreateUserBody, AdminUpdateUserBody, UpdateMeBody } from "modules/users/users.schema";
+import { IdParams } from "lib/http";
+import {
+  AdminCreateUserBody,
+  AdminListUsersQuery,
+  AdminUpdateUserBody,
+  UpdateMeBody,
+} from "modules/users/users.schema";
 import {
   createUser,
   deleteUser,
@@ -21,7 +26,7 @@ export const updateMeHandler: RequestHandler = async (req, res) => {
 };
 
 export const listUsersHandler: RequestHandler = async (_req, res) => {
-  const { items, meta } = await listUsers(res.locals.query as PageQuery);
+  const { items, meta } = await listUsers(res.locals.query as AdminListUsersQuery);
   res.json({ data: items, meta });
 };
 
