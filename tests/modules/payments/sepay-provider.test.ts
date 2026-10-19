@@ -1,0 +1,129 @@
+import crypto from "node:crypto";
+import { SePayPaymentProvider } from "modules/payments/providers/sepay-payment.provider";
+
+const config = {
+  webhookSecret: "secret",
+  apiToken: "token",
+  bankCode: "VCB",
+  accountNumber: "0123456789",
+  accountName: "LAPTOP SHOP",
+};
+
+const body = JSON.stringify({
+  id: 92704,
+  gateway: "Vietcombank",
+  transactionDate: "2026-10-19 11:08:33",
+  accountNumber: "0123456789",
+  code: "LSABC12345678",
+  content: "LSABC12345678 chuyen tien",
+  transferType: "in",
+  transferAmount: 18500000,
+  referenceCode: "FT24012345678",
+});
+
+const signedHeaders = (timestamp: number) => ({
+  "x-sepay-timestamp": String(timestamp),
+  "x-sepay-signature": `sha256=${crypto.createHmac("sha256", config.webhookSecret).update(`${timestamp}.${body}`).digest("hex")}`,
+});
+
+describe("SePayPaymentProvider", () => {
+  it("builds a dynamic VietQR instruction URL", () => {
+    const provider = new SePayPaymentProvider(config);
+    const result = provider.buildInstructions({
+      amount: 18500000,
+      transferCode: "LSABC12345678",
+      bankCode: config.bankCode,
+      accountNumber: config.accountNumber,
+      accountName: config.accountName,
+    });
+    const url = new URL(result.qrImageUrl);
+    expect(url.origin).toBe("https://vietqr.app");
+    expect(url.searchParams.get("acc")).toBe(config.accountNumber);
+    expect(url.searchParams.get("bank")).toBe(config.bankCode);
+    expect(url.searchParams.get("amount")).toBe("18500000");
+    expect(url.searchParams.get("des")).toBe("LSABC12345678");
+    expect(result.accountName).toBe(config.accountName);
+  });
+
+  it("verifies raw-body HMAC and normalizes an inbound transaction", () => {
+    const provider = new SePayPaymentProvider(config);
+    const result = provider.verifyWebhook({
+      rawBody: Buffer.from(body),
+      headers: signedHeaders(Math.floor(Date.now() / 1000)),
+      now: new Date(),
+    });
+    expect(result).toMatchObject({
+      providerEventId: "92704",
+      providerTransactionKey: "FT24012345678",
+      direction: "IN",
+      amount: 18500000,
+      transferCode: "LSABC12345678",
+      accountNumber: "0123456789",
+    });
+  });
+
+  it("rejects an invalid signature and stale timestamp", () => {
+    const provider = new SePayPaymentProvider(config);
+    expect(() =>
+      provider.verifyWebhook({
+        rawBody: Buffer.from(body),
+        headers: signedHeaders(Math.floor(Date.now() / 1000) - 301),
+        now: new Date(),
+      }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_WEBHOOK_SIGNATURE" }));
+    expect(() =>
+      provider.verifyWebhook({
+        rawBody: Buffer.from(body),
+        headers: {
+          ...signedHeaders(Math.floor(Date.now() / 1000)),
+          "x-sepay-signature": "sha256=bad",
+        },
+        now: new Date(),
+      }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_WEBHOOK_SIGNATURE" }));
+  });
+
+  it("preserves the last transaction cursor on a terminal reconciliation page", async () => {
+    const provider = new SePayPaymentProvider(config);
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "tx-uuid",
+            transaction_date: "2026-10-19 11:08:33",
+            transfer_type: "in",
+            amount_in: 1000,
+            reference_number: "REF-1",
+            code: "LSABC12345678",
+            account_number: config.accountNumber,
+          },
+        ],
+        meta: { pagination: { has_more: false } },
+      }),
+    });
+    global.fetch = fetchMock as typeof fetch;
+    await expect(provider.listTransactions({ cursor: null })).resolves.toMatchObject({
+      cursor: "tx-uuid",
+      hasMore: false,
+    });
+  });
+
+  it("rejects unknown transfer directions", () => {
+    const provider = new SePayPaymentProvider(config);
+    const timestamp = Math.floor(Date.now() / 1000);
+    const payload = JSON.stringify({
+      id: 7,
+      transactionDate: "2026-10-19 11:08:33",
+      transferType: "unknown",
+      transferAmount: 1000,
+    });
+    const signature = `sha256=${crypto.createHmac("sha256", config.webhookSecret).update(`${timestamp}.${payload}`).digest("hex")}`;
+    expect(() =>
+      provider.verifyWebhook({
+        rawBody: Buffer.from(payload),
+        headers: { "x-sepay-timestamp": String(timestamp), "x-sepay-signature": signature },
+      }),
+    ).toThrow(expect.objectContaining({ code: "INVALID_WEBHOOK_PAYLOAD" }));
+  });
+});

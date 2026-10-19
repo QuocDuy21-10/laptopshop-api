@@ -27,3 +27,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD wget -qO- http://127.0.0.1:${PORT:-8080}/healthz || exit 1
 ENTRYPOINT ["./entrypoint.sh"]
+CMD ["node", "dist/server.js"]

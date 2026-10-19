@@ -14,9 +14,13 @@ const V1_PATHS = [
   "/api/v1/cart/items",
   "/api/v1/cart/items/{id}",
   "/api/v1/orders",
+  "/api/v1/orders/checkout-attempt",
   "/api/v1/orders/me",
   "/api/v1/orders/me/{id}",
+  "/api/v1/orders/me/{id}/payment",
   "/api/v1/orders/me/{id}/cancel",
+  "/api/v1/payments/methods",
+  "/api/v1/webhooks/payments/{provider}",
   "/api/v1/admin/products",
   "/api/v1/admin/products/{id}",
   "/api/v1/admin/users",
@@ -32,6 +36,9 @@ const V1_PATHS = [
   "/api/v1/admin/orders/{id}/status",
   "/api/v1/admin/dashboard",
   "/api/v1/admin/dashboard/sales",
+  "/api/v1/admin/payment-events",
+  "/api/v1/admin/payment-events/{id}",
+  "/api/v1/admin/payment-events/{id}/resolve",
 ];
 const secured = [{ cookieAuth: [] }, { bearerAuth: [] }];
 
@@ -55,6 +62,7 @@ describe("openapi document", () => {
   it("keeps public routes public and protects the rest", () => {
     expect(op("/api/v1/products", "get").security).toBeUndefined();
     expect(op("/api/v1/auth/login", "post").security).toBeUndefined();
+    expect(op("/api/v1/webhooks/payments/{provider}", "post").security).toBeUndefined();
     expect(op("/api/v1/cart", "get").security).toEqual(secured);
     expect(op("/api/v1/admin/dashboard", "get").security).toEqual(secured);
     expect(op("/api/v1/admin/dashboard", "get").responses["403"]).toBeDefined();
@@ -105,6 +113,8 @@ describe("openapi document", () => {
 
   it("documents the low-stock count on the dashboard", () => {
     expect((doc.components?.schemas?.Dashboard as any).properties).toHaveProperty("lowStockCount");
+    expect(doc.components?.schemas).toHaveProperty("Payment");
+    expect(doc.components?.schemas).toHaveProperty("PaymentEvent");
   });
 
   it("documents the order history on the admin order detail", () => {

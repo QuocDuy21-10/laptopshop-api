@@ -13,6 +13,7 @@ import { registerHealthRoutes } from "routes/health";
 import { applySecurity } from "middlewares/security";
 import { createLimiters } from "middlewares/rate-limit";
 import { errorHandler, notFoundHandler } from "middlewares/error.middleware";
+import { paymentWebhookRoutes } from "modules/payments/payments.routes";
 
 export interface AppDeps {
   limitStores?: { global?: Store; auth?: Store };
@@ -32,6 +33,9 @@ export const createApp = (deps: AppDeps = {}): Express => {
   // health + uploaded images before the limiter so they do not hit Redis
   registerHealthRoutes(app, deps.readyChecks ?? []);
   app.use(express.static("public"));
+
+  // Provider signatures are calculated over raw bytes; this route must precede express.json().
+  app.use("/api/v1/webhooks/payments", paymentWebhookRoutes);
 
   app.use(express.json({ limit: "100kb" }));
   app.use(express.urlencoded({ extended: true, limit: "100kb" }));

@@ -17,6 +17,11 @@ describe("parseEnv", () => {
     expect(e.ADMIN_PASSWORD).toBe("123456");
     expect(e.ENABLE_DOCS).toBe(false);
     expect(e.SENTRY_DSN).toBeUndefined();
+    expect(e.BANK_TRANSFER_ENABLED).toBe(false);
+    expect(e.PAYMENT_PROVIDER).toBe("fake");
+    expect(e.PAYMENT_TTL_MINUTES).toBe(15);
+    expect(e.PAYMENT_GRACE_SECONDS).toBe(120);
+    expect(e.SEPAY_MODE).toBe("test");
   });
 
   it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {
@@ -45,5 +50,47 @@ describe("parseEnv", () => {
       parseEnv({ ...base, NODE_ENV: "production", ADMIN_PASSWORD: "a-long-password-1" })
         .ADMIN_PASSWORD,
     ).toBe("a-long-password-1");
+  });
+
+  it("parses payment configuration", () => {
+    const e = parseEnv({
+      ...base,
+      BANK_TRANSFER_ENABLED: "true",
+      PAYMENT_PROVIDER: "sepay",
+      PAYMENT_TTL_MINUTES: "20",
+      PAYMENT_GRACE_SECONDS: "180",
+      SEPAY_MODE: "live",
+      PAYMENT_EVENT_ENCRYPTION_KEY: "a".repeat(64),
+      SEPAY_WEBHOOK_SECRET: "webhook-secret",
+      SEPAY_API_TOKEN: "api-token",
+      SEPAY_BANK_CODE: "VCB",
+      SEPAY_ACCOUNT_NUMBER: "0123456789",
+      SEPAY_ACCOUNT_NAME: "LAPTOP SHOP",
+    });
+    expect(e.BANK_TRANSFER_ENABLED).toBe(true);
+    expect(e.PAYMENT_PROVIDER).toBe("sepay");
+    expect(e.PAYMENT_TTL_MINUTES).toBe(20);
+    expect(e.PAYMENT_GRACE_SECONDS).toBe(180);
+    expect(e.SEPAY_MODE).toBe("live");
+  });
+
+  it("rejects fake provider in production and missing live secrets", () => {
+    expect(() =>
+      parseEnv({
+        ...base,
+        NODE_ENV: "production",
+        ADMIN_PASSWORD: "a-long-password-1",
+        BANK_TRANSFER_ENABLED: "true",
+      }),
+    ).toThrow(/PAYMENT_PROVIDER/);
+    expect(() =>
+      parseEnv({
+        ...base,
+        NODE_ENV: "production",
+        ADMIN_PASSWORD: "a-long-password-1",
+        BANK_TRANSFER_ENABLED: "true",
+        PAYMENT_PROVIDER: "sepay",
+      }),
+    ).toThrow(/SEPAY/);
   });
 });

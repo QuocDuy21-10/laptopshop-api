@@ -53,6 +53,14 @@ beforeEach(() => {
 });
 
 describe("POST /api/v1/orders", () => {
+  it("rejects BANK_TRANSFER while the backend feature flag is disabled", async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    const res = await post().send({ ...receiver, paymentMethod: "BANK_TRANSFER" });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("PAYMENT_METHOD_UNAVAILABLE");
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
   it("requires an Idempotency-Key header", async () => {
     const res = await request(buildApp())
       .post("/api/v1/orders")
@@ -240,5 +248,17 @@ describe("POST /api/v1/orders/me/:id/cancel", () => {
     expect(res.status).toBe(409);
     expect(prismaMock.product.update).not.toHaveBeenCalled();
     expect(prismaMock.orderStatusHistory.create).not.toHaveBeenCalled();
+  });
+
+  it("does not allow a customer to cancel a paid bank-transfer order", async () => {
+    prismaMock.order.findFirst.mockResolvedValue({
+      status: "PENDING",
+      paymentMethod: "BANK_TRANSFER",
+      paymentStatus: "PAYMENT_SUCCESS",
+    });
+    const res = await cancel();
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("PAID_ORDER_CANNOT_CANCEL");
+    expect(prismaMock.order.updateMany).not.toHaveBeenCalled();
   });
 });

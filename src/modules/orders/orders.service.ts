@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
+import { env } from "config/env";
 import { AppError, notFound } from "lib/errors";
 import { pageArgs, pageMeta, PageQuery } from "lib/http";
 import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
@@ -26,6 +27,7 @@ import {
   OrderStatus,
   PAYMENT_STATUS,
 } from "modules/orders/order-status";
+import { createTransferCode } from "modules/payments/payment-reference";
 
 const findByKey = (userId: number, idempotencyKey: string) =>
   prisma.order.findUnique({
@@ -34,8 +36,12 @@ const findByKey = (userId: number, idempotencyKey: string) =>
   });
 
 export const placeOrder = async (userId: number, key: string, receiver: PlaceOrderBody) => {
+  const paymentMethod = receiver.paymentMethod ?? "COD";
   const existing = await findByKey(userId, key);
   if (existing) return { order: toOrderDto(existing), created: false };
+  if (paymentMethod === "BANK_TRANSFER" && !env.BANK_TRANSFER_ENABLED) {
+    throw new AppError("Bank transfer is unavailable", 409, "PAYMENT_METHOD_UNAVAILABLE");
+  }
   try {
     const order = await prisma.$transaction(async (tx) => {
       // productId order gives every checkout the same lock order, so concurrent checkouts cannot deadlock
@@ -62,17 +68,38 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
           }),
         );
       }
+      const totalPrice = lines.reduce((sum, l) => sum + l.product.price * l.quantity, 0);
+      const payment =
+        paymentMethod === "BANK_TRANSFER"
+          ? (() => {
+              const expiresAt = new Date(Date.now() + env.PAYMENT_TTL_MINUTES * 60_000);
+              return {
+                provider: env.PAYMENT_PROVIDER,
+                method: "BANK_TRANSFER",
+                status: "PENDING",
+                amount: totalPrice,
+                currency: "VND",
+                transferCode: createTransferCode(),
+                bankCode: env.SEPAY_BANK_CODE!,
+                accountNumber: env.SEPAY_ACCOUNT_NUMBER!,
+                accountName: env.SEPAY_ACCOUNT_NAME!,
+                expiresAt,
+                cancelAfter: new Date(expiresAt.getTime() + env.PAYMENT_GRACE_SECONDS * 1000),
+              };
+            })()
+          : undefined;
       const created = await tx.order.create({
         data: {
           userId,
           idempotencyKey: key,
-          totalPrice: lines.reduce((sum, l) => sum + l.product.price * l.quantity, 0),
+          totalPrice,
           receiverName: receiver.receiverName,
           receiverAddress: receiver.receiverAddress,
           receiverPhone: receiver.receiverPhone,
           status: ORDER_STATUS.PENDING,
-          paymentMethod: "COD",
+          paymentMethod,
           paymentStatus: PAYMENT_STATUS.UNPAID,
+          ...(payment ? { payment: { create: payment } } : {}),
           orderDetails: {
             create: lines.map((l) => ({
               productId: l.productId,
@@ -132,31 +159,63 @@ export const getMyOrder = async (userId: number, id: number) => {
 export const changeStatus = async (
   orderId: number,
   to: OrderStatus,
-  scope: { actorId: number; userId?: number; from?: OrderStatus[] },
+  scope: { actorId?: number; userId?: number; from?: OrderStatus[]; reason?: string },
 ) =>
   prisma.$transaction(async (tx) => {
     const order = await tx.order.findFirst({
       where: { id: orderId, ...(scope.userId ? { userId: scope.userId } : {}) },
-      select: { status: true },
+      select: { status: true, paymentMethod: true, paymentStatus: true },
     });
     if (!order) throw notFound("Order");
     const allowedFrom = !scope.from || scope.from.includes(order.status as OrderStatus);
     if (!allowedFrom || !canTransition(order.status, to)) throw invalidTransition(order.status, to);
+    if (
+      order.paymentMethod === "BANK_TRANSFER" &&
+      (to === ORDER_STATUS.SHIPPING || to === ORDER_STATUS.COMPLETED) &&
+      order.paymentStatus !== PAYMENT_STATUS.SUCCESS
+    ) {
+      throw new AppError("Payment is required before fulfillment", 409, "PAYMENT_REQUIRED");
+    }
+    if (
+      to === ORDER_STATUS.CANCELLED &&
+      order.paymentMethod === "BANK_TRANSFER" &&
+      order.paymentStatus === PAYMENT_STATUS.SUCCESS
+    ) {
+      throw new AppError("A paid order requires refund handling", 409, "PAID_ORDER_CANNOT_CANCEL");
+    }
     // conditional on the status we read, so two concurrent changes cannot both apply (no double restock)
     const { count } = await tx.order.updateMany({
       where: { id: orderId, status: order.status },
       data: {
         status: to,
-        ...(to === ORDER_STATUS.COMPLETED
+        ...(to === ORDER_STATUS.COMPLETED && order.paymentMethod !== "BANK_TRANSFER"
           ? { paymentStatus: PAYMENT_STATUS.SUCCESS, completedAt: new Date() }
-          : {}),
+          : to === ORDER_STATUS.COMPLETED
+            ? { completedAt: new Date() }
+            : {}),
       },
     });
     if (count === 0) throw invalidTransition(order.status, to);
     // same transaction as the status change, so history never misses or invents a transition
     await tx.orderStatusHistory.create({
-      data: { orderId, fromStatus: order.status, toStatus: to, actorId: scope.actorId },
+      data: {
+        orderId,
+        fromStatus: order.status,
+        toStatus: to,
+        actorId: scope.actorId,
+        ...(scope.reason ? { reason: scope.reason } : {}),
+      },
     });
+    if (to === ORDER_STATUS.CANCELLED && order.paymentMethod === "BANK_TRANSFER") {
+      await tx.payment.updateMany({
+        where: { orderId, status: "PENDING" },
+        data: { status: "CANCELLED", cancelledAt: new Date() },
+      });
+      await tx.order.updateMany({
+        where: { id: orderId, status: ORDER_STATUS.CANCELLED },
+        data: { paymentStatus: PAYMENT_STATUS.FAILED },
+      });
+    }
     if (to === ORDER_STATUS.CANCELLED) {
       const lines = await tx.orderDetail.findMany({
         where: { orderId },
