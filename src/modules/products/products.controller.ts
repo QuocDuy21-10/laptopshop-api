@@ -44,7 +44,8 @@ export const getFiltersHandler: RequestHandler = (_req, res) => {
 };
 
 export const createProductHandler: RequestHandler = async (req, res) => {
-  res.status(201).json({ data: await createProduct(req.body as ProductBody, req.file?.filename) });
+  const product = await createProduct(req.body as ProductBody, req.file?.filename, req.auth!.id);
+  res.status(201).json({ data: product });
 };
 
 export const updateProductHandler: RequestHandler = async (req, res) => {

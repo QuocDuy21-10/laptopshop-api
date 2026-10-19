@@ -8,6 +8,7 @@ import { adminProductRoutes, productRoutes } from "modules/products/products.rou
 import { adminRoleRoutes, adminUserRoutes, usersRoutes } from "modules/users/users.routes";
 import { cartRoutes } from "modules/cart/cart.routes";
 import { adminOrderRoutes, orderRoutes } from "modules/orders/orders.routes";
+import { adminInventoryRoutes } from "modules/inventory/inventory.routes";
 import { dashboardRoutes } from "modules/dashboard/dashboard.routes";
 import { notFoundHandler } from "middlewares/error.middleware";
 
@@ -28,6 +29,7 @@ export const createApiV1Router = () => {
   admin.use("/roles", adminRoleRoutes);
   admin.use("/orders", adminOrderRoutes);
   admin.use("/dashboard", dashboardRoutes);
+  admin.use("/inventory", adminInventoryRoutes);
   router.use("/admin", admin);
 
   router.use(notFoundHandler);

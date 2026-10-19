@@ -31,6 +31,7 @@ import {
   updateStatusBody,
 } from "modules/orders/orders.schema";
 import { salesQuery } from "modules/dashboard/dashboard.schema";
+import { adjustmentBody, listMovementsQuery } from "modules/inventory/inventory.schema";
 import { ORDER_STATUSES } from "modules/orders/order-status";
 
 extendZodWithOpenApi(z);
@@ -180,6 +181,21 @@ const SalesReport = registry.register(
       }),
     ),
     totals: z.object({ revenue: z.number(), orders: z.number() }),
+  }),
+);
+
+const StockMovement = registry.register(
+  "StockMovement",
+  z.object({
+    id: z.number(),
+    productId: z.number(),
+    productName: z.string(),
+    delta: z.number(),
+    reason: z.string(),
+    orderId: z.number().nullable(),
+    actor: Actor,
+    note: z.string().nullable(),
+    createdAt: z.string().datetime(),
   }),
 );
 
@@ -565,6 +581,26 @@ op({
   request: { query: salesQuery },
   ok: [200, "OK", data(SalesReport)],
   errors: { 400: "Invalid range" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/inventory/adjustments`,
+  summary: "Adjust stock (restock or stock-take correction)",
+  tag: "admin",
+  auth: "admin",
+  request: { body: json(adjustmentBody) },
+  ok: [201, "Adjusted", data(z.object({ product: Product, movement: StockMovement }))],
+  errors: { 400: "Invalid input", 404: "Product not found", 409: "Stock would go negative" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/inventory/movements`,
+  summary: "Stock ledger",
+  tag: "admin",
+  auth: "admin",
+  request: { query: listMovementsQuery },
+  ok: [200, "OK", page(StockMovement)],
+  errors: { 400: "Invalid filter" },
 });
 
 export const buildOpenApiDocument = () =>

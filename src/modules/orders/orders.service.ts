@@ -3,7 +3,8 @@ import { prisma } from "config/client";
 import { AppError, notFound } from "lib/errors";
 import { pageArgs, pageMeta, PageQuery } from "lib/http";
 import { assertDayRange, createdAtRange } from "lib/shop-time";
-import { outOfStock, productUnavailable } from "modules/cart/cart.service";
+import { productUnavailable } from "modules/cart/cart.service";
+import { moveStock } from "modules/inventory/inventory.service";
 import {
   adminOrderDetailInclude,
   adminOrderInclude,
@@ -41,12 +42,20 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
       if (lines.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
       for (const line of lines) {
         if (!line.product.isActive) throw productUnavailable(line.productId);
-        // isActive in the condition also covers a product hidden after the read above
-        const { count } = await tx.product.updateMany({
-          where: { id: line.productId, isActive: true, quantity: { gte: line.quantity } },
-          data: { quantity: { decrement: line.quantity }, sold: { increment: line.quantity } },
-        });
-        if (count === 0) throw outOfStock(line.productId);
+      }
+      // stock is taken before the order rows exist: order_detail's foreign key share-locks the product,
+      // and upgrading that to the update lock in two concurrent checkouts would deadlock
+      const movements = [];
+      for (const line of lines) {
+        movements.push(
+          await moveStock(tx, {
+            productId: line.productId,
+            delta: -line.quantity,
+            reason: "ORDER",
+            actorId: userId,
+            onlyActive: true,
+          }),
+        );
       }
       const created = await tx.order.create({
         data: {
@@ -76,6 +85,11 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
           toStatus: ORDER_STATUS.PENDING,
           actorId: userId,
         },
+      });
+      // link the ledger rows to the order now that it exists
+      await tx.stockMovement.updateMany({
+        where: { id: { in: movements.map((m) => m.id) } },
+        data: { orderId: created.id },
       });
       await tx.cartDetail.deleteMany({ where: { cart: { userId } } });
       await tx.cart.deleteMany({ where: { userId } });
@@ -144,9 +158,12 @@ export const changeStatus = async (
         orderBy: { productId: "asc" },
       });
       for (const l of lines) {
-        await tx.product.update({
-          where: { id: l.productId },
-          data: { quantity: { increment: l.quantity }, sold: { decrement: l.quantity } },
+        await moveStock(tx, {
+          productId: l.productId,
+          delta: l.quantity,
+          reason: "ORDER_CANCEL",
+          orderId,
+          actorId: scope.actorId,
         });
       }
     }
