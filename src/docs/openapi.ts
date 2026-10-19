@@ -132,6 +132,7 @@ const Dashboard = registry.register(
     orderCount: z.number(),
     revenue: z.number(),
     ordersByStatus: z.record(z.number()),
+    lowStockCount: z.number(),
   }),
 );
 

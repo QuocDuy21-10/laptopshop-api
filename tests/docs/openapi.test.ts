@@ -66,6 +66,10 @@ describe("openapi document", () => {
     expect(names).toEqual(expect.arrayContaining(["isActive", "stock"]));
   });
 
+  it("documents the low-stock count on the dashboard", () => {
+    expect((doc.components?.schemas?.Dashboard as any).properties).toHaveProperty("lowStockCount");
+  });
+
   it("names the response schemas the frontend generates types from", () => {
     expect(Object.keys(doc.components?.schemas ?? {})).toEqual(
       expect.arrayContaining(["Error", "User", "Me", "Product", "Cart", "Order", "AdminOrder"]),
