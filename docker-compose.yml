@@ -20,6 +20,25 @@ services:
       # a named volume is seeded from the image on first run, so the bundled product images are kept
       - uploads:/app/public/images
 
+  payment-worker:
+    build:
+      context: .
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      RUN_MIGRATIONS: "false"
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      app:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["node", "dist/workers/payment-worker.js"]
+    healthcheck:
+      disable: true
+
   mysql:
     image: mysql:8.4
     environment:

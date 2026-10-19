@@ -11,6 +11,7 @@ import { adminOrderRoutes, orderRoutes } from "modules/orders/orders.routes";
 import { adminInventoryRoutes } from "modules/inventory/inventory.routes";
 import { dashboardRoutes } from "modules/dashboard/dashboard.routes";
 import { notFoundHandler } from "middlewares/error.middleware";
+import { adminPaymentRoutes, paymentRoutes } from "modules/payments/payments.routes";
 
 export const createApiV1Router = () => {
   const router = express.Router();
@@ -21,6 +22,7 @@ export const createApiV1Router = () => {
   router.use("/users", usersRoutes);
   router.use("/cart", cartRoutes);
   router.use("/orders", orderRoutes);
+  router.use("/payments", paymentRoutes);
 
   const admin = express.Router();
   admin.use(authenticate, requireRole("ADMIN"));
@@ -30,6 +32,7 @@ export const createApiV1Router = () => {
   admin.use("/orders", adminOrderRoutes);
   admin.use("/dashboard", dashboardRoutes);
   admin.use("/inventory", adminInventoryRoutes);
+  admin.use("/payment-events", adminPaymentRoutes);
   router.use("/admin", admin);
 
   router.use(notFoundHandler);

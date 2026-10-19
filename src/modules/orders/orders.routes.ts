@@ -18,12 +18,15 @@ import {
   placeOrderHandler,
   updateStatusHandler,
 } from "modules/orders/orders.controller";
+import { checkoutAttemptHandler, getMyPaymentHandler } from "modules/payments/payments.controller";
 
 export const orderRoutes = Router();
 
 orderRoutes.use(authenticate);
 orderRoutes.post("/", validate({ body: placeOrderBody }), placeOrderHandler);
+orderRoutes.get("/checkout-attempt", checkoutAttemptHandler);
 orderRoutes.get("/me", validate({ query: pageQuery }), listMyOrdersHandler);
+orderRoutes.get("/me/:id/payment", validate({ params: idParams }), getMyPaymentHandler);
 orderRoutes.get("/me/:id", validate({ params: idParams }), getMyOrderHandler);
 orderRoutes.post("/me/:id/cancel", validate({ params: idParams }), cancelMyOrderHandler);
 

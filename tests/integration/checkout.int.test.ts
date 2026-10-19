@@ -1,6 +1,7 @@
 import { prisma } from "config/client";
 import { AppError } from "lib/errors";
 import { changeStatus, placeOrder } from "modules/orders/orders.service";
+import { expirePayments, ingestPaymentTransaction } from "modules/payments/payments.service";
 import { createProduct, createUser, putInCart, receiver, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
@@ -99,6 +100,95 @@ describe("hidden products", () => {
       3,
     );
     expect(await prisma.order.count()).toBe(0);
+  });
+});
+
+describe("bank transfer payments", () => {
+  it("creates one pending payment with a unique transfer code", async () => {
+    const product = await createProduct(3, 1000);
+    const user = await createUser();
+    await putInCart(user.id, product.id, 2);
+    const { order } = await placeOrder(user.id, "qr-1", {
+      ...receiver,
+      paymentMethod: "BANK_TRANSFER",
+    });
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
+    expect(payment.status).toBe("PENDING");
+    expect(payment.transferCode).toMatch(/^LS[A-Z0-9]{12}$/);
+    expect(payment.amount).toBe(2000);
+    expect(payment.cancelAfter.getTime()).toBeGreaterThan(payment.expiresAt.getTime());
+  });
+
+  it("confirms an exact transaction once and ignores a duplicate", async () => {
+    const product = await createProduct(3, 1000);
+    const user = await createUser();
+    await putInCart(user.id, product.id, 1);
+    const { order } = await placeOrder(user.id, "qr-2", {
+      ...receiver,
+      paymentMethod: "BANK_TRANSFER",
+    });
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
+    const transaction = {
+      providerEventId: "event-1",
+      providerTransactionKey: "tx-1",
+      direction: "IN" as const,
+      amount: payment.amount,
+      currency: "VND",
+      transferCode: payment.transferCode,
+      accountNumber: payment.accountNumber,
+      occurredAt: new Date(payment.expiresAt.getTime() - 1000),
+    };
+    await expect(ingestPaymentTransaction(transaction, "WEBHOOK")).resolves.toMatchObject({
+      status: "MATCHED",
+    });
+    await expect(ingestPaymentTransaction(transaction, "RECONCILIATION")).resolves.toMatchObject({
+      duplicate: true,
+    });
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe(
+      "SUCCEEDED",
+    );
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).paymentStatus).toBe(
+      "PAYMENT_SUCCESS",
+    );
+  });
+
+  it("expires an unpaid payment and restores stock once", async () => {
+    const product = await createProduct(2, 1000);
+    const user = await createUser();
+    await putInCart(user.id, product.id, 1);
+    const { order } = await placeOrder(user.id, "qr-3", {
+      ...receiver,
+      paymentMethod: "BANK_TRANSFER",
+    });
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
+    const expiredAt = new Date(payment.cancelAfter.getTime() + 1);
+    expect(await expirePayments(expiredAt)).toBe(1);
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe(
+      "EXPIRED",
+    );
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: order.id } })).status).toBe(
+      "CANCELLED",
+    );
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).quantity).toBe(
+      2,
+    );
+    expect(await expirePayments(expiredAt)).toBe(0);
+  });
+
+  it("does not expire a payment after fulfillment already left pending", async () => {
+    const product = await createProduct(2, 1000);
+    const user = await createUser();
+    await putInCart(user.id, product.id, 1);
+    const { order } = await placeOrder(user.id, "qr-4", {
+      ...receiver,
+      paymentMethod: "BANK_TRANSFER",
+    });
+    await prisma.order.update({ where: { id: order.id }, data: { status: "SHIPPING" } });
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
+    expect(await expirePayments(new Date(payment.cancelAfter.getTime() + 1))).toBe(0);
+    expect((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe(
+      "PENDING",
+    );
   });
 });
 

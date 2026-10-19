@@ -98,6 +98,20 @@ describe("GET /api/v1/admin/orders", () => {
 });
 
 describe("PATCH /api/v1/admin/orders/:id/status", () => {
+  it("requires a successful bank payment before shipping", async () => {
+    prismaMock.order.findFirst.mockResolvedValue({
+      status: "PENDING",
+      paymentMethod: "BANK_TRANSFER",
+      paymentStatus: "PAYMENT_UNPAID",
+    });
+    const res = await asAdmin(request(buildApp()).patch("/api/v1/admin/orders/50/status")).send({
+      status: "SHIPPING",
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("PAYMENT_REQUIRED");
+    expect(prismaMock.order.updateMany).not.toHaveBeenCalled();
+  });
+
   it("completes a shipping order and marks it paid", async () => {
     prismaMock.order.findFirst.mockResolvedValue({ status: "SHIPPING" });
     prismaMock.order.updateMany.mockResolvedValue({ count: 1 });

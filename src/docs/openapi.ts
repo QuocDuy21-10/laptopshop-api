@@ -39,6 +39,11 @@ import {
   listMovementsQuery,
 } from "modules/inventory/inventory.schema";
 import { ORDER_STATUSES } from "modules/orders/order-status";
+import {
+  paymentEventQuery,
+  paymentProviderParam,
+  resolvePaymentEventBody,
+} from "modules/payments/payments.schema";
 
 extendZodWithOpenApi(z);
 
@@ -137,6 +142,56 @@ const orderShape = {
   ),
 };
 const Order = registry.register("Order", z.object(orderShape));
+const PaymentInstructions = z.object({
+  qrImageUrl: z.string().url(),
+  bankCode: z.string(),
+  accountNumber: z.string(),
+  accountName: z.string(),
+  transferCode: z.string(),
+});
+const Payment = registry.register(
+  "Payment",
+  z.object({
+    id: z.string(),
+    orderId: z.number(),
+    provider: z.string(),
+    method: z.string(),
+    status: z.enum(["PENDING", "SUCCEEDED", "EXPIRED", "CANCELLED"]),
+    amount: z.number(),
+    currency: z.string(),
+    expiresAt: z.string().datetime(),
+    cancelAfter: z.string().datetime(),
+    paidAt: z.string().datetime().nullable(),
+    serverTime: z.string().datetime(),
+    instructions: PaymentInstructions.nullable(),
+  }),
+);
+const PaymentEvent = registry.register(
+  "PaymentEvent",
+  z.object({
+    id: z.string(),
+    provider: z.string(),
+    source: z.string(),
+    providerEventId: z.string(),
+    providerTransactionKey: z.string(),
+    paymentId: z.string().nullable(),
+    direction: z.string(),
+    amount: z.number(),
+    currency: z.string(),
+    transferCode: z.string().nullable(),
+    accountNumber: z.string().nullable(),
+    occurredAt: z.string().datetime().nullable(),
+    status: z.string(),
+    reviewReason: z.string().nullable(),
+    note: z.string().nullable(),
+    receivedAt: z.string().datetime(),
+    resolvedAt: z.string().datetime().nullable(),
+    resolvedById: z.number().nullable(),
+  }),
+);
+const PaymentMethods = z.array(
+  z.object({ code: z.enum(["COD", "BANK_TRANSFER"]), enabled: z.boolean() }),
+);
 const adminOrderShape = {
   ...orderShape,
   completedAt: z.string().datetime().nullable(),
@@ -420,6 +475,16 @@ op({
 });
 op({
   method: "get",
+  path: `${v1}/orders/checkout-attempt`,
+  summary: "Recover a checkout attempt",
+  tag: "orders",
+  auth: "user",
+  request: { headers: z.object({ "Idempotency-Key": z.string().min(1).max(64) }) },
+  ok: [200, "Recovered order", data(Order)],
+  errors: { 404: "Checkout attempt not found" },
+});
+op({
+  method: "get",
   path: `${v1}/orders/me/{id}`,
   summary: "My order",
   tag: "orders",
@@ -437,6 +502,33 @@ op({
   request: id,
   ok: [200, "Cancelled", data(Order)],
   errors: { 404: "Not found", 409: "Not cancellable" },
+});
+op({
+  method: "get",
+  path: `${v1}/orders/me/{id}/payment`,
+  summary: "Payment instructions and status",
+  tag: "payments",
+  auth: "user",
+  request: id,
+  ok: [200, "OK", data(Payment)],
+  errors: { 404: "Payment not found" },
+});
+op({
+  method: "get",
+  path: `${v1}/payments/methods`,
+  summary: "Available payment methods",
+  tag: "payments",
+  auth: "user",
+  ok: [200, "OK", data(PaymentMethods)],
+});
+op({
+  method: "post",
+  path: `${v1}/webhooks/payments/{provider}`,
+  summary: "Receive a payment provider webhook",
+  tag: "payments",
+  request: { params: paymentProviderParam, body: json(z.record(z.unknown())) },
+  ok: [200, "Accepted"],
+  errors: { 400: "Invalid payload", 401: "Invalid signature", 404: "Provider not found" },
 });
 
 // admin
@@ -625,6 +717,35 @@ op({
   request: { query: salesQuery },
   ok: [200, "OK", data(SalesReport)],
   errors: { 400: "Invalid range" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/payment-events`,
+  summary: "Review payment events",
+  tag: "admin",
+  auth: "admin",
+  request: { query: paymentEventQuery },
+  ok: [200, "OK", page(PaymentEvent)],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/payment-events/{id}`,
+  summary: "Payment event detail",
+  tag: "admin",
+  auth: "admin",
+  request: { params: z.object({ id: z.string().uuid() }) },
+  ok: [200, "OK", data(PaymentEvent)],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/payment-events/{id}/resolve`,
+  summary: "Resolve a payment event",
+  tag: "admin",
+  auth: "admin",
+  request: { params: z.object({ id: z.string().uuid() }), body: json(resolvePaymentEventBody) },
+  ok: [200, "Resolved", data(PaymentEvent)],
+  errors: { 404: "Not found", 409: "Event is not reviewable" },
 });
 op({
   method: "post",
