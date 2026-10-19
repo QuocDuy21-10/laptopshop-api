@@ -18,6 +18,7 @@ import {
   updateMeBody,
 } from "modules/users/users.schema";
 import {
+  adminExportProductsQuery,
   adminListProductsQuery,
   compareQuery,
   listProductsQuery,
@@ -26,12 +27,17 @@ import {
 } from "modules/products/products.schema";
 import { addItemBody, updateItemBody } from "modules/cart/cart.schema";
 import {
+  adminExportOrdersQuery,
   adminListOrdersQuery,
   placeOrderBody,
   updateStatusBody,
 } from "modules/orders/orders.schema";
 import { salesQuery } from "modules/dashboard/dashboard.schema";
-import { adjustmentBody, listMovementsQuery } from "modules/inventory/inventory.schema";
+import {
+  adjustmentBody,
+  exportMovementsQuery,
+  listMovementsQuery,
+} from "modules/inventory/inventory.schema";
 import { ORDER_STATUSES } from "modules/orders/order-status";
 
 extendZodWithOpenApi(z);
@@ -217,6 +223,7 @@ type Op = {
   request?: RouteConfig["request"];
   ok: [status: number, description: string, schema?: z.ZodTypeAny];
   errors?: Record<number, string>;
+  csv?: boolean;
 };
 
 const op = (o: Op) => {
@@ -234,7 +241,11 @@ const op = (o: Op) => {
     ...(o.auth ? { security: secured } : {}),
     request: o.request,
     responses: {
-      [status]: schema ? { description, ...json(schema) } : { description },
+      [status]: o.csv
+        ? { description, content: { "text/csv": { schema: z.string() } } }
+        : schema
+          ? { description, ...json(schema) }
+          : { description },
       ...Object.fromEntries(
         Object.entries(errors).map(([code, d]) => [code, { description: d, ...json(ErrorBody) }]),
       ),
@@ -563,6 +574,39 @@ op({
   request: { ...id, body: json(updateStatusBody) },
   ok: [200, "OK", data(Order)],
   errors: { 404: "Not found", 409: "Invalid transition" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/orders/export.csv`,
+  summary: "Export orders (same filters as the list) as CSV",
+  tag: "admin",
+  auth: "admin",
+  request: { query: adminExportOrdersQuery },
+  ok: [200, "CSV file"],
+  csv: true,
+  errors: { 400: "Invalid filter or too many rows" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/products/export.csv`,
+  summary: "Export products (same filters as the list) as CSV",
+  tag: "admin",
+  auth: "admin",
+  request: { query: adminExportProductsQuery },
+  ok: [200, "CSV file"],
+  csv: true,
+  errors: { 400: "Invalid filter or too many rows" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/inventory/movements/export.csv`,
+  summary: "Export the stock ledger as CSV",
+  tag: "admin",
+  auth: "admin",
+  request: { query: exportMovementsQuery },
+  ok: [200, "CSV file"],
+  csv: true,
+  errors: { 400: "Invalid filter or too many rows" },
 });
 op({
   method: "get",

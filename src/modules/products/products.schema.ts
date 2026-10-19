@@ -99,3 +99,6 @@ export const compareQuery = z.object({
     .refine((ids) => new Set(ids).size === ids.length, { message: "Duplicate product ids" }),
 });
 export type CompareQuery = z.infer<typeof compareQuery>;
+
+export const adminExportProductsQuery = adminListProductsQuery.omit({ page: true, pageSize: true });
+export type AdminExportProductsQuery = z.infer<typeof adminExportProductsQuery>;

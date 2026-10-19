@@ -3,12 +3,14 @@ import { idParams, pageQuery } from "lib/http";
 import { authenticate } from "middlewares/authenticate";
 import { validate } from "middlewares/validate";
 import {
+  adminExportOrdersQuery,
   adminListOrdersQuery,
   placeOrderBody,
   updateStatusBody,
 } from "modules/orders/orders.schema";
 import {
   cancelMyOrderHandler,
+  exportOrdersHandler,
   getAnyOrderHandler,
   getMyOrderHandler,
   listAllOrdersHandler,
@@ -28,6 +30,11 @@ orderRoutes.post("/me/:id/cancel", validate({ params: idParams }), cancelMyOrder
 export const adminOrderRoutes = Router();
 
 adminOrderRoutes.get("/", validate({ query: adminListOrdersQuery }), listAllOrdersHandler);
+adminOrderRoutes.get(
+  "/export.csv",
+  validate({ query: adminExportOrdersQuery }),
+  exportOrdersHandler,
+);
 adminOrderRoutes.get("/:id", validate({ params: idParams }), getAnyOrderHandler);
 adminOrderRoutes.patch(
   "/:id/status",

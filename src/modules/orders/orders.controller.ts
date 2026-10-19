@@ -1,6 +1,8 @@
 import { RequestHandler } from "express";
+import { sendCsv } from "lib/csv";
 import { IdParams, PageQuery } from "lib/http";
 import {
+  AdminExportOrdersQuery,
   AdminListOrdersQuery,
   idempotencyKeyHeader,
   PlaceOrderBody,
@@ -9,6 +11,7 @@ import {
 import {
   cancelMyOrder,
   changeStatus,
+  exportOrders,
   getAnyOrder,
   getMyOrder,
   listAllOrders,
@@ -48,4 +51,8 @@ export const updateStatusHandler: RequestHandler = async (req, res) => {
   const { id } = res.locals.params as IdParams;
   const { status } = req.body as UpdateStatusBody;
   res.json({ data: await changeStatus(id, status, { actorId: req.auth!.id }) });
+};
+
+export const exportOrdersHandler: RequestHandler = async (_req, res) => {
+  sendCsv(res, "orders", await exportOrders(res.locals.query as AdminExportOrdersQuery));
 };

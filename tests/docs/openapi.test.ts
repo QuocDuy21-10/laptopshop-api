@@ -25,6 +25,9 @@ const V1_PATHS = [
   "/api/v1/admin/inventory/movements",
   "/api/v1/admin/roles",
   "/api/v1/admin/orders",
+  "/api/v1/admin/orders/export.csv",
+  "/api/v1/admin/products/export.csv",
+  "/api/v1/admin/inventory/movements/export.csv",
   "/api/v1/admin/orders/{id}",
   "/api/v1/admin/orders/{id}/status",
   "/api/v1/admin/dashboard",
@@ -108,6 +111,11 @@ describe("openapi document", () => {
     const detail = doc.components?.schemas?.AdminOrderDetail as any;
     expect(detail.properties).toHaveProperty("history");
     expect((doc.components?.schemas?.AdminOrder as any).properties).toHaveProperty("completedAt");
+  });
+
+  it("documents the CSV exports as text/csv", () => {
+    const ok = op("/api/v1/admin/orders/export.csv", "get").responses["200"];
+    expect(Object.keys(ok.content)).toEqual(["text/csv"]);
   });
 
   it("names the response schemas the frontend generates types from", () => {

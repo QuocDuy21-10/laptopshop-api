@@ -1,12 +1,14 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
 import { AppError, isNotFound, notFound } from "lib/errors";
+import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
 import { pageArgs, pageMeta } from "lib/http";
-import { assertDayRange, createdAtRange } from "lib/shop-time";
+import { assertDayRange, createdAtRange, formatShopDateTime } from "lib/shop-time";
 import { outOfStock } from "modules/cart/cart.service";
-import { movementInclude, toMovementDto } from "modules/inventory/inventory.mapper";
+import { MovementRow, movementInclude, toMovementDto } from "modules/inventory/inventory.mapper";
 import {
   AdjustmentBody,
+  ExportMovementsQuery,
   ListMovementsQuery,
   STOCK_REASON,
   StockReason,
@@ -126,4 +128,29 @@ export const listMovements = async (q: ListMovementsQuery) => {
     }),
   ]);
   return { items: rows.map(toMovementDto), meta: pageMeta(q, total) };
+};
+
+const MOVEMENT_COLUMNS: CsvColumn<MovementRow>[] = [
+  { header: "Thời gian", value: (m) => formatShopDateTime(m.createdAt) },
+  { header: "Mã SP", value: (m) => m.productId },
+  { header: "Sản phẩm", value: (m) => m.product.name },
+  { header: "Thay đổi", value: (m) => m.delta },
+  { header: "Lý do", value: (m) => m.reason },
+  { header: "Mã đơn", value: (m) => m.orderId },
+  {
+    header: "Người thao tác",
+    value: (m) => (m.actor ? (m.actor.fullName ?? m.actor.username) : null),
+  },
+  { header: "Ghi chú", value: (m) => m.note },
+];
+
+export const exportMovements = async (q: ExportMovementsQuery) => {
+  const where = movementWhere(q);
+  assertExportSize(await prisma.stockMovement.count({ where }));
+  const rows = await prisma.stockMovement.findMany({
+    where,
+    include: movementInclude,
+    orderBy: newestFirst,
+  });
+  return toCsv(MOVEMENT_COLUMNS, rows);
 };

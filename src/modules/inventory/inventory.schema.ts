@@ -32,3 +32,6 @@ export const listMovementsQuery = pageQuery.extend({
   to: z.string().date().optional(),
 });
 export type ListMovementsQuery = z.infer<typeof listMovementsQuery>;
+
+export const exportMovementsQuery = listMovementsQuery.omit({ page: true, pageSize: true });
+export type ExportMovementsQuery = z.infer<typeof exportMovementsQuery>;
