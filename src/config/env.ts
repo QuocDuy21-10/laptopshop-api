@@ -28,6 +28,19 @@ const schema = z
       .enum(["true", "false"])
       .default("false")
       .transform((v) => v === "true"),
+    BANK_TRANSFER_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    PAYMENT_PROVIDER: z.enum(["fake", "sepay"]).default("fake"),
+    PAYMENT_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+    PAYMENT_GRACE_SECONDS: z.coerce.number().int().nonnegative().default(120),
+    PAYMENT_EVENT_ENCRYPTION_KEY: z.preprocess(emptyToUndefined, z.string().length(64).optional()),
+    SEPAY_WEBHOOK_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    SEPAY_API_TOKEN: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    SEPAY_BANK_CODE: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    SEPAY_ACCOUNT_NUMBER: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    SEPAY_ACCOUNT_NAME: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     GIT_SHA: z.preprocess(emptyToUndefined, z.string().optional()),
   })
   .superRefine((e, ctx) => {
@@ -37,6 +50,30 @@ const schema = z
         path: ["ADMIN_PASSWORD"],
         message: "ADMIN_PASSWORD (min 12 chars) is required in production",
       });
+    }
+    if (e.NODE_ENV === "production" && e.BANK_TRANSFER_ENABLED && e.PAYMENT_PROVIDER !== "sepay") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["PAYMENT_PROVIDER"],
+        message: "PAYMENT_PROVIDER=sepay is required in production",
+      });
+    }
+    if (e.BANK_TRANSFER_ENABLED) {
+      for (const key of [
+        "PAYMENT_EVENT_ENCRYPTION_KEY",
+        "SEPAY_WEBHOOK_SECRET",
+        "SEPAY_API_TOKEN",
+        "SEPAY_BANK_CODE",
+        "SEPAY_ACCOUNT_NUMBER",
+        "SEPAY_ACCOUNT_NAME",
+      ] as const) {
+        if (!e[key])
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required when BANK_TRANSFER_ENABLED=true`,
+          });
+      }
     }
   })
   .transform((e) => ({ ...e, ADMIN_PASSWORD: e.ADMIN_PASSWORD ?? "123456" }));

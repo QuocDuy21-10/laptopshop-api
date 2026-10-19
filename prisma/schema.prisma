@@ -25,11 +25,12 @@ model User {
   role        Role    @relation(fields: [roleId], references: [id])
   roleId      Int
 
-  Cart           Cart?
-  orders         Order[]
-  refreshTokens  RefreshToken[]
-  statusChanges  OrderStatusHistory[]
-  stockMovements StockMovement[]
+  Cart                    Cart?
+  orders                  Order[]
+  refreshTokens           RefreshToken[]
+  statusChanges           OrderStatusHistory[]
+  stockMovements          StockMovement[]
+  paymentEventResolutions PaymentWebhookEvent[]
 
   @@map("users")
 }
@@ -117,6 +118,7 @@ model Order {
   orderDetails   OrderDetail[]
   history        OrderStatusHistory[]
   stockMovements StockMovement[]
+  payment        Payment?
 
   @@unique([userId, idempotencyKey])
   @@index([status, createdAt])
@@ -164,11 +166,88 @@ model OrderStatusHistory {
   order   Order @relation(fields: [orderId], references: [id])
   orderId Int
 
-  actor   User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  actor   User?   @relation(fields: [actorId], references: [id], onDelete: SetNull)
   actorId Int?
+  reason  String? @db.VarChar(50)
 
   @@index([orderId, createdAt])
   @@map("order_status_history")
+}
+
+model Payment {
+  id            String    @id @default(uuid()) @db.Char(36)
+  orderId       Int       @unique
+  provider      String    @db.VarChar(20)
+  method        String    @default("BANK_TRANSFER") @db.VarChar(30)
+  status        String    @default("PENDING") @db.VarChar(20)
+  amount        Int
+  currency      String    @default("VND") @db.Char(3)
+  transferCode  String    @unique @db.VarChar(32)
+  bankCode      String    @db.VarChar(30)
+  accountNumber String    @db.VarChar(64)
+  accountName   String    @db.VarChar(255)
+  expiresAt     DateTime
+  cancelAfter   DateTime
+  paidAt        DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  order         Order                 @relation(fields: [orderId], references: [id])
+  webhookEvents PaymentWebhookEvent[]
+
+  @@index([status, cancelAfter])
+  @@map("payments")
+}
+
+model PaymentWebhookEvent {
+  id                     String    @id @default(uuid()) @db.Char(36)
+  provider               String    @db.VarChar(20)
+  source                 String    @db.VarChar(20)
+  providerEventId        String    @db.VarChar(150)
+  providerTransactionKey String    @db.VarChar(150)
+  paymentId              String?
+  direction              String    @db.VarChar(10)
+  amount                 Int
+  currency               String    @default("VND") @db.Char(3)
+  transferCode           String?   @db.VarChar(64)
+  accountNumber          String?   @db.VarChar(64)
+  occurredAt             DateTime?
+  status                 String    @default("REVIEW_REQUIRED") @db.VarChar(30)
+  reviewReason           String?   @db.VarChar(40)
+  payloadHash            String    @db.Char(64)
+  rawPayload             Bytes?    @db.LongBlob
+  rawPayloadIv           Bytes?    @db.VarBinary(16)
+  rawPayloadTag          Bytes?    @db.VarBinary(16)
+  encryptionKeyId        String?   @db.VarChar(32)
+  note                   String?   @db.VarChar(500)
+  receivedAt             DateTime  @default(now())
+  resolvedAt             DateTime?
+  resolvedById           Int?
+
+  payment    Payment? @relation(fields: [paymentId], references: [id])
+  resolvedBy User?    @relation(fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@unique([provider, providerEventId])
+  @@unique([provider, providerTransactionKey])
+  @@index([status, receivedAt])
+  @@index([paymentId])
+  @@map("payment_webhook_events")
+}
+
+model PaymentProviderCheckpoint {
+  id              Int       @id @default(autoincrement())
+  provider        String    @db.VarChar(20)
+  mode            String    @db.VarChar(20)
+  cursor          String?   @db.VarChar(150)
+  lastStartedAt   DateTime?
+  lastSucceededAt DateTime?
+  lastErrorAt     DateTime?
+  lastError       String?   @db.VarChar(500)
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([provider, mode])
+  @@map("payment_provider_checkpoints")
 }
 
 model StockMovement {
