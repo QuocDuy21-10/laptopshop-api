@@ -52,6 +52,7 @@ model Product {
   sold       Int?    @default(0)
   factory    String? @db.VarChar(255)
   target     String? @db.VarChar(255)
+  isActive   Boolean @default(true)
 
   cartDetails  CartDetail[]
   orderDetails OrderDetail[]

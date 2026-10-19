@@ -13,6 +13,11 @@ export type PriceRange = keyof typeof PRICE_RANGES;
 export const FACTORIES = factoryOptions.map((o) => o.value);
 export const TARGETS = targetOptions.map((o) => o.value);
 
+export const LOW_STOCK_THRESHOLD = 5;
+
+// multipart and query strings arrive as "true"/"false"; z.coerce.boolean would turn "false" into true
+const flag = z.union([z.boolean(), z.enum(["true", "false"]).transform((v) => v === "true")]);
+
 const csvOf = (allowed: readonly string[]) =>
   z
     .string()
@@ -38,6 +43,12 @@ export const listProductsQuery = pageQuery.extend({
 });
 export type ListProductsQuery = z.infer<typeof listProductsQuery>;
 
+export const adminListProductsQuery = listProductsQuery.extend({
+  isActive: flag.optional(),
+  stock: z.enum(["low"]).optional(),
+});
+export type AdminListProductsQuery = z.infer<typeof adminListProductsQuery>;
+
 export const productBody = z.object({
   name: z.string().trim().min(1).max(255),
   price: z.coerce.number().int().positive(),
@@ -49,5 +60,5 @@ export const productBody = z.object({
 });
 export type ProductBody = z.infer<typeof productBody>;
 
-export const productPatchBody = productBody.partial();
+export const productPatchBody = productBody.partial().extend({ isActive: flag.optional() });
 export type ProductPatchBody = z.infer<typeof productPatchBody>;

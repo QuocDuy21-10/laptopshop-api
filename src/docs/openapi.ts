@@ -12,7 +12,12 @@ import { env } from "config/env";
 import { idParams, pageQuery } from "lib/http";
 import { loginBody, registerBody } from "modules/auth/auth.schema";
 import { adminCreateUserBody, adminUpdateUserBody, updateMeBody } from "modules/users/users.schema";
-import { listProductsQuery, productBody, productPatchBody } from "modules/products/products.schema";
+import {
+  adminListProductsQuery,
+  listProductsQuery,
+  productBody,
+  productPatchBody,
+} from "modules/products/products.schema";
 import { addItemBody, updateItemBody } from "modules/cart/cart.schema";
 import {
   adminListOrdersQuery,
@@ -73,6 +78,7 @@ const Product = registry.register(
     sold: z.number().nullable(),
     factory: z.string().nullable(),
     target: z.string().nullable(),
+    isActive: z.boolean(),
   }),
 );
 const Option = z.object({ name: z.string(), value: z.string() });
@@ -356,7 +362,7 @@ op({
   summary: "List products",
   tag: "admin",
   auth: "admin",
-  request: { query: listProductsQuery },
+  request: { query: adminListProductsQuery },
   ok: [200, "OK", page(Product)],
 });
 op({

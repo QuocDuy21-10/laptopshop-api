@@ -1,7 +1,12 @@
 import { RequestHandler } from "express";
 import { factoryOptions, targetOptions } from "config/constant";
 import { IdParams } from "lib/http";
-import { ListProductsQuery, ProductBody, ProductPatchBody } from "modules/products/products.schema";
+import {
+  AdminListProductsQuery,
+  ListProductsQuery,
+  ProductBody,
+  ProductPatchBody,
+} from "modules/products/products.schema";
 import {
   createProduct,
   deleteProduct,
@@ -17,6 +22,15 @@ export const listProductsHandler: RequestHandler = async (_req, res) => {
 
 export const getProductHandler: RequestHandler = async (_req, res) => {
   res.json({ data: await getProduct((res.locals.params as IdParams).id) });
+};
+
+export const listAdminProductsHandler: RequestHandler = async (_req, res) => {
+  const { items, meta } = await listProducts(res.locals.query as AdminListProductsQuery, true);
+  res.json({ data: items, meta });
+};
+
+export const getAdminProductHandler: RequestHandler = async (_req, res) => {
+  res.json({ data: await getProduct((res.locals.params as IdParams).id, true) });
 };
 
 export const getFiltersHandler: RequestHandler = (_req, res) => {
