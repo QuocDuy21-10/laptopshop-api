@@ -84,6 +84,16 @@ const Product = registry.register(
     factory: z.string().nullable(),
     target: z.string().nullable(),
     isActive: z.boolean(),
+    cpu: z.string().nullable(),
+    gpu: z.string().nullable(),
+    ramGb: z.number().int().nullable(),
+    storageGb: z.number().int().nullable(),
+    screenSizeInch: z.number().nullable(),
+    screenResolution: z.string().nullable(),
+    refreshRateHz: z.number().int().nullable(),
+    batteryWh: z.number().int().nullable(),
+    weightGrams: z.number().int().nullable(),
+    warrantyMonths: z.number().int().nullable(),
   }),
 );
 const Option = z.object({ name: z.string(), value: z.string() });

@@ -66,6 +66,24 @@ describe("openapi document", () => {
     expect(names).toEqual(expect.arrayContaining(["isActive", "stock"]));
   });
 
+  it("documents the product hardware specs", () => {
+    const props = (doc.components?.schemas?.Product as any).properties;
+    for (const key of [
+      "cpu",
+      "gpu",
+      "ramGb",
+      "storageGb",
+      "screenSizeInch",
+      "screenResolution",
+      "refreshRateHz",
+      "batteryWh",
+      "weightGrams",
+      "warrantyMonths",
+    ]) {
+      expect(props).toHaveProperty(key);
+    }
+  });
+
   it("documents the admin order search filters", () => {
     const names = (op("/api/v1/admin/orders", "get").parameters as any[]).map((p) => p.name);
     expect(names).toEqual(expect.arrayContaining(["status", "q", "from", "to", "userId"]));
