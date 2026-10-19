@@ -73,7 +73,7 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
 export const deleteProduct = async (id: number) => {
   const ordered = await prisma.orderDetail.count({ where: { productId: id } });
   if (ordered > 0) {
-    throw new AppError("Product is in orders; set quantity to 0 instead", 409, "PRODUCT_IN_USE");
+    throw new AppError("Product is in orders; hide it instead", 409, "PRODUCT_IN_USE");
   }
   try {
     await prisma.$transaction([

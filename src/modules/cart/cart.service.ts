@@ -7,6 +7,9 @@ import { AddItemBody } from "modules/cart/cart.schema";
 export const outOfStock = (productId: number) =>
   new AppError("Not enough stock", 409, "OUT_OF_STOCK", { productId });
 
+export const productUnavailable = (productId: number) =>
+  new AppError("Product is no longer sold", 409, "PRODUCT_UNAVAILABLE", { productId });
+
 type Line = { id: number; quantity: number; product: Product };
 
 const toCartDto = (lines: Line[]) => {
@@ -37,9 +40,10 @@ export const addItem = async (userId: number, { productId, quantity }: AddItemBo
   await prisma.$transaction(async (tx) => {
     const product = await tx.product.findUnique({
       where: { id: productId },
-      select: { quantity: true },
+      select: { quantity: true, isActive: true },
     });
     if (!product) throw notFound("Product");
+    if (!product.isActive) throw productUnavailable(productId);
     const cart = await tx.cart.upsert({
       where: { userId },
       create: { userId },
@@ -60,9 +64,10 @@ export const addItem = async (userId: number, { productId, quantity }: AddItemBo
 export const updateItem = async (userId: number, lineId: number, quantity: number) => {
   const line = await prisma.cartDetail.findFirst({
     where: { id: lineId, cart: { userId } },
-    select: { productId: true, product: { select: { quantity: true } } },
+    select: { productId: true, product: { select: { quantity: true, isActive: true } } },
   });
   if (!line) throw notFound("Cart item");
+  if (!line.product.isActive) throw productUnavailable(line.productId);
   if (quantity > line.product.quantity) throw outOfStock(line.productId);
   await prisma.cartDetail.update({ where: { id: lineId }, data: { quantity } });
   return getCart(userId);

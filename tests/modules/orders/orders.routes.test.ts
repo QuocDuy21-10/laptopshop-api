@@ -38,8 +38,8 @@ const orderRow = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 const lines = [
-  { productId: 1, quantity: 2, product: { price: 50 } },
-  { productId: 2, quantity: 1, product: { price: 100 } },
+  { productId: 1, quantity: 2, product: { price: 50, isActive: true } },
+  { productId: 2, quantity: 1, product: { price: 100, isActive: true } },
 ];
 const post = () =>
   request(buildApp())
@@ -81,7 +81,7 @@ describe("POST /api/v1/orders", () => {
       orderBy: { productId: "asc" },
     });
     expect(prismaMock.product.updateMany).toHaveBeenNthCalledWith(1, {
-      where: { id: 1, quantity: { gte: 2 } },
+      where: { id: 1, isActive: true, quantity: { gte: 2 } },
       data: { quantity: { decrement: 2 }, sold: { increment: 2 } },
     });
     const data = prismaMock.order.create.mock.calls[0][0].data;
@@ -94,6 +94,22 @@ describe("POST /api/v1/orders", () => {
       where: { cart: { userId: USER.id } },
     });
     expect(prismaMock.cart.deleteMany).toHaveBeenCalledWith({ where: { userId: USER.id } });
+  });
+
+  it("returns 409 PRODUCT_UNAVAILABLE and creates nothing when a line is hidden", async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.cartDetail.findMany.mockResolvedValue([
+      lines[0],
+      { ...lines[1], product: { price: 100, isActive: false } },
+    ]);
+    prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
+    const res = await post().send(receiver);
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatchObject({
+      code: "PRODUCT_UNAVAILABLE",
+      details: { productId: 2 },
+    });
+    expect(prismaMock.order.create).not.toHaveBeenCalled();
   });
 
   it("returns 409 OUT_OF_STOCK and creates nothing when stock is short", async () => {
