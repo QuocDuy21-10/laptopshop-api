@@ -75,6 +75,11 @@ describe("GET /api/v1/products", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects a repeated advanced filter query parameter", async () => {
+    const res = await request(buildApp()).get("/api/v1/products?cpuBrand=INTEL&cpuBrand=AMD");
+    expect(res.status).toBe(400);
+  });
+
   it("caps pageSize at 50", async () => {
     expect((await request(buildApp()).get("/api/v1/products?pageSize=51")).status).toBe(400);
   });

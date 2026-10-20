@@ -1,19 +1,29 @@
 import { z } from "zod";
-import { factoryOptions, targetOptions } from "config/constant";
 import { pageQuery } from "lib/http";
+import {
+  BATTERY_MINIMUMS,
+  CPU_BRANDS,
+  FACTORIES,
+  GPU_BRANDS,
+  GPU_TYPES,
+  LOW_STOCK_THRESHOLD,
+  PANEL_TYPES,
+  PRICE_RANGES,
+  REFRESH_RATE_MINIMUMS,
+  RESOLUTION_TIERS,
+  SCREEN_SIZES,
+  TARGETS,
+  WARRANTY_MINIMUMS,
+  WEIGHT_MAXIMUMS,
+} from "modules/products/products.facets";
 
-export const PRICE_RANGES = {
-  "under-10m": { lt: 10_000_000 },
-  "10-15m": { gte: 10_000_000, lte: 15_000_000 },
-  "15-20m": { gte: 15_000_000, lte: 20_000_000 },
-  "over-20m": { gt: 20_000_000 },
-} as const;
-export type PriceRange = keyof typeof PRICE_RANGES;
-
-export const FACTORIES = factoryOptions.map((o) => o.value);
-export const TARGETS = targetOptions.map((o) => o.value);
-
-export const LOW_STOCK_THRESHOLD = 5;
+export {
+  FACTORIES,
+  LOW_STOCK_THRESHOLD,
+  PRICE_RANGES,
+  TARGETS,
+} from "modules/products/products.facets";
+export type { PriceRange } from "modules/products/products.facets";
 
 // multipart and query strings arrive as "true"/"false"; z.coerce.boolean would turn "false" into true
 const flag = z.union([z.boolean(), z.enum(["true", "false"]).transform((v) => v === "true")]);
@@ -30,28 +40,77 @@ const specNumber = (min: number, max: number, int = true) =>
     )
     .optional();
 
-const csvOf = (allowed: readonly string[]) =>
+const csvOf = (allowed: readonly string[], maxItems = 10) =>
   z
     .string()
     .optional()
     .transform((s) =>
       s
-        ? s
-            .split(",")
-            .map((v) => v.trim())
-            .filter(Boolean)
+        ? [
+            ...new Set(
+              s
+                .split(",")
+                .map((v) => v.trim())
+                .filter(Boolean),
+            ),
+          ]
         : [],
     )
+    .refine((list) => list.length <= maxItems, { message: `At most ${maxItems} values` })
     .refine((list) => list.every((v) => allowed.includes(v)), {
       message: `Allowed values: ${allowed.join(", ")}`,
     });
 
-export const listProductsQuery = pageQuery.extend({
+const csvNumbers = (min: number, max: number, maxItems = 10) =>
+  z
+    .string()
+    .optional()
+    .transform((s) => {
+      const values = s
+        ? s
+            .split(",")
+            .map((v) => v.trim())
+            .filter(Boolean)
+        : [];
+      return [...new Set(values)].map(Number);
+    })
+    .refine((list) => list.length <= maxItems, { message: `At most ${maxItems} values` })
+    .refine((list) => list.every((v) => Number.isInteger(v) && v >= min && v <= max), {
+      message: `Values must be integers from ${min} to ${max}`,
+    });
+
+const threshold = <T extends readonly number[]>(values: T) =>
+  z.coerce
+    .number()
+    .int()
+    .refine((value) => values.includes(value), { message: `Allowed values: ${values.join(", ")}` });
+
+export const productFilterFields = {
   factory: csvOf(FACTORIES),
   target: csvOf(TARGETS),
   price: csvOf(Object.keys(PRICE_RANGES)),
-  sort: z.enum(["price_asc", "price_desc"]).optional(),
+  cpuBrand: csvOf(CPU_BRANDS),
+  gpuBrand: csvOf(GPU_BRANDS),
+  gpuType: csvOf(GPU_TYPES),
+  ramGb: csvNumbers(1, 256),
+  storageGb: csvNumbers(1, 16_384),
+  screenSize: csvOf(SCREEN_SIZES),
+  resolutionTier: csvOf(RESOLUTION_TIERS),
+  panelType: csvOf(PANEL_TYPES),
+  minRefreshHz: threshold(REFRESH_RATE_MINIMUMS).optional(),
+  minBatteryWh: threshold(BATTERY_MINIMUMS).optional(),
+  maxWeightGrams: threshold(WEIGHT_MAXIMUMS).optional(),
+  minWarrantyMonths: threshold(WARRANTY_MINIMUMS).optional(),
+  inStock: flag.optional(),
   q: z.string().trim().min(1).max(100).optional(),
+};
+
+export const productFacetsQuery = z.object(productFilterFields);
+export type ProductFilterQuery = z.infer<typeof productFacetsQuery>;
+
+export const listProductsQuery = pageQuery.extend({
+  ...productFilterFields,
+  sort: z.enum(["price_asc", "price_desc"]).optional(),
 });
 export type ListProductsQuery = z.infer<typeof listProductsQuery>;
 
