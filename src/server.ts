@@ -5,17 +5,46 @@ import { createRedisClient } from "config/redis";
 import { createRedisLimitStore } from "middlewares/rate-limit";
 import { logger } from "lib/logger";
 import { registerDocs } from "docs/openapi";
+import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
+import { RedisAdvisorQuota } from "modules/advisor/advisor.quota";
+import { createAdvisorService } from "modules/advisor/advisor.service";
+import { GroqAdvisorProvider } from "modules/advisor/providers/groq-advisor.provider";
 import { createApp } from "./app";
 
 const main = async () => {
   const redis = createRedisClient(env.REDIS_URL);
   await redis.connect();
 
+  const advisor = env.ADVISOR_AI_ENABLED
+    ? {
+        identitySecret: env.JWT_SECRET,
+        service: createAdvisorService({
+          repository: new PrismaAdvisorRepository(),
+          provider: new GroqAdvisorProvider({
+            apiKey: env.GROQ_API_KEY!,
+            model: env.GROQ_MODEL!,
+            timeoutMs: env.ADVISOR_AI_TIMEOUT_MS,
+            maxOutputTokens: env.ADVISOR_AI_MAX_OUTPUT_TOKENS,
+            structuredOutputMode: env.GROQ_STRUCTURED_OUTPUT_MODE,
+          }),
+          quota: new RedisAdvisorQuota(redis, {
+            guestLimit: env.ADVISOR_GUEST_DAILY_LIMIT,
+            userLimit: env.ADVISOR_USER_DAILY_LIMIT,
+            globalLimit: env.ADVISOR_GLOBAL_DAILY_LIMIT,
+          }),
+          logger,
+          model: env.GROQ_MODEL,
+        }),
+      }
+    : undefined;
+
   const app = createApp({
     limitStores: {
       global: createRedisLimitStore(redis, "rl:global:"),
       auth: createRedisLimitStore(redis, "rl:auth:"),
+      advisor: createRedisLimitStore(redis, "rl:advisor:"),
     },
+    advisor,
     registerExtras: registerDocs,
     readyChecks: [() => prisma.$queryRaw`SELECT 1`, () => redis.ping()],
   });

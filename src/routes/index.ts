@@ -12,8 +12,9 @@ import { adminInventoryRoutes } from "modules/inventory/inventory.routes";
 import { dashboardRoutes } from "modules/dashboard/dashboard.routes";
 import { notFoundHandler } from "middlewares/error.middleware";
 import { adminPaymentRoutes, paymentRoutes } from "modules/payments/payments.routes";
+import { createAdvisorRoutes, type AdvisorRouteDeps } from "modules/advisor/advisor.routes";
 
-export const createApiV1Router = () => {
+export const createApiV1Router = (advisor: AdvisorRouteDeps) => {
   const router = express.Router();
   router.use(originCheck(env.CORS_ORIGINS));
 
@@ -23,6 +24,7 @@ export const createApiV1Router = () => {
   router.use("/cart", cartRoutes);
   router.use("/orders", orderRoutes);
   router.use("/payments", paymentRoutes);
+  router.use("/advisor", createAdvisorRoutes(advisor));
 
   const admin = express.Router();
   admin.use(authenticate, requireRole("ADMIN"));

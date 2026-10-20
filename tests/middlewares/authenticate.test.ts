@@ -3,7 +3,7 @@ jest.mock("config/client", () => ({ prisma: require("../helpers/prisma").prismaM
 import express from "express";
 import jwt from "jsonwebtoken";
 import request from "supertest";
-import { authenticate } from "middlewares/authenticate";
+import { authenticate, optionalAuthenticate } from "middlewares/authenticate";
 import { requireRole } from "middlewares/require-role";
 import { errorHandler } from "middlewares/error.middleware";
 import { signAccessToken } from "modules/auth/token.service";
@@ -13,6 +13,9 @@ const build = () => {
   const app = express();
   app.get("/api/me", authenticate, (req, res) => {
     res.json(req.auth);
+  });
+  app.get("/api/optional", optionalAuthenticate, (req, res) => {
+    res.json(req.auth ?? null);
   });
   app.get("/api/admin", authenticate, requireRole("ADMIN"), (_req, res) => {
     res.sendStatus(204);
@@ -48,6 +51,51 @@ describe("authenticate", () => {
     });
     const res = await request(build()).get("/api/me").set("Cookie", `access_token=${t}`);
     expect(res.status).toBe(401);
+  });
+
+  it("allows an optional route without a token", async () => {
+    const res = await request(build()).get("/api/optional");
+    expect(res.status).toBe(200);
+    expect(res.body).toBeNull();
+  });
+
+  it("uses a valid cookie or bearer token on an optional route", async () => {
+    expect(
+      (await request(build()).get("/api/optional").set("Cookie", cookieFor(USER))).body,
+    ).toEqual(USER);
+    expect(
+      (
+        await request(build())
+          .get("/api/optional")
+          .set("Authorization", `Bearer ${signAccessToken(ADMIN)}`)
+      ).body,
+    ).toEqual(ADMIN);
+  });
+
+  it("rejects an invalid token on an optional route", async () => {
+    const res = await request(build()).get("/api/optional").set("Cookie", "access_token=invalid");
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe("UNAUTHENTICATED");
+  });
+
+  it.each(["", "Basic abc"])("rejects malformed authorization %j", async (authorization) => {
+    const res = await request(build()).get("/api/optional").set("Authorization", authorization);
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe("UNAUTHENTICATED");
+  });
+
+  it("accepts lowercase bearer with surrounding whitespace", async () => {
+    const res = await request(build())
+      .get("/api/optional")
+      .set("Authorization", ` bearer ${signAccessToken(USER)} `);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(USER);
+  });
+
+  it("rejects a malformed percent-encoded access cookie", async () => {
+    const res = await request(build()).get("/api/optional").set("Cookie", "access_token=%ZZ");
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe("UNAUTHENTICATED");
   });
 });
 

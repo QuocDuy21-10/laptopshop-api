@@ -3,6 +3,7 @@ import { env } from "config/env";
 import { logger } from "lib/logger";
 import { hashPassword } from "lib/password";
 import { ACCOUNT_TYPE } from "config/constant";
+import { productSeeds } from "config/seed-products";
 
 const initDatabase = async () => {
   const countUser = await prisma.user.count();
@@ -52,7 +53,7 @@ const initDatabase = async () => {
   }
 
   if (countProduct === 0) {
-    const products = [
+    const baseProducts = [
       {
         name: "Laptop Asus TUF Gaming",
         price: 17490000,
@@ -263,6 +264,11 @@ const initDatabase = async () => {
         warrantyMonths: 12,
       },
     ];
+
+    const products = baseProducts.map((product) => {
+      const metadata = productSeeds.find((seed) => seed.image === product.image);
+      return metadata ? { ...product, ...metadata } : product;
+    });
 
     await prisma.product.createMany({
       data: products,
