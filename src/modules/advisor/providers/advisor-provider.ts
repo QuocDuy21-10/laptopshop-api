@@ -19,6 +19,16 @@ export type ProviderExplanation = {
 
 export type AdvisorProviderFailure = "timeout" | "provider_429" | "provider_5xx" | "invalid_output";
 
+export class AdvisorProviderError extends Error {
+  constructor(
+    public category: AdvisorProviderFailure,
+    message: string,
+  ) {
+    super(message);
+    this.name = "AdvisorProviderError";
+  }
+}
+
 export interface AdvisorProvider {
   explain(input: ProviderRequest): Promise<ProviderExplanation>;
 }

@@ -60,4 +60,52 @@ describe("createAdvisorService", () => {
     const result = await createAdvisorService({ repository }).recommend(input, requester);
     expect(result.recommendations.map(({ product: item }) => item.id)).toEqual([1]);
   });
+
+  it("uses a valid provider explanation without changing product order or score", async () => {
+    repository.findCandidates.mockResolvedValue([product(1)]);
+    const provider = {
+      explain: jest.fn().mockResolvedValue({
+        recommendations: [
+          { productId: 1, reason: "Giải thích AI", evidenceKeys: ["ram-16gb"], tradeoffs: [] },
+        ],
+      }),
+    };
+    const quota = { tryReserve: jest.fn().mockResolvedValue(true) };
+    const result = await createAdvisorService({ repository, provider, quota }).recommend(
+      input,
+      requester,
+    );
+    expect(result.mode).toBe("ai_enhanced");
+    expect(result.recommendations[0]).toMatchObject({
+      product: { id: 1 },
+      matchScore: expect.any(Number),
+      reason: "Giải thích AI",
+    });
+    expect(result.recommendations[0].highlights.length).toBeGreaterThan(0);
+  });
+
+  it("falls back as a whole when provider output is invalid", async () => {
+    repository.findCandidates.mockResolvedValue([product(1)]);
+    const provider = { explain: jest.fn().mockResolvedValue({ recommendations: [] }) };
+    const quota = { tryReserve: jest.fn().mockResolvedValue(true) };
+    const result = await createAdvisorService({ repository, provider, quota }).recommend(
+      input,
+      requester,
+    );
+    expect(result.mode).toBe("rule_based");
+    expect(result.recommendations[0].reason).not.toBe("Giải thích AI");
+  });
+
+  it("does not call provider for an empty shortlist", async () => {
+    repository.findCandidates.mockResolvedValue([]);
+    const provider = { explain: jest.fn() };
+    const quota = { tryReserve: jest.fn() };
+    const result = await createAdvisorService({ repository, provider, quota }).recommend(
+      input,
+      requester,
+    );
+    expect(result.mode).toBe("rule_based");
+    expect(provider.explain).not.toHaveBeenCalled();
+    expect(quota.tryReserve).not.toHaveBeenCalled();
+  });
 });
