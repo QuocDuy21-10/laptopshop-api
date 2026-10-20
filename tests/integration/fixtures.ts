@@ -4,7 +4,9 @@ export const resetDb = async () => {
   await prisma.paymentWebhookEvent.deleteMany();
   await prisma.paymentProviderCheckpoint.deleteMany();
   await prisma.payment.deleteMany();
+  await prisma.stockReceiptItem.deleteMany();
   await prisma.stockMovement.deleteMany();
+  await prisma.stockReceipt.deleteMany();
   await prisma.orderStatusHistory.deleteMany();
   await prisma.orderDetail.deleteMany();
   await prisma.order.deleteMany();
@@ -37,7 +39,18 @@ export const createProduct = (quantity: number, price = 1000) =>
       name: `product-${quantity}-${price}`,
       price,
       quantity,
-      ...(quantity ? { stockMovements: { create: { delta: quantity, reason: "OPENING" } } } : {}),
+      ...(quantity
+        ? {
+            stockMovements: {
+              create: {
+                delta: quantity,
+                reason: "OPENING",
+                balanceBefore: 0,
+                balanceAfter: quantity,
+              },
+            },
+          }
+        : {}),
     },
   });
 

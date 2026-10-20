@@ -50,6 +50,8 @@ const post = () =>
 beforeEach(() => {
   resetPrisma();
   prismaMock.stockMovement.create.mockResolvedValue({ id: 900 });
+  prismaMock.product.update.mockResolvedValue({ quantity: 2 });
+  prismaMock.product.findUniqueOrThrow.mockResolvedValue({ quantity: 0 });
 });
 
 describe("POST /api/v1/orders", () => {
@@ -116,6 +118,8 @@ describe("POST /api/v1/orders", () => {
         orderId: undefined,
         actorId: USER.id,
         note: undefined,
+        balanceBefore: 2,
+        balanceAfter: 0,
       },
     });
     expect(prismaMock.stockMovement.updateMany).toHaveBeenCalledWith({
@@ -237,6 +241,8 @@ describe("POST /api/v1/orders/me/:id/cancel", () => {
         orderId: 50,
         actorId: USER.id,
         note: undefined,
+        balanceBefore: 0,
+        balanceAfter: 2,
       },
     });
   });

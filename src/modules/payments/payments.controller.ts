@@ -1,6 +1,6 @@
 import { RequestHandler } from "express";
+import { idempotencyKeyHeader } from "lib/idempotency";
 import { idParams } from "lib/http";
-import { idempotencyKeyHeader } from "modules/orders/orders.schema";
 import { getCheckoutAttempt } from "modules/payments/payments.service";
 import {
   getMyPayment,

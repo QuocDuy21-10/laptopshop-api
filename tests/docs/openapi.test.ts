@@ -33,6 +33,9 @@ const V1_PATHS = [
   "/api/v1/admin/orders/export.csv",
   "/api/v1/admin/products/export.csv",
   "/api/v1/admin/inventory/movements/export.csv",
+  "/api/v1/admin/inventory/receipts",
+  "/api/v1/admin/inventory/receipts/{id}",
+  "/api/v1/admin/inventory/receipts/{id}/post",
   "/api/v1/admin/orders/{id}",
   "/api/v1/admin/orders/{id}/status",
   "/api/v1/admin/dashboard",
@@ -92,6 +95,26 @@ describe("openapi document", () => {
     expect(params).toContainEqual(
       expect.objectContaining({ in: "header", name: "Idempotency-Key", required: true }),
     );
+  });
+
+  it("documents the inventory receipt and movement contract", () => {
+    const adjustment = op("/api/v1/admin/inventory/adjustments", "post");
+    expect(adjustment.responses[200]).toBeDefined();
+    expect(adjustment.responses[201]).toBeDefined();
+    expect(adjustment.parameters).toContainEqual(
+      expect.objectContaining({ in: "header", name: "Idempotency-Key", required: true }),
+    );
+    expect(doc.components?.schemas).toHaveProperty("StockReceiptDetail");
+    expect(doc.components?.schemas).toHaveProperty("StockReceiptItem");
+    expect((doc.components?.schemas?.StockMovement as any).properties).toEqual(
+      expect.objectContaining({
+        balanceBefore: expect.anything(),
+        balanceAfter: expect.anything(),
+        receiptCode: expect.anything(),
+      }),
+    );
+    expect(op("/api/v1/admin/inventory/receipts", "post").responses[409]).toBeDefined();
+    expect(op("/api/v1/admin/inventory/receipts/{id}/post", "post").responses[409]).toBeDefined();
   });
 
   it("documents product visibility and the admin product filters", () => {

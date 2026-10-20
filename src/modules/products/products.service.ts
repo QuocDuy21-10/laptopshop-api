@@ -112,14 +112,16 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
 };
 
 export const deleteProduct = async (id: number) => {
-  const ordered = await prisma.orderDetail.count({ where: { productId: id } });
-  if (ordered > 0) {
+  const [ordered, movements] = await Promise.all([
+    prisma.orderDetail.count({ where: { productId: id } }),
+    prisma.stockMovement.count({ where: { productId: id } }),
+  ]);
+  if (ordered > 0 || movements > 0) {
     throw new AppError("Product is in orders; hide it instead", 409, "PRODUCT_IN_USE");
   }
   try {
     await prisma.$transaction([
       prisma.cartDetail.deleteMany({ where: { productId: id } }),
-      prisma.stockMovement.deleteMany({ where: { productId: id } }),
       prisma.product.delete({ where: { id } }),
     ]);
   } catch (e) {

@@ -1,5 +1,5 @@
 import { prisma } from "config/client";
-import { adjustStock } from "modules/inventory/inventory.service";
+import { adjustStock, moveStock } from "modules/inventory/inventory.service";
 import { changeStatus, placeOrder } from "modules/orders/orders.service";
 import { createProduct, createUser, ledgerMatches, putInCart, receiver, resetDb } from "./fixtures";
 
@@ -7,6 +7,34 @@ beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
 
 describe("stock ledger", () => {
+  it("keeps balances contiguous across concurrent stock moves", async () => {
+    const product = await createProduct(5);
+
+    await Promise.all([
+      prisma.$transaction((tx) =>
+        moveStock(tx, { productId: product.id, delta: 2, reason: "RESTOCK" }),
+      ),
+      prisma.$transaction((tx) =>
+        moveStock(tx, { productId: product.id, delta: -1, reason: "CORRECTION", note: "Mất hàng" }),
+      ),
+    ]);
+
+    const rows = await prisma.stockMovement.findMany({
+      where: { productId: product.id },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { delta: true, balanceBefore: true, balanceAfter: true },
+    });
+    let previous = 0;
+    for (const row of rows) {
+      expect(row.balanceBefore).toBe(previous);
+      previous = row.balanceAfter!;
+      expect(row.balanceAfter).toBe(row.balanceBefore! + row.delta);
+    }
+    expect(previous).toBe(
+      (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).quantity,
+    );
+  });
+
   it("keeps SUM(delta) equal to quantity through concurrent checkouts and a cancel", async () => {
     const product = await createProduct(2);
     const users = [];
@@ -47,13 +75,49 @@ describe("stock ledger", () => {
     const product = await createProduct(3);
     const admin = await createUser();
     const results = await Promise.allSettled([
-      adjustStock(admin.id, { productId: product.id, delta: -2, reason: "CORRECTION", note: "a" }),
-      adjustStock(admin.id, { productId: product.id, delta: -2, reason: "CORRECTION", note: "b" }),
+      adjustStock(admin.id, undefined, {
+        productId: product.id,
+        delta: -2,
+        reason: "CORRECTION",
+        note: "a",
+      }),
+      adjustStock(admin.id, undefined, {
+        productId: product.id,
+        delta: -2,
+        reason: "CORRECTION",
+        note: "b",
+      }),
     ]);
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     expect((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).quantity).toBe(
       1,
     );
+    expect(await ledgerMatches(product.id)).toBe(true);
+  });
+
+  it("applies one of two concurrent adjustments with the same key", async () => {
+    const product = await createProduct(3);
+    const admin = await createUser();
+    const body = {
+      productId: product.id,
+      delta: -2,
+      reason: "CORRECTION" as const,
+      note: "Mất hàng",
+    };
+    const results = await Promise.all([
+      adjustStock(admin.id, "same-key", body),
+      adjustStock(admin.id, "same-key", body),
+    ]);
+    expect(results.filter((result) => result.created)).toHaveLength(1);
+    expect(results.filter((result) => !result.created)).toHaveLength(1);
+    expect((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).quantity).toBe(
+      1,
+    );
+    expect(
+      await prisma.stockMovement.count({
+        where: { productId: product.id, idempotencyKey: "same-key" },
+      }),
+    ).toBe(1);
     expect(await ledgerMatches(product.id)).toBe(true);
   });
 });

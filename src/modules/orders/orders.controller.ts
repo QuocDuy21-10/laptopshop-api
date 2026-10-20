@@ -1,10 +1,10 @@
 import { RequestHandler } from "express";
 import { sendCsv } from "lib/csv";
+import { idempotencyKeyHeader } from "lib/idempotency";
 import { IdParams, PageQuery } from "lib/http";
 import {
   AdminExportOrdersQuery,
   AdminListOrdersQuery,
-  idempotencyKeyHeader,
   PlaceOrderBody,
   UpdateStatusBody,
 } from "modules/orders/orders.schema";

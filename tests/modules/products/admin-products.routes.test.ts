@@ -82,6 +82,7 @@ describe("GET /api/v1/admin/products/:id", () => {
 describe("POST /api/v1/admin/products", () => {
   it("creates a product from multipart fields", async () => {
     prismaMock.product.create.mockResolvedValue(product);
+    prismaMock.product.update.mockResolvedValue(product);
     prismaMock.product.findUniqueOrThrow.mockResolvedValue(product);
     let req = asAdmin(request(buildApp()).post("/api/v1/admin/products"));
     for (const [k, v] of Object.entries(fields)) req = req.field(k, v);
@@ -100,6 +101,8 @@ describe("POST /api/v1/admin/products", () => {
         orderId: undefined,
         actorId: ADMIN.id,
         note: undefined,
+        balanceBefore: 0,
+        balanceAfter: 5,
       },
     });
   });
@@ -114,6 +117,7 @@ describe("POST /api/v1/admin/products", () => {
 
   it("stores hardware specs sent as multipart fields", async () => {
     prismaMock.product.create.mockResolvedValue(product);
+    prismaMock.product.update.mockResolvedValue(product);
     prismaMock.product.findUniqueOrThrow.mockResolvedValue(product);
     const specs = {
       cpu: "Intel Core i5-11400H",
@@ -232,10 +236,21 @@ describe("DELETE /api/v1/admin/products/:id", () => {
 
   it("removes cart lines and the product", async () => {
     prismaMock.orderDetail.count.mockResolvedValue(0);
+    prismaMock.stockMovement.count.mockResolvedValue(0);
     const res = await asAdmin(request(buildApp()).delete("/api/v1/admin/products/1"));
     expect(res.status).toBe(204);
     expect(prismaMock.cartDetail.deleteMany).toHaveBeenCalledWith({ where: { productId: 1 } });
-    expect(prismaMock.stockMovement.deleteMany).toHaveBeenCalledWith({ where: { productId: 1 } });
+    expect(prismaMock.stockMovement.deleteMany).not.toHaveBeenCalled();
     expect(prismaMock.product.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+  });
+
+  it("returns 409 PRODUCT_IN_USE when a stock movement references it", async () => {
+    prismaMock.orderDetail.count.mockResolvedValue(0);
+    prismaMock.stockMovement.count.mockResolvedValue(1);
+    const res = await asAdmin(request(buildApp()).delete("/api/v1/admin/products/1"));
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("PRODUCT_IN_USE");
+    expect(prismaMock.stockMovement.deleteMany).not.toHaveBeenCalled();
+    expect(prismaMock.product.delete).not.toHaveBeenCalled();
   });
 });

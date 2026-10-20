@@ -1,6 +1,7 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
 
 import request from "supertest";
+import { sha256Canonical } from "lib/idempotency";
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { ADMIN, USER, cookieFor } from "../../helpers/auth";
@@ -26,25 +27,81 @@ const movementRow = {
   orderId: null,
   actorId: ADMIN.id,
   note: null,
+  balanceBefore: 3,
+  balanceAfter: 8,
+  receiptId: "00000000-0000-4000-8000-000000000001",
+  idempotencyKey: null,
+  requestHash: null,
   createdAt: new Date("2026-10-19T03:00:00Z"),
   product: { name: "Asus" },
   actor: { id: ADMIN.id, fullName: "Admin", username: "admin@gmail.com" },
+  receipt: { code: "PN-20261020-ABCDEF12" },
 };
+let keySequence = 0;
 const adjust = (body: object, who = ADMIN) =>
   request(buildApp())
     .post("/api/v1/admin/inventory/adjustments")
     .set("Cookie", cookieFor(who))
+    .set("Idempotency-Key", `test-key-${++keySequence}`)
     .send(body);
 
 beforeEach(() => {
   resetPrisma();
   prismaMock.product.findUnique.mockResolvedValue({ id: 1 });
+  prismaMock.product.update.mockResolvedValue(product);
   prismaMock.stockMovement.create.mockResolvedValue({ id: 3 });
   prismaMock.stockMovement.findUniqueOrThrow.mockResolvedValue(movementRow);
   prismaMock.product.findUniqueOrThrow.mockResolvedValue(product);
 });
 
 describe("POST /api/v1/admin/inventory/adjustments", () => {
+  it("requires an Idempotency-Key header", async () => {
+    const res = await request(buildApp())
+      .post("/api/v1/admin/inventory/adjustments")
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ productId: 1, delta: 1, reason: "RESTOCK", note: "Nhập hàng" });
+    expect(res.status).toBe(400);
+  });
+  it("creates an idempotent adjustment and returns created true", async () => {
+    const res = await adjust(
+      { productId: 1, delta: 5, reason: "RESTOCK", note: "Nhập NCC" },
+      ADMIN,
+    ).set("Idempotency-Key", "stock-key-1");
+    expect(res.status).toBe(201);
+    expect(res.body.data.created).toBe(true);
+    expect(prismaMock.stockMovement.create.mock.calls[0][0].data).toMatchObject({
+      idempotencyKey: "stock-key-1",
+      requestHash: sha256Canonical([1, 5, "RESTOCK", "Nhập NCC"]),
+    });
+  });
+
+  it("replays the same key and rejects a different payload", async () => {
+    const existing = {
+      ...movementRow,
+      idempotencyKey: "stock-key-2",
+      requestHash: sha256Canonical([1, 5, "RESTOCK", "Nhập NCC"]),
+    };
+    prismaMock.stockMovement.findUnique.mockResolvedValue(existing);
+    const replay = await adjust(
+      { productId: 1, delta: 5, reason: "RESTOCK", note: "  Nhập NCC  " },
+      ADMIN,
+    ).set("Idempotency-Key", "stock-key-2");
+    expect(replay.status).toBe(200);
+    expect(replay.body.data.created).toBe(false);
+    expect(prismaMock.product.update).not.toHaveBeenCalled();
+
+    prismaMock.stockMovement.findUnique.mockResolvedValue({
+      ...existing,
+      requestHash: "different",
+    });
+    const conflict = await adjust(
+      { productId: 1, delta: 4, reason: "RESTOCK", note: "Nhập NCC" },
+      ADMIN,
+    ).set("Idempotency-Key", "stock-key-2");
+    expect(conflict.status).toBe(409);
+    expect(conflict.body.error.code).toBe("IDEMPOTENCY_KEY_REUSED");
+  });
+
   it("restocks and returns the product and the movement", async () => {
     const res = await adjust({ productId: 1, delta: 5, reason: "RESTOCK", note: "Nhập NCC" });
     expect(res.status).toBe(201);
@@ -69,7 +126,7 @@ describe("POST /api/v1/admin/inventory/adjustments", () => {
   });
 
   it("rejects a negative restock", async () => {
-    const res = await adjust({ productId: 1, delta: -1, reason: "RESTOCK" });
+    const res = await adjust({ productId: 1, delta: -1, reason: "RESTOCK", note: "Nhập hàng" });
     expect(res.status).toBe(400);
     expect(res.body.error.details[0].path).toBe("delta");
   });
@@ -95,7 +152,9 @@ describe("POST /api/v1/admin/inventory/adjustments", () => {
 
   it("returns 404 for an unknown product", async () => {
     prismaMock.product.findUnique.mockResolvedValue(null);
-    expect((await adjust({ productId: 9, delta: 1, reason: "RESTOCK" })).status).toBe(404);
+    expect(
+      (await adjust({ productId: 9, delta: 1, reason: "RESTOCK", note: "Nhập hàng" })).status,
+    ).toBe(404);
   });
 
   it("is admin only", async () => {
@@ -124,6 +183,13 @@ describe("GET /api/v1/admin/inventory/movements", () => {
       },
     });
     expect(args.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
-    expect(res.body.data[0]).toMatchObject({ productName: "Asus", reason: "RESTOCK", delta: 5 });
+    expect(res.body.data[0]).toMatchObject({
+      productName: "Asus",
+      reason: "RESTOCK",
+      delta: 5,
+      balanceBefore: 3,
+      balanceAfter: 8,
+      receiptCode: "PN-20261020-ABCDEF12",
+    });
   });
 });

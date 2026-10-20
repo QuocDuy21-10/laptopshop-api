@@ -21,7 +21,7 @@ export const adjustmentBody = z.object({
     .max(10_000)
     .refine((d) => d !== 0, { message: "must not be 0" }),
   reason: z.enum([STOCK_REASON.RESTOCK, STOCK_REASON.CORRECTION]),
-  note: z.string().trim().max(500).optional(),
+  note: z.string().trim().min(1).max(500),
 });
 export type AdjustmentBody = z.infer<typeof adjustmentBody>;
 
