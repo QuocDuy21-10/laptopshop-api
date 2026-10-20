@@ -866,7 +866,7 @@ op({
   tag: "admin",
   auth: "admin",
   request: {
-    headers: z.object({ "Idempotency-Key": z.string().min(1).max(64).optional() }),
+    headers: z.object({ "Idempotency-Key": z.string().min(1).max(64) }),
     body: json(adjustmentBody),
   },
   ok: [

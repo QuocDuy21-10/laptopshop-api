@@ -37,10 +37,12 @@ const movementRow = {
   actor: { id: ADMIN.id, fullName: "Admin", username: "admin@gmail.com" },
   receipt: { code: "PN-20261020-ABCDEF12" },
 };
+let keySequence = 0;
 const adjust = (body: object, who = ADMIN) =>
   request(buildApp())
     .post("/api/v1/admin/inventory/adjustments")
     .set("Cookie", cookieFor(who))
+    .set("Idempotency-Key", `test-key-${++keySequence}`)
     .send(body);
 
 beforeEach(() => {
@@ -53,6 +55,13 @@ beforeEach(() => {
 });
 
 describe("POST /api/v1/admin/inventory/adjustments", () => {
+  it("requires an Idempotency-Key header", async () => {
+    const res = await request(buildApp())
+      .post("/api/v1/admin/inventory/adjustments")
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ productId: 1, delta: 1, reason: "RESTOCK", note: "Nhập hàng" });
+    expect(res.status).toBe(400);
+  });
   it("creates an idempotent adjustment and returns created true", async () => {
     const res = await adjust(
       { productId: 1, delta: 5, reason: "RESTOCK", note: "Nhập NCC" },

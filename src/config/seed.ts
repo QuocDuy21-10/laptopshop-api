@@ -280,7 +280,13 @@ const initDatabase = async () => {
       select: { id: true, quantity: true },
     });
     await prisma.stockMovement.createMany({
-      data: stocked.map((p) => ({ productId: p.id, delta: p.quantity, reason: "OPENING" })),
+      data: stocked.map((p) => ({
+        productId: p.id,
+        delta: p.quantity,
+        reason: "OPENING",
+        balanceBefore: 0,
+        balanceAfter: p.quantity,
+      })),
     });
   }
 

@@ -9,8 +9,7 @@ import {
 import { adjustStock, exportMovements, listMovements } from "modules/inventory/inventory.service";
 
 export const adjustStockHandler: RequestHandler = async (req, res) => {
-  const rawKey = req.get("idempotency-key");
-  const key = rawKey === undefined ? undefined : idempotencyKeyHeader.parse(rawKey);
+  const key = idempotencyKeyHeader.parse(req.get("idempotency-key"));
   const result = await adjustStock(req.auth!.id, key, req.body as AdjustmentBody);
   res.status(result.created ? 201 : 200).json({ data: result });
 };

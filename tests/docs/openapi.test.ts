@@ -102,7 +102,7 @@ describe("openapi document", () => {
     expect(adjustment.responses[200]).toBeDefined();
     expect(adjustment.responses[201]).toBeDefined();
     expect(adjustment.parameters).toContainEqual(
-      expect.objectContaining({ in: "header", name: "Idempotency-Key", required: false }),
+      expect.objectContaining({ in: "header", name: "Idempotency-Key", required: true }),
     );
     expect(doc.components?.schemas).toHaveProperty("StockReceiptDetail");
     expect(doc.components?.schemas).toHaveProperty("StockReceiptItem");

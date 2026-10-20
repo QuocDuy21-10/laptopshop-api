@@ -259,8 +259,8 @@ model StockMovement {
   reason         String   @db.VarChar(20)
   note           String?  @db.VarChar(500)
   createdAt      DateTime @default(now())
-  balanceBefore  Int?
-  balanceAfter   Int?
+  balanceBefore  Int
+  balanceAfter   Int
   idempotencyKey String?  @db.VarChar(64)
   requestHash    String?  @db.Char(64)
 
