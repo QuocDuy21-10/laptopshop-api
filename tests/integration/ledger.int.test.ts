@@ -1,5 +1,5 @@
 import { prisma } from "config/client";
-import { adjustStock } from "modules/inventory/inventory.service";
+import { adjustStock, moveStock } from "modules/inventory/inventory.service";
 import { changeStatus, placeOrder } from "modules/orders/orders.service";
 import { createProduct, createUser, ledgerMatches, putInCart, receiver, resetDb } from "./fixtures";
 
@@ -7,6 +7,34 @@ beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
 
 describe("stock ledger", () => {
+  it("keeps balances contiguous across concurrent stock moves", async () => {
+    const product = await createProduct(5);
+
+    await Promise.all([
+      prisma.$transaction((tx) =>
+        moveStock(tx, { productId: product.id, delta: 2, reason: "RESTOCK" }),
+      ),
+      prisma.$transaction((tx) =>
+        moveStock(tx, { productId: product.id, delta: -1, reason: "CORRECTION", note: "Mất hàng" }),
+      ),
+    ]);
+
+    const rows = await prisma.stockMovement.findMany({
+      where: { productId: product.id },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { delta: true, balanceBefore: true, balanceAfter: true },
+    });
+    let previous = 0;
+    for (const row of rows) {
+      expect(row.balanceBefore).toBe(previous);
+      previous = row.balanceAfter!;
+      expect(row.balanceAfter).toBe(row.balanceBefore! + row.delta);
+    }
+    expect(previous).toBe(
+      (await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).quantity,
+    );
+  });
+
   it("keeps SUM(delta) equal to quantity through concurrent checkouts and a cancel", async () => {
     const product = await createProduct(2);
     const users = [];

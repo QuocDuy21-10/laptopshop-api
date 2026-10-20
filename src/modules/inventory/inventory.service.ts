@@ -20,8 +20,11 @@ export type StockMove = {
   delta: number;
   reason: StockReason;
   orderId?: number;
+  receiptId?: string;
   actorId?: number;
   note?: string;
+  idempotencyKey?: string;
+  requestHash?: string;
   onlyActive?: boolean;
 };
 
@@ -34,6 +37,7 @@ const soldChange = ({ reason, delta }: StockMove) =>
 
 // the only way stock changes: quantity and its ledger row move together in the caller's transaction
 export const moveStock = async (tx: Prisma.TransactionClient, m: StockMove) => {
+  let balanceAfter: number;
   if (m.delta < 0) {
     const { count } = await tx.product.updateMany({
       where: {
@@ -44,12 +48,18 @@ export const moveStock = async (tx: Prisma.TransactionClient, m: StockMove) => {
       data: { quantity: { decrement: -m.delta }, ...soldChange(m) },
     });
     if (count === 0) throw outOfStock(m.productId);
+    const product = await tx.product.findUniqueOrThrow({
+      where: { id: m.productId },
+      select: { quantity: true },
+    });
+    balanceAfter = product.quantity;
   } else {
     try {
-      await tx.product.update({
+      const product = await tx.product.update({
         where: { id: m.productId },
         data: { quantity: { increment: m.delta }, ...soldChange(m) },
       });
+      balanceAfter = product.quantity;
     } catch (e) {
       if (isNotFound(e)) throw notFound("Product");
       throw e;
@@ -63,6 +73,11 @@ export const moveStock = async (tx: Prisma.TransactionClient, m: StockMove) => {
       orderId: m.orderId,
       actorId: m.actorId,
       note: m.note,
+      balanceBefore: balanceAfter - m.delta,
+      balanceAfter,
+      ...(m.receiptId ? { receiptId: m.receiptId } : {}),
+      ...(m.idempotencyKey ? { idempotencyKey: m.idempotencyKey } : {}),
+      ...(m.requestHash ? { requestHash: m.requestHash } : {}),
     },
   });
 };

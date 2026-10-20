@@ -39,6 +39,7 @@ const adjust = (body: object, who = ADMIN) =>
 beforeEach(() => {
   resetPrisma();
   prismaMock.product.findUnique.mockResolvedValue({ id: 1 });
+  prismaMock.product.update.mockResolvedValue(product);
   prismaMock.stockMovement.create.mockResolvedValue({ id: 3 });
   prismaMock.stockMovement.findUniqueOrThrow.mockResolvedValue(movementRow);
   prismaMock.product.findUniqueOrThrow.mockResolvedValue(product);

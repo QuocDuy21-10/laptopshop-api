@@ -5,8 +5,27 @@ import { moveStock } from "modules/inventory/inventory.service";
 beforeEach(resetPrisma);
 
 describe("moveStock", () => {
+  it("writes balanceBefore and balanceAfter from the locked product row", async () => {
+    prismaMock.product.update.mockResolvedValue({ quantity: 8 });
+    prismaMock.product.findUniqueOrThrow.mockResolvedValue({ quantity: 8 });
+    await moveStock(prismaMock, { productId: 1, delta: 5, reason: "RESTOCK", actorId: 7 });
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith({
+      data: {
+        productId: 1,
+        delta: 5,
+        reason: "RESTOCK",
+        orderId: undefined,
+        actorId: 7,
+        note: undefined,
+        balanceBefore: 3,
+        balanceAfter: 8,
+      },
+    });
+  });
+
   it("decrements conditionally, counts the sale and writes the movement", async () => {
     prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.product.findUniqueOrThrow.mockResolvedValue({ quantity: 3 });
     await moveStock(prismaMock, {
       productId: 1,
       delta: -2,
@@ -20,7 +39,16 @@ describe("moveStock", () => {
       data: { quantity: { decrement: 2 }, sold: { increment: 2 } },
     });
     expect(prismaMock.stockMovement.create).toHaveBeenCalledWith({
-      data: { productId: 1, delta: -2, reason: "ORDER", orderId: 50, actorId: 7, note: undefined },
+      data: {
+        productId: 1,
+        delta: -2,
+        reason: "ORDER",
+        orderId: 50,
+        actorId: 7,
+        note: undefined,
+        balanceBefore: 5,
+        balanceAfter: 3,
+      },
     });
   });
 
@@ -33,6 +61,7 @@ describe("moveStock", () => {
   });
 
   it("restocks a cancelled order and gives the sale back", async () => {
+    prismaMock.product.update.mockResolvedValue({ quantity: 2 });
     await moveStock(prismaMock, { productId: 1, delta: 2, reason: "ORDER_CANCEL", orderId: 50 });
     expect(prismaMock.product.update).toHaveBeenCalledWith({
       where: { id: 1 },
@@ -41,6 +70,7 @@ describe("moveStock", () => {
   });
 
   it("does not touch sold for manual movements", async () => {
+    prismaMock.product.update.mockResolvedValue({ quantity: 5 });
     await moveStock(prismaMock, { productId: 1, delta: 5, reason: "RESTOCK" });
     expect(prismaMock.product.update.mock.calls[0][0].data).toEqual({
       quantity: { increment: 5 },

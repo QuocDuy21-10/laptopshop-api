@@ -39,7 +39,18 @@ export const createProduct = (quantity: number, price = 1000) =>
       name: `product-${quantity}-${price}`,
       price,
       quantity,
-      ...(quantity ? { stockMovements: { create: { delta: quantity, reason: "OPENING" } } } : {}),
+      ...(quantity
+        ? {
+            stockMovements: {
+              create: {
+                delta: quantity,
+                reason: "OPENING",
+                balanceBefore: 0,
+                balanceAfter: quantity,
+              },
+            },
+          }
+        : {}),
     },
   });
 
