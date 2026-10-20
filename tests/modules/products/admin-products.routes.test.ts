@@ -121,7 +121,10 @@ describe("POST /api/v1/admin/products", () => {
     prismaMock.product.findUniqueOrThrow.mockResolvedValue(product);
     const specs = {
       cpu: "Intel Core i5-11400H",
+      cpuBrand: "INTEL",
       gpu: "NVIDIA RTX 2050 4GB",
+      gpuBrand: "NVIDIA",
+      gpuType: "DEDICATED",
       ramGb: "16",
       storageGb: "512",
       screenSizeInch: "15.6",
@@ -140,11 +143,15 @@ describe("POST /api/v1/admin/products", () => {
       price: 100,
       quantity: 0,
       cpu: "Intel Core i5-11400H",
+      cpuBrand: "INTEL",
       gpu: "NVIDIA RTX 2050 4GB",
+      gpuBrand: "NVIDIA",
+      gpuType: "DEDICATED",
       ramGb: 16,
       storageGb: 512,
       screenSizeInch: 15.6,
       screenResolution: "1920x1080",
+      resolutionTier: "FHD",
       refreshRateHz: 144,
       batteryWh: 48,
       weightGrams: 2300,
@@ -162,10 +169,26 @@ describe("POST /api/v1/admin/products", () => {
     for (const [k, v] of Object.entries({ ...fields, [key]: value })) req = req.field(k, v);
     expect((await req).status).toBe(400);
   });
+
+  it("rejects a CPU description without its normalized brand", async () => {
+    const res = await asAdmin(request(buildApp()).post("/api/v1/admin/products"))
+      .field("name", "A")
+      .field("price", "100")
+      .field("quantity", "0")
+      .field("shortDesc", "s")
+      .field("detailDesc", "d")
+      .field("factory", "ASUS")
+      .field("target", "GAMING")
+      .field("cpu", "Intel Core i5");
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("INVALID_PRODUCT_SPECS");
+    expect(prismaMock.product.create).not.toHaveBeenCalled();
+  });
 });
 
 describe("PATCH /api/v1/admin/products/:id", () => {
   it("clears specs sent as empty multipart strings instead of storing 0", async () => {
+    prismaMock.product.findUnique.mockResolvedValue(product);
     prismaMock.product.update.mockResolvedValue(product);
     const res = await asAdmin(request(buildApp()).patch("/api/v1/admin/products/1"))
       .field("ramGb", "")
@@ -173,7 +196,7 @@ describe("PATCH /api/v1/admin/products/:id", () => {
     expect(res.status).toBe(200);
     expect(prismaMock.product.update).toHaveBeenCalledWith({
       where: { id: 1 },
-      data: { ramGb: null, cpu: null },
+      data: { ramGb: null, cpu: null, cpuBrand: null },
     });
   });
 
@@ -186,6 +209,26 @@ describe("PATCH /api/v1/admin/products/:id", () => {
     expect(prismaMock.product.update).toHaveBeenCalledWith({
       where: { id: 1 },
       data: { price: 200 },
+    });
+    expect(prismaMock.product.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("clears GPU text and its normalized fields together", async () => {
+    prismaMock.product.findUnique.mockResolvedValue({
+      ...product,
+      gpu: "NVIDIA RTX 2050",
+      gpuBrand: "NVIDIA",
+      gpuType: "DEDICATED",
+    });
+    prismaMock.product.update.mockResolvedValue(product);
+    const res = await asAdmin(request(buildApp()).patch("/api/v1/admin/products/1")).field(
+      "gpu",
+      "",
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.product.update).toHaveBeenCalledWith({
+      where: { id: 1 },
+      data: { gpu: null, gpuBrand: null, gpuType: null },
     });
   });
 

@@ -14,6 +14,16 @@ import {
   ProductBody,
   ProductPatchBody,
 } from "modules/products/products.schema";
+import {
+  assertProductSpecState,
+  mergeProductSpecState,
+  type ProductSpecState,
+} from "modules/products/products.normalization";
+
+const nonNullEntries = (data: Record<string, unknown>) =>
+  Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== null && value !== undefined),
+  );
 
 // public callers always see only active products; admin may filter either way
 // public callers always see only active products; admin may filter either way
@@ -64,8 +74,31 @@ export const createProduct = async (
   input: ProductBody,
   image: string | undefined,
   actorId: number,
-) =>
-  prisma.$transaction(async (tx) => {
+) => {
+  const specs = mergeProductSpecState(
+    {
+      cpu: null,
+      cpuBrand: null,
+      gpu: null,
+      gpuBrand: null,
+      gpuType: null,
+      screenResolution: null,
+      resolutionTier: null,
+      panelType: null,
+    },
+    {
+      cpu: input.cpu ?? null,
+      cpuBrand: input.cpuBrand ?? null,
+      gpu: input.gpu ?? null,
+      gpuBrand: input.gpuBrand ?? null,
+      gpuType: input.gpuType ?? null,
+      screenResolution: input.screenResolution ?? null,
+      panelType: input.panelType ?? null,
+    },
+  );
+  assertProductSpecState(specs);
+
+  return prisma.$transaction(async (tx) => {
     const created = await tx.product.create({
       data: {
         name: input.name,
@@ -75,12 +108,21 @@ export const createProduct = async (
         detailDesc: input.detailDesc,
         factory: input.factory,
         target: input.target,
-        cpu: input.cpu,
-        gpu: input.gpu,
+        ...nonNullEntries({
+          cpu: specs.cpu,
+          cpuBrand: specs.cpuBrand,
+          gpu: specs.gpu,
+          gpuBrand: specs.gpuBrand,
+          gpuType: specs.gpuType,
+        }),
         ramGb: input.ramGb,
         storageGb: input.storageGb,
         screenSizeInch: input.screenSizeInch,
-        screenResolution: input.screenResolution,
+        ...nonNullEntries({
+          screenResolution: specs.screenResolution,
+          resolutionTier: specs.resolutionTier,
+          panelType: specs.panelType,
+        }),
         refreshRateHz: input.refreshRateHz,
         batteryWh: input.batteryWh,
         weightGrams: input.weightGrams,
@@ -97,12 +139,73 @@ export const createProduct = async (
     });
     return toProductDto(await tx.product.findUniqueOrThrow({ where: { id: created.id } }));
   });
+};
 
 export const updateProduct = async (id: number, input: ProductPatchBody, image?: string) => {
   try {
+    const specKeys = [
+      "cpu",
+      "cpuBrand",
+      "gpu",
+      "gpuBrand",
+      "gpuType",
+      "screenResolution",
+      "panelType",
+    ] as const;
+    const hasSpecPatch = specKeys.some((key) => key in input);
+    let data: Record<string, unknown> = { ...input };
+    if (hasSpecPatch) {
+      const current = await prisma.product.findUnique({ where: { id } });
+      if (!current) throw notFound("Product");
+      const currentSpecs: ProductSpecState = {
+        cpu: current.cpu ?? null,
+        cpuBrand: (current.cpuBrand as ProductSpecState["cpuBrand"]) ?? null,
+        gpu: current.gpu ?? null,
+        gpuBrand: (current.gpuBrand as ProductSpecState["gpuBrand"]) ?? null,
+        gpuType: (current.gpuType as ProductSpecState["gpuType"]) ?? null,
+        screenResolution: current.screenResolution ?? null,
+        resolutionTier: (current.resolutionTier as ProductSpecState["resolutionTier"]) ?? null,
+        panelType: (current.panelType as ProductSpecState["panelType"]) ?? null,
+      };
+      const specs = mergeProductSpecState(currentSpecs, {
+        ...(Object.prototype.hasOwnProperty.call(input, "cpu") ? { cpu: input.cpu ?? null } : {}),
+        ...(Object.prototype.hasOwnProperty.call(input, "cpuBrand")
+          ? { cpuBrand: input.cpuBrand ?? null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(input, "gpu") ? { gpu: input.gpu ?? null } : {}),
+        ...(Object.prototype.hasOwnProperty.call(input, "gpuBrand")
+          ? { gpuBrand: input.gpuBrand ?? null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(input, "gpuType")
+          ? { gpuType: input.gpuType ?? null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(input, "screenResolution")
+          ? { screenResolution: input.screenResolution ?? null }
+          : {}),
+        ...(Object.prototype.hasOwnProperty.call(input, "panelType")
+          ? { panelType: input.panelType ?? null }
+          : {}),
+      });
+      assertProductSpecState(specs);
+      for (const key of specKeys) delete data[key];
+      if ("cpu" in input || "cpuBrand" in input) {
+        data = { ...data, cpu: specs.cpu, cpuBrand: specs.cpuBrand };
+      }
+      if ("gpu" in input || "gpuBrand" in input || "gpuType" in input) {
+        data = { ...data, gpu: specs.gpu, gpuBrand: specs.gpuBrand, gpuType: specs.gpuType };
+      }
+      if ("screenResolution" in input) {
+        data = {
+          ...data,
+          screenResolution: specs.screenResolution,
+          resolutionTier: specs.resolutionTier,
+        };
+      }
+      if ("panelType" in input) data = { ...data, panelType: specs.panelType };
+    }
     const product = await prisma.product.update({
       where: { id },
-      data: { ...input, ...(image ? { image } : {}) },
+      data: { ...data, ...(image ? { image } : {}) },
     });
     return toProductDto(product);
   } catch (e) {

@@ -1,3 +1,4 @@
+import type { Product } from "@prisma/client";
 import { toProductDto } from "modules/products/products.mapper";
 import type {
   AdvisorInput,
@@ -34,7 +35,14 @@ export const buildRuleBasedRecommendation = (
     tradeoffs.push("Chưa có thông tin dung lượng pin.");
   }
   return {
-    product: toProductDto(ranked.product),
+    product: toProductDto({
+      ...ranked.product,
+      cpuBrand: ranked.product.cpuBrand ?? null,
+      gpuBrand: ranked.product.gpuBrand ?? null,
+      gpuType: ranked.product.gpuType ?? null,
+      resolutionTier: ranked.product.resolutionTier ?? null,
+      panelType: ranked.product.panelType ?? null,
+    } as Product),
     matchScore: ranked.matchScore,
     highlights,
     reason,

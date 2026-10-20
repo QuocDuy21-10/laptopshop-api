@@ -39,6 +39,8 @@ const specNumber = (min: number, max: number, int = true) =>
       (int ? z.coerce.number().int() : z.coerce.number()).min(min).max(max).nullable(),
     )
     .optional();
+const specEnum = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.preprocess(blankToNull, z.enum(values).nullable()).optional();
 
 const csvOf = (allowed: readonly string[], maxItems = 10) =>
   z
@@ -129,11 +131,15 @@ export const productBody = z.object({
   factory: z.string().refine((v) => FACTORIES.includes(v), { message: "Unknown factory" }),
   target: z.string().refine((v) => TARGETS.includes(v), { message: "Unknown target" }),
   cpu: specText(255),
+  cpuBrand: specEnum(CPU_BRANDS),
   gpu: specText(255),
+  gpuBrand: specEnum(GPU_BRANDS),
+  gpuType: specEnum(GPU_TYPES),
   ramGb: specNumber(1, 256),
   storageGb: specNumber(1, 16384),
   screenSizeInch: specNumber(10, 20, false),
   screenResolution: specText(50),
+  panelType: specEnum(PANEL_TYPES),
   refreshRateHz: specNumber(30, 500),
   batteryWh: specNumber(1, 200),
   weightGrams: specNumber(300, 10000),

@@ -1,4 +1,10 @@
-export const productSeeds = [
+import {
+  inferCpuBrand,
+  inferGpuProfile,
+  inferResolutionTier,
+} from "modules/products/products.normalization";
+
+const rawProductSeeds = [
   {
     name: "Laptop Asus TUF Gaming",
     factory: "ASUS",
@@ -160,3 +166,14 @@ export const productSeeds = [
     warrantyMonths: 12,
   },
 ] as const;
+
+export const productSeeds = rawProductSeeds.map((product) => {
+  const gpu = inferGpuProfile(product.gpu);
+  return {
+    ...product,
+    cpuBrand: inferCpuBrand(product.cpu),
+    gpuBrand: gpu?.gpuBrand,
+    gpuType: gpu?.gpuType,
+    resolutionTier: inferResolutionTier(product.screenResolution),
+  };
+});

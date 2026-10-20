@@ -60,10 +60,15 @@ model Product {
   isActive         Boolean @default(true)
   cpu              String? @db.VarChar(255)
   gpu              String? @db.VarChar(255)
+  cpuBrand         String? @db.VarChar(20)
+  gpuBrand         String? @db.VarChar(20)
+  gpuType          String? @db.VarChar(20)
   ramGb            Int?
   storageGb        Int?
   screenSizeInch   Float?
   screenResolution String? @db.VarChar(50)
+  resolutionTier    String? @db.VarChar(20)
+  panelType         String? @db.VarChar(20)
   refreshRateHz    Int?
   batteryWh        Int?
   weightGrams      Int?

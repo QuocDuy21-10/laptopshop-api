@@ -1,4 +1,9 @@
 import { productSeeds } from "config/seed-products";
+import {
+  inferCpuBrand,
+  inferGpuProfile,
+  inferResolutionTier,
+} from "modules/products/products.normalization";
 
 describe("productSeeds", () => {
   it("keeps advisor catalog metadata consistent", () => {
@@ -30,5 +35,15 @@ describe("productSeeds", () => {
     ).toBe(true);
     const keys = productSeeds.map((product) => `${product.name}:${product.cpu}`);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("contains safe normalized facet metadata for every seed product", () => {
+    for (const product of productSeeds) {
+      expect(product.cpuBrand).toBe(inferCpuBrand(product.cpu));
+      expect(product.gpuBrand).toBe(inferGpuProfile(product.gpu)?.gpuBrand);
+      expect(product.gpuType).toBe(inferGpuProfile(product.gpu)?.gpuType);
+      expect(product.resolutionTier).toBe(inferResolutionTier(product.screenResolution));
+      expect("panelType" in product).toBe(false);
+    }
   });
 });

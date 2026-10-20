@@ -27,6 +27,13 @@ describe("PrismaAdvisorRepository", () => {
           ramGb: { gte: 16 },
         },
         orderBy: { id: "asc" },
+        select: expect.objectContaining({
+          cpuBrand: true,
+          gpuBrand: true,
+          gpuType: true,
+          resolutionTier: true,
+          panelType: true,
+        }),
       }),
     );
   });
