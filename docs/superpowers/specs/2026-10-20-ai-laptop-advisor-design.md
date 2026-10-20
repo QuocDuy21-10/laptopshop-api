@@ -109,7 +109,7 @@ Validation:
 - `priorities`: tối đa 3 phần tử, không trùng.
 - `workloads`: không trùng.
 - `note`: trim, tối đa 500 ký tự; không ảnh hưởng filter hoặc score.
-- Zod output của request được đọc từ `res.locals.body`, theo pattern `validate()` hiện tại.
+- Zod output của request được đọc từ `req.body`, theo pattern `validate({ body })` hiện tại; query và params mới dùng `res.locals`.
 
 ### 4.3 Response
 
