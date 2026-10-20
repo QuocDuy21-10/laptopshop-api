@@ -3,6 +3,9 @@ import { RedisStore } from "rate-limit-redis";
 import { RedisClientType } from "redis";
 
 const tooMany = { data: null, message: "Too many requests, please try again later" };
+const advisorTooMany = {
+  error: { code: "RATE_LIMITED", message: "Too many advisor requests, please try again later" },
+};
 
 export const createRedisLimitStore = (client: RedisClientType, prefix: string): Store =>
   new RedisStore({
@@ -11,7 +14,7 @@ export const createRedisLimitStore = (client: RedisClientType, prefix: string): 
   });
 
 // separate stores (different key prefixes) so the two limiters never share counters
-export const createLimiters = (stores?: { global?: Store; auth?: Store }) => ({
+export const createLimiters = (stores?: { global?: Store; auth?: Store; advisor?: Store }) => ({
   globalLimiter: rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 300,
@@ -27,5 +30,15 @@ export const createLimiters = (stores?: { global?: Store; auth?: Store }) => ({
     legacyHeaders: false,
     message: tooMany,
     store: stores?.auth,
+  }),
+  advisorLimiter: rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 20,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: advisorTooMany,
+    keyGenerator: (req) => req.advisorRequester?.key ?? req.ip,
+    passOnStoreError: true,
+    store: stores?.advisor,
   }),
 });

@@ -8,9 +8,10 @@ import type {
   AdvisorResult,
   RankedAdvisorCandidate,
 } from "modules/advisor/advisor.schema";
-import type {
-  AdvisorProvider,
-  ProviderExplanation,
+import {
+  AdvisorProviderError,
+  type AdvisorProvider,
+  type ProviderExplanation,
 } from "modules/advisor/providers/advisor-provider";
 
 export type AdvisorRequester = { kind: "guest" | "user"; key: string };
@@ -61,12 +62,21 @@ export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService =
     const fallback = () => buildRuleBasedResult(ranked, input);
     if (!deps.provider || !deps.quota || ranked.length === 0) return fallback();
     try {
-      if (!(await deps.quota.tryReserve(requester))) return fallback();
+      if (!(await deps.quota.tryReserve(requester))) {
+        deps.logger?.warn({ category: "quota" }, "advisor quota fallback");
+        return fallback();
+      }
+    } catch {
+      deps.logger?.warn({ category: "redis_error" }, "advisor quota fallback");
+      return fallback();
+    }
+    try {
       const explanation = await deps.provider.explain({ preferences: input, candidates: ranked });
       if (!providerMatchesRanking(ranked, explanation)) return fallback();
       return withProviderExplanation(ranked, input, explanation);
     } catch (error) {
-      deps.logger?.warn({ error }, "advisor provider fallback");
+      const category = error instanceof AdvisorProviderError ? error.category : "provider_5xx";
+      deps.logger?.warn({ category }, "advisor provider fallback");
       return fallback();
     }
   },

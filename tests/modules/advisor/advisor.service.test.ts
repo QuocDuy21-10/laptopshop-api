@@ -1,4 +1,5 @@
 import { createAdvisorService } from "modules/advisor/advisor.service";
+import { AdvisorProviderError } from "modules/advisor/providers/advisor-provider";
 import type { AdvisorCandidate, AdvisorInput } from "modules/advisor/advisor.schema";
 
 const input: AdvisorInput = {
@@ -107,5 +108,46 @@ describe("createAdvisorService", () => {
     expect(result.mode).toBe("rule_based");
     expect(provider.explain).not.toHaveBeenCalled();
     expect(quota.tryReserve).not.toHaveBeenCalled();
+  });
+
+  it("falls back when the requester quota is exhausted", async () => {
+    repository.findCandidates.mockResolvedValue([product(1)]);
+    const provider = { explain: jest.fn() };
+    const quota = { tryReserve: jest.fn().mockResolvedValue(false) };
+    const logger = { warn: jest.fn() };
+    const result = await createAdvisorService({ repository, provider, quota, logger }).recommend(
+      input,
+      requester,
+    );
+    expect(result.mode).toBe("rule_based");
+    expect(provider.explain).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith({ category: "quota" }, expect.any(String));
+  });
+
+  it("falls back on provider or Redis errors without logging note or requester key", async () => {
+    repository.findCandidates.mockResolvedValue([product(1)]);
+    const logger = { warn: jest.fn() };
+    const provider = {
+      explain: jest.fn().mockRejectedValue(new AdvisorProviderError("provider_429", "quota")),
+    };
+    const quota = { tryReserve: jest.fn().mockResolvedValue(true) };
+    const result = await createAdvisorService({ repository, provider, quota, logger }).recommend(
+      { ...input, note: "private note" },
+      { kind: "guest", key: "private-key" },
+    );
+    expect(result.mode).toBe("rule_based");
+    expect(logger.warn).toHaveBeenCalledWith({ category: "provider_429" }, expect.any(String));
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("private note");
+    expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("private-key");
+
+    const redisLogger = { warn: jest.fn() };
+    const redisResult = await createAdvisorService({
+      repository,
+      provider: { explain: jest.fn() },
+      quota: { tryReserve: jest.fn().mockRejectedValue(new Error("redis down")) },
+      logger: redisLogger,
+    }).recommend(input, requester);
+    expect(redisResult.mode).toBe("rule_based");
+    expect(redisLogger.warn).toHaveBeenCalledWith({ category: "redis_error" }, expect.any(String));
   });
 });
