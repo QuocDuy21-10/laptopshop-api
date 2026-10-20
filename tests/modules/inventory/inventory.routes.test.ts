@@ -1,6 +1,7 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
 
 import request from "supertest";
+import { sha256Canonical } from "lib/idempotency";
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { ADMIN, USER, cookieFor } from "../../helpers/auth";
@@ -46,6 +47,46 @@ beforeEach(() => {
 });
 
 describe("POST /api/v1/admin/inventory/adjustments", () => {
+  it("creates an idempotent adjustment and returns created true", async () => {
+    const res = await adjust(
+      { productId: 1, delta: 5, reason: "RESTOCK", note: "Nhập NCC" },
+      ADMIN,
+    ).set("Idempotency-Key", "stock-key-1");
+    expect(res.status).toBe(201);
+    expect(res.body.data.created).toBe(true);
+    expect(prismaMock.stockMovement.create.mock.calls[0][0].data).toMatchObject({
+      idempotencyKey: "stock-key-1",
+      requestHash: sha256Canonical([1, 5, "RESTOCK", "Nhập NCC"]),
+    });
+  });
+
+  it("replays the same key and rejects a different payload", async () => {
+    const existing = {
+      ...movementRow,
+      idempotencyKey: "stock-key-2",
+      requestHash: sha256Canonical([1, 5, "RESTOCK", "Nhập NCC"]),
+    };
+    prismaMock.stockMovement.findUnique.mockResolvedValue(existing);
+    const replay = await adjust(
+      { productId: 1, delta: 5, reason: "RESTOCK", note: "  Nhập NCC  " },
+      ADMIN,
+    ).set("Idempotency-Key", "stock-key-2");
+    expect(replay.status).toBe(200);
+    expect(replay.body.data.created).toBe(false);
+    expect(prismaMock.product.update).not.toHaveBeenCalled();
+
+    prismaMock.stockMovement.findUnique.mockResolvedValue({
+      ...existing,
+      requestHash: "different",
+    });
+    const conflict = await adjust(
+      { productId: 1, delta: 4, reason: "RESTOCK", note: "Nhập NCC" },
+      ADMIN,
+    ).set("Idempotency-Key", "stock-key-2");
+    expect(conflict.status).toBe(409);
+    expect(conflict.body.error.code).toBe("IDEMPOTENCY_KEY_REUSED");
+  });
+
   it("restocks and returns the product and the movement", async () => {
     const res = await adjust({ productId: 1, delta: 5, reason: "RESTOCK", note: "Nhập NCC" });
     expect(res.status).toBe(201);
@@ -70,7 +111,7 @@ describe("POST /api/v1/admin/inventory/adjustments", () => {
   });
 
   it("rejects a negative restock", async () => {
-    const res = await adjust({ productId: 1, delta: -1, reason: "RESTOCK" });
+    const res = await adjust({ productId: 1, delta: -1, reason: "RESTOCK", note: "Nhập hàng" });
     expect(res.status).toBe(400);
     expect(res.body.error.details[0].path).toBe("delta");
   });
@@ -96,7 +137,9 @@ describe("POST /api/v1/admin/inventory/adjustments", () => {
 
   it("returns 404 for an unknown product", async () => {
     prismaMock.product.findUnique.mockResolvedValue(null);
-    expect((await adjust({ productId: 9, delta: 1, reason: "RESTOCK" })).status).toBe(404);
+    expect(
+      (await adjust({ productId: 9, delta: 1, reason: "RESTOCK", note: "Nhập hàng" })).status,
+    ).toBe(404);
   });
 
   it("is admin only", async () => {

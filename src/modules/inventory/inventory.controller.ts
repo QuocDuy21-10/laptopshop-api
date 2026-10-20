@@ -1,4 +1,5 @@
 import { RequestHandler } from "express";
+import { idempotencyKeyHeader } from "lib/idempotency";
 import { sendCsv } from "lib/csv";
 import {
   AdjustmentBody,
@@ -8,7 +9,10 @@ import {
 import { adjustStock, exportMovements, listMovements } from "modules/inventory/inventory.service";
 
 export const adjustStockHandler: RequestHandler = async (req, res) => {
-  res.status(201).json({ data: await adjustStock(req.auth!.id, req.body as AdjustmentBody) });
+  const rawKey = req.get("idempotency-key");
+  const key = rawKey === undefined ? undefined : idempotencyKeyHeader.parse(rawKey);
+  const result = await adjustStock(req.auth!.id, key, req.body as AdjustmentBody);
+  res.status(result.created ? 201 : 200).json({ data: result });
 };
 
 export const listMovementsHandler: RequestHandler = async (_req, res) => {

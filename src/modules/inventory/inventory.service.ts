@@ -3,6 +3,8 @@ import { prisma } from "config/client";
 import { AppError, isNotFound, notFound } from "lib/errors";
 import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
 import { pageArgs, pageMeta } from "lib/http";
+import { sha256Canonical } from "lib/idempotency";
+import { logger } from "lib/logger";
 import { assertDayRange, createdAtRange, formatShopDateTime } from "lib/shop-time";
 import { outOfStock } from "modules/cart/cart.service";
 import { MovementRow, movementInclude, toMovementDto } from "modules/inventory/inventory.mapper";
@@ -85,34 +87,110 @@ export const moveStock = async (tx: Prisma.TransactionClient, m: StockMove) => {
 const invalid = (path: string, message: string) =>
   new AppError("Validation failed", 400, "VALIDATION_ERROR", [{ path, message }]);
 
-// shortcut: no Idempotency-Key, the UI locks the button while sending; add a key + unique (actorId, key) if retries ever double-apply
-export const adjustStock = async (actorId: number, body: AdjustmentBody) => {
+export type AdjustStockResult = {
+  product: ReturnType<typeof toProductDto>;
+  movement: ReturnType<typeof toMovementDto>;
+  created: boolean;
+};
+
+const idempotencyConflict = () =>
+  new AppError(
+    "Idempotency key was reused with a different payload",
+    409,
+    "IDEMPOTENCY_KEY_REUSED",
+  );
+
+export const adjustStock = async (
+  actorId: number,
+  idempotencyKey: string | undefined,
+  body: AdjustmentBody,
+): Promise<AdjustStockResult> => {
   if (body.reason === STOCK_REASON.RESTOCK && body.delta < 0) {
     throw invalid("delta", "a restock must add stock");
   }
-  if (body.reason === STOCK_REASON.CORRECTION && !body.note) {
+  if (!body.note) {
     throw invalid("note", "a correction needs a note");
   }
-  return prisma.$transaction(async (tx) => {
-    const exists = await tx.product.findUnique({
-      where: { id: body.productId },
-      select: { id: true },
-    });
-    if (!exists) throw notFound("Product");
-    const created = await moveStock(tx, {
-      productId: body.productId,
-      delta: body.delta,
-      reason: body.reason,
-      actorId,
-      note: body.note || undefined,
-    });
+  const requestHash = idempotencyKey
+    ? sha256Canonical([body.productId, body.delta, body.reason, body.note])
+    : undefined;
+  if (!idempotencyKey) {
+    logger.warn({ category: "missing_idempotency_key", actorId }, "stock adjustment missing key");
+  }
+
+  const buildResult = async (
+    tx: Prisma.TransactionClient,
+    movement: Prisma.StockMovementGetPayload<{ include: typeof movementInclude }>,
+    created: boolean,
+  ): Promise<AdjustStockResult> => {
     const product = await tx.product.findUniqueOrThrow({ where: { id: body.productId } });
-    const movement = await tx.stockMovement.findUniqueOrThrow({
-      where: { id: created.id },
+    return { product: toProductDto(product), movement: toMovementDto(movement), created };
+  };
+
+  const run = () =>
+    prisma.$transaction(async (tx) => {
+      if (idempotencyKey) {
+        const existing = await tx.stockMovement.findUnique({
+          where: { actorId_idempotencyKey: { actorId, idempotencyKey } },
+          include: movementInclude,
+        });
+        if (existing) {
+          if (existing.requestHash !== requestHash) throw idempotencyConflict();
+          logger.info(
+            { category: "replayed", actorId, movementId: existing.id },
+            "stock adjustment replayed",
+          );
+          return buildResult(tx, existing, false);
+        }
+      }
+      const exists = await tx.product.findUnique({
+        where: { id: body.productId },
+        select: { id: true },
+      });
+      if (!exists) throw notFound("Product");
+      const created = await moveStock(tx, {
+        productId: body.productId,
+        delta: body.delta,
+        reason: body.reason,
+        actorId,
+        note: body.note,
+        idempotencyKey,
+        requestHash,
+      });
+      const movement = await tx.stockMovement.findUniqueOrThrow({
+        where: { id: created.id },
+        include: movementInclude,
+      });
+      logger.info(
+        { category: "created", actorId, movementId: movement.id },
+        "stock adjustment created",
+      );
+      return buildResult(tx, movement, true);
+    });
+
+  try {
+    return await run();
+  } catch (error) {
+    if (!idempotencyKey) throw error;
+    const winner = await prisma.stockMovement.findUnique({
+      where: { actorId_idempotencyKey: { actorId, idempotencyKey } },
       include: movementInclude,
     });
-    return { product: toProductDto(product), movement: toMovementDto(movement) };
-  });
+    if (!winner) throw error;
+    if (winner.requestHash !== requestHash) {
+      logger.warn(
+        { category: "conflict", actorId, movementId: winner.id },
+        "stock adjustment key conflict",
+      );
+      throw idempotencyConflict();
+    }
+    logger.info(
+      { category: "replayed", actorId, movementId: winner.id },
+      "stock adjustment replayed",
+    );
+    const product = await prisma.product.findUniqueOrThrow({ where: { id: body.productId } });
+    return { product: toProductDto(product), movement: toMovementDto(winner), created: false };
+  }
 };
 
 export const movementWhere = (
