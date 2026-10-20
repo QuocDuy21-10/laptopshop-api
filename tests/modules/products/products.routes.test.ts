@@ -119,6 +119,31 @@ describe("GET /api/v1/products/filters", () => {
     expect(res.status).toBe(200);
     expect(res.body.data.factoryOptions).toContainEqual({ name: "Asus", value: "ASUS" });
     expect(res.body.data.targetOptions.length).toBeGreaterThan(0);
+    expect(
+      res.body.data.facetDefinitions.map((definition: { key: string }) => definition.key),
+    ).toEqual(
+      expect.arrayContaining(["cpuBrand", "gpuBrand", "gpuType", "ramGb", "panelType", "inStock"]),
+    );
+  });
+});
+
+describe("GET /api/v1/products/facets", () => {
+  it("returns dynamic counts with the parsed filter query", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([
+      { facetKey: "__total__", value: "__total__", count: BigInt(2) },
+      { facetKey: "cpuBrand", value: "INTEL", count: BigInt(2) },
+    ]);
+    const res = await request(buildApp()).get("/api/v1/products/facets?cpuBrand=INTEL&ramGb=16");
+    expect(res.status).toBe(200);
+    expect(res.body.data.total).toBe(2);
+    expect(res.body.data.groups.cpuBrand).toEqual(
+      expect.arrayContaining([{ value: "INTEL", count: 2 }]),
+    );
+  });
+
+  it("rejects an unknown facet value", async () => {
+    const res = await request(buildApp()).get("/api/v1/products/facets?cpuBrand=UNKNOWN");
+    expect(res.status).toBe(400);
   });
 });
 

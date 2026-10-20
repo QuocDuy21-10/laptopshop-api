@@ -8,6 +8,7 @@ const V1_PATHS = [
   "/api/v1/users/me",
   "/api/v1/products",
   "/api/v1/products/filters",
+  "/api/v1/products/facets",
   "/api/v1/products/compare",
   "/api/v1/products/{id}",
   "/api/v1/advisor/recommend",
@@ -65,6 +66,7 @@ describe("openapi document", () => {
 
   it("keeps public routes public and protects the rest", () => {
     expect(op("/api/v1/products", "get").security).toBeUndefined();
+    expect(op("/api/v1/products/facets", "get").security).toBeUndefined();
     expect(op("/api/v1/auth/login", "post").security).toBeUndefined();
     expect(op("/api/v1/webhooks/payments/{provider}", "post").security).toBeUndefined();
     expect(op("/api/v1/cart", "get").security).toEqual(secured);
@@ -127,11 +129,16 @@ describe("openapi document", () => {
     const props = (doc.components?.schemas?.Product as any).properties;
     for (const key of [
       "cpu",
+      "cpuBrand",
       "gpu",
+      "gpuBrand",
+      "gpuType",
       "ramGb",
       "storageGb",
       "screenSizeInch",
       "screenResolution",
+      "resolutionTier",
+      "panelType",
       "refreshRateHz",
       "batteryWh",
       "weightGrams",

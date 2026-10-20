@@ -22,6 +22,7 @@ import {
   adminListProductsQuery,
   compareQuery,
   listProductsQuery,
+  productFacetsQuery,
   productBody,
   productPatchBody,
 } from "modules/products/products.schema";
@@ -105,11 +106,16 @@ const Product = registry.register(
     target: z.string().nullable(),
     isActive: z.boolean(),
     cpu: z.string().nullable(),
+    cpuBrand: z.string().nullable(),
     gpu: z.string().nullable(),
+    gpuBrand: z.string().nullable(),
+    gpuType: z.string().nullable(),
     ramGb: z.number().int().nullable(),
     storageGb: z.number().int().nullable(),
     screenSizeInch: z.number().nullable(),
     screenResolution: z.string().nullable(),
+    resolutionTier: z.string().nullable(),
+    panelType: z.string().nullable(),
     refreshRateHz: z.number().int().nullable(),
     batteryWh: z.number().int().nullable(),
     weightGrams: z.number().int().nullable(),
@@ -153,6 +159,31 @@ const AdvisorResult = registry.register(
   }),
 );
 const Option = z.object({ name: z.string(), value: z.string() });
+const FacetDefinition = registry.register(
+  "FacetDefinition",
+  z.object({
+    key: z.string(),
+    name: z.string(),
+    mode: z.enum(["MULTI", "SINGLE_MIN", "SINGLE_MAX", "BOOLEAN"]),
+    kind: z.enum(["categorical", "exact", "bucket"]),
+    options: z.array(Option).optional(),
+  }),
+);
+const ProductFilterCatalog = registry.register(
+  "ProductFilterCatalog",
+  z.object({
+    factoryOptions: z.array(Option),
+    targetOptions: z.array(Option),
+    facetDefinitions: z.array(FacetDefinition),
+  }),
+);
+const ProductFacets = registry.register(
+  "ProductFacets",
+  z.object({
+    total: z.number(),
+    groups: z.record(z.string(), z.array(z.object({ value: z.string(), count: z.number() }))),
+  }),
+);
 const Cart = registry.register(
   "Cart",
   z.object({
@@ -497,11 +528,16 @@ op({
   path: `${v1}/products/filters`,
   summary: "Filter options",
   tag: "products",
-  ok: [
-    200,
-    "OK",
-    data(z.object({ factoryOptions: z.array(Option), targetOptions: z.array(Option) })),
-  ],
+  ok: [200, "OK", data(ProductFilterCatalog)],
+});
+op({
+  method: "get",
+  path: `${v1}/products/facets`,
+  summary: "Dynamic product facet counts",
+  tag: "products",
+  request: { query: productFacetsQuery },
+  ok: [200, "OK", data(ProductFacets)],
+  errors: { 400: "Invalid facet filter" },
 });
 op({
   method: "get",
