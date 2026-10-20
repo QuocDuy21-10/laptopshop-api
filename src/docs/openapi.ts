@@ -122,7 +122,8 @@ const AdvisorRequest = registry.register(
       minRamGb: z.union([z.literal(8), z.literal(16), z.literal(32)]).optional(),
       workloads: z
         .array(z.enum(["DOCKER_VM", "ESPORTS", "AAA_GAMING", "PHOTO_VIDEO", "CAD_3D"]))
-        .max(5),
+        .max(5)
+        .optional(),
       note: z.string().max(500).optional(),
     })
     .openapi("AdvisorRequest"),

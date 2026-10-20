@@ -33,6 +33,7 @@ const main = async () => {
             globalLimit: env.ADVISOR_GLOBAL_DAILY_LIMIT,
           }),
           logger,
+          model: env.GROQ_MODEL,
         }),
       }
     : undefined;

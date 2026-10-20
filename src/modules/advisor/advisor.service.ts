@@ -24,7 +24,11 @@ export type AdvisorServiceDeps = {
   repository: AdvisorRepository;
   provider?: AdvisorProvider;
   quota?: AdvisorQuota;
-  logger?: { warn: (object: unknown, message?: string) => void };
+  logger?: {
+    warn: (object: unknown, message?: string) => void;
+    info?: (object: unknown, message?: string) => void;
+  };
+  model?: string;
 };
 
 export type AdvisorService = {
@@ -57,9 +61,23 @@ const withProviderExplanation = (
 
 export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService => ({
   async recommend(input, requester) {
+    const startedAt = Date.now();
     const candidates = await deps.repository.findCandidates(input);
     const ranked = rankCandidates(candidates, input);
-    const fallback = () => buildRuleBasedResult(ranked, input);
+    const finish = (result: AdvisorResult, usage?: ProviderExplanation["usage"]) => {
+      deps.logger?.info?.(
+        {
+          mode: result.mode,
+          model: deps.model,
+          latencyMs: Date.now() - startedAt,
+          candidateCount: ranked.length,
+          ...(usage ?? {}),
+        },
+        "advisor completed",
+      );
+      return result;
+    };
+    const fallback = () => finish(buildRuleBasedResult(ranked, input));
     if (!deps.provider || !deps.quota || ranked.length === 0) return fallback();
     try {
       if (!(await deps.quota.tryReserve(requester))) {
@@ -73,7 +91,7 @@ export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService =
     try {
       const explanation = await deps.provider.explain({ preferences: input, candidates: ranked });
       if (!providerMatchesRanking(ranked, explanation)) return fallback();
-      return withProviderExplanation(ranked, input, explanation);
+      return finish(withProviderExplanation(ranked, input, explanation), explanation.usage);
     } catch (error) {
       const category = error instanceof AdvisorProviderError ? error.category : "provider_5xx";
       deps.logger?.warn({ category }, "advisor provider fallback");

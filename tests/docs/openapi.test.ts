@@ -82,6 +82,9 @@ describe("openapi document", () => {
     expect(advisor.responses[401]).toBeDefined();
     expect(advisor.responses[429]).toBeDefined();
     expect(doc.components?.schemas).toHaveProperty("AdvisorResult");
+    const properties = doc.components?.schemas?.AdvisorRequest as any;
+    expect(properties.properties.workloads).toBeDefined();
+    expect(properties.required ?? []).not.toContain("workloads");
   });
 
   it("documents the checkout idempotency header", () => {

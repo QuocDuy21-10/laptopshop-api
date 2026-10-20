@@ -122,6 +122,89 @@ describe("GroqAdvisorProvider", () => {
     await expect(provider.explain(input())).rejects.toMatchObject({ category: "invalid_output" });
   });
 
+  it("rejects a qualitative unknown-CPU claim and an empty evidence list", async () => {
+    const unknownInput = input({
+      candidates: [
+        {
+          ...input().candidates[0],
+          product: { ...input().candidates[0].product, cpu: null, gpu: null },
+          evidence: [{ key: "ram-16gb", text: "RAM 16 GB" }],
+        },
+      ],
+    });
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(
+        responseFor({
+          recommendations: [
+            { productId: 1, reason: "CPU rất mạnh", evidenceKeys: ["ram-16gb"], tradeoffs: [] },
+          ],
+        }),
+      );
+    const provider = new GroqAdvisorProvider(
+      {
+        apiKey: "secret",
+        model: "model",
+        timeoutMs: 10_000,
+        maxOutputTokens: 500,
+        structuredOutputMode: "json_object",
+      },
+      fetchImpl,
+    );
+    await expect(provider.explain(unknownInput)).rejects.toMatchObject({
+      category: "invalid_output",
+    });
+    fetchImpl.mockResolvedValue(
+      responseFor({
+        recommendations: [{ productId: 1, reason: "RAM ổn", evidenceKeys: [], tradeoffs: [] }],
+      }),
+    );
+    await expect(provider.explain(unknownInput)).rejects.toMatchObject({
+      category: "invalid_output",
+    });
+  });
+
+  it("rejects numbers from evidence that was not referenced", async () => {
+    const numericInput = input({
+      candidates: [
+        {
+          ...input().candidates[0],
+          evidence: [
+            { key: "ram-16gb", text: "RAM 16 GB" },
+            { key: "weight-2300g", text: "Trọng lượng 2300 g" },
+          ],
+        },
+      ],
+    });
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(
+        responseFor({
+          recommendations: [
+            {
+              productId: 1,
+              reason: "Trọng lượng 2300 g",
+              evidenceKeys: ["ram-16gb"],
+              tradeoffs: [],
+            },
+          ],
+        }),
+      );
+    const provider = new GroqAdvisorProvider(
+      {
+        apiKey: "secret",
+        model: "model",
+        timeoutMs: 10_000,
+        maxOutputTokens: 500,
+        structuredOutputMode: "json_object",
+      },
+      fetchImpl,
+    );
+    await expect(provider.explain(numericInput)).rejects.toMatchObject({
+      category: "invalid_output",
+    });
+  });
+
   it("rejects duplicate, missing or reordered product ids", async () => {
     const fetchImpl = jest.fn().mockResolvedValue(
       responseFor({

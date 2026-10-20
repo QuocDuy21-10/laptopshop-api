@@ -77,6 +77,26 @@ describe("authenticate", () => {
     expect(res.status).toBe(401);
     expect(res.body.error.code).toBe("UNAUTHENTICATED");
   });
+
+  it.each(["", "Basic abc"])("rejects malformed authorization %j", async (authorization) => {
+    const res = await request(build()).get("/api/optional").set("Authorization", authorization);
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe("UNAUTHENTICATED");
+  });
+
+  it("accepts lowercase bearer with surrounding whitespace", async () => {
+    const res = await request(build())
+      .get("/api/optional")
+      .set("Authorization", ` bearer ${signAccessToken(USER)} `);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual(USER);
+  });
+
+  it("rejects a malformed percent-encoded access cookie", async () => {
+    const res = await request(build()).get("/api/optional").set("Cookie", "access_token=%ZZ");
+    expect(res.status).toBe(401);
+    expect(res.body.error.code).toBe("UNAUTHENTICATED");
+  });
 });
 
 describe("requireRole", () => {

@@ -6,6 +6,7 @@ import {
   type ProviderRecommendation,
   type ProviderRequest,
 } from "modules/advisor/providers/advisor-provider";
+import { hardwareTier } from "modules/advisor/advisor.hardware-profile";
 
 export type GroqStructuredOutputMode = "strict" | "best_effort" | "json_object";
 export type GroqAdvisorConfig = {
@@ -20,7 +21,7 @@ const providerRecommendation = z
   .object({
     productId: z.number().int().positive(),
     reason: z.string().trim().min(1).max(300),
-    evidenceKeys: z.array(z.string().min(1)).max(8),
+    evidenceKeys: z.array(z.string().min(1)).min(1).max(8),
     tradeoffs: z.array(z.string().trim().min(1).max(180)).max(2),
   })
   .strict();
@@ -79,8 +80,8 @@ export class GroqAdvisorProvider implements AdvisorProvider {
       id: product.id,
       name: product.name,
       price: product.price,
-      cpu: product.cpu,
-      gpu: product.gpu,
+      cpu: hardwareTier("cpu", product.cpu) === "unknown" ? null : product.cpu,
+      gpu: hardwareTier("gpu", product.gpu) === "unknown" ? null : product.gpu,
       ramGb: product.ramGb,
       storageGb: product.storageGb,
       screenResolution: product.screenResolution,
@@ -171,13 +172,44 @@ export class GroqAdvisorProvider implements AdvisorProvider {
       ) {
         throw invalid("Groq referenced unknown evidence");
       }
+      const referencedFacts = item.evidenceKeys
+        .map((key) => evidence.find((fact) => fact.key === key))
+        .filter(Boolean);
       const allowedNumbers = new Set([
-        ...evidence.flatMap((fact) => numbersIn(fact.text)),
+        ...referencedFacts.flatMap((fact) => numbersIn(fact.text)),
         ...numbersIn(JSON.stringify(input.preferences)),
       ]);
       const prose = [item.reason, ...item.tradeoffs].flatMap(numbersIn);
       if (prose.some((token) => !allowedNumbers.has(token)))
         throw invalid("Groq introduced an unsupported number");
+      const allProse = [item.reason, ...item.tradeoffs].join(" ");
+      const featureClaims: Array<{ feature: string; pattern: RegExp; evidencePrefix: string }> = [
+        {
+          feature: "cpu",
+          pattern: /cpu|bộ xử lý|vi xử lý|processor|chip/i,
+          evidencePrefix: "cpu-",
+        },
+        { feature: "gpu", pattern: /gpu|card đồ họa|đồ họa|graphics/i, evidencePrefix: "gpu-" },
+        { feature: "battery", pattern: /pin|thời lượng/i, evidencePrefix: "battery-" },
+        {
+          feature: "display",
+          pattern: /màn hình|display|tần số|độ phân giải/i,
+          evidencePrefix: "resolution-",
+        },
+        {
+          feature: "portability",
+          pattern: /nhẹ|nặng|di chuyển|trọng lượng/i,
+          evidencePrefix: "weight-",
+        },
+      ];
+      for (const claim of featureClaims) {
+        if (
+          claim.pattern.test(allProse) &&
+          !item.evidenceKeys.some((key) => key.startsWith(claim.evidencePrefix))
+        ) {
+          throw invalid(`Groq made an unsupported ${claim.feature} claim`);
+        }
+      }
     }
     const usage = (body as { usage?: { prompt_tokens?: number; completion_tokens?: number } })
       .usage;

@@ -150,4 +150,26 @@ describe("createAdvisorService", () => {
     expect(redisResult.mode).toBe("rule_based");
     expect(redisLogger.warn).toHaveBeenCalledWith({ category: "redis_error" }, expect.any(String));
   });
+
+  it("logs safe completion telemetry without the requester or note", async () => {
+    repository.findCandidates.mockResolvedValue([product(1)]);
+    const info = jest.fn();
+    const result = await createAdvisorService({
+      repository,
+      logger: { warn: jest.fn(), info },
+      model: "model",
+    }).recommend({ ...input, note: "private note" }, { kind: "guest", key: "private-key" });
+    expect(result.mode).toBe("rule_based");
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "rule_based",
+        model: "model",
+        candidateCount: 1,
+        latencyMs: expect.any(Number),
+      }),
+      "advisor completed",
+    );
+    expect(JSON.stringify(info.mock.calls)).not.toContain("private note");
+    expect(JSON.stringify(info.mock.calls)).not.toContain("private-key");
+  });
 });
