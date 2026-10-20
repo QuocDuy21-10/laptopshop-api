@@ -22,6 +22,13 @@ describe("parseEnv", () => {
     expect(e.PAYMENT_TTL_MINUTES).toBe(15);
     expect(e.PAYMENT_GRACE_SECONDS).toBe(120);
     expect(e.SEPAY_MODE).toBe("test");
+    expect(e.ADVISOR_AI_ENABLED).toBe(false);
+    expect(e.GROQ_STRUCTURED_OUTPUT_MODE).toBe("json_object");
+    expect(e.ADVISOR_AI_TIMEOUT_MS).toBe(10_000);
+    expect(e.ADVISOR_AI_MAX_OUTPUT_TOKENS).toBe(500);
+    expect(e.ADVISOR_GUEST_DAILY_LIMIT).toBe(5);
+    expect(e.ADVISOR_USER_DAILY_LIMIT).toBe(10);
+    expect(e.ADVISOR_GLOBAL_DAILY_LIMIT).toBe(30);
   });
 
   it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {
@@ -92,5 +99,36 @@ describe("parseEnv", () => {
         PAYMENT_PROVIDER: "sepay",
       }),
     ).toThrow(/SEPAY/);
+  });
+
+  it("requires Groq credentials only when advisor AI is enabled", () => {
+    expect(() => parseEnv({ ...base, ADVISOR_AI_ENABLED: "true" })).toThrow(
+      /GROQ_API_KEY|GROQ_MODEL/,
+    );
+    const e = parseEnv({
+      ...base,
+      ADVISOR_AI_ENABLED: "true",
+      GROQ_API_KEY: "groq-test-key",
+      GROQ_MODEL: "openai/gpt-oss-20b",
+      GROQ_STRUCTURED_OUTPUT_MODE: "strict",
+      ADVISOR_AI_TIMEOUT_MS: "12000",
+      ADVISOR_AI_MAX_OUTPUT_TOKENS: "450",
+      ADVISOR_GUEST_DAILY_LIMIT: "6",
+      ADVISOR_USER_DAILY_LIMIT: "11",
+      ADVISOR_GLOBAL_DAILY_LIMIT: "31",
+    });
+    expect(e.ADVISOR_AI_ENABLED).toBe(true);
+    expect(e.GROQ_MODEL).toBe("openai/gpt-oss-20b");
+    expect(e.ADVISOR_AI_TIMEOUT_MS).toBe(12_000);
+  });
+
+  it.each([
+    ["ADVISOR_AI_TIMEOUT_MS", "999"],
+    ["ADVISOR_AI_TIMEOUT_MS", "30001"],
+    ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "99"],
+    ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "2001"],
+    ["ADVISOR_GLOBAL_DAILY_LIMIT", "0"],
+  ])("rejects invalid advisor configuration %s=%s", (key, value) => {
+    expect(() => parseEnv({ ...base, [key]: value })).toThrow();
   });
 });

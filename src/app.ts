@@ -14,9 +14,12 @@ import { applySecurity } from "middlewares/security";
 import { createLimiters } from "middlewares/rate-limit";
 import { errorHandler, notFoundHandler } from "middlewares/error.middleware";
 import { paymentWebhookRoutes } from "modules/payments/payments.routes";
+import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
+import { createAdvisorService, type AdvisorService } from "modules/advisor/advisor.service";
 
 export interface AppDeps {
-  limitStores?: { global?: Store; auth?: Store };
+  limitStores?: { global?: Store; auth?: Store; advisor?: Store };
+  advisor?: { service: AdvisorService; identitySecret: string };
   readyChecks?: Array<() => Promise<unknown>>;
   // hook for optional features that must register before the final 404/error handlers
   registerExtras?: (app: Express) => void;
@@ -41,11 +44,17 @@ export const createApp = (deps: AppDeps = {}): Express => {
   app.use(express.urlencoded({ extended: true, limit: "100kb" }));
   app.use(hpp());
 
-  const { globalLimiter, authLimiter } = createLimiters(deps.limitStores);
+  const { globalLimiter, authLimiter, advisorLimiter } = createLimiters(deps.limitStores);
   app.use(globalLimiter);
   app.post(["/api/v1/auth/login", "/api/v1/auth/register"], authLimiter);
 
-  app.use("/api/v1", createApiV1Router());
+  const advisor =
+    deps.advisor ??
+    ({
+      service: createAdvisorService({ repository: new PrismaAdvisorRepository() }),
+      identitySecret: env.JWT_SECRET,
+    } as const);
+  app.use("/api/v1", createApiV1Router({ ...advisor, requestLimiter: advisorLimiter }));
   deps.registerExtras?.(app);
 
   app.use(notFoundHandler);

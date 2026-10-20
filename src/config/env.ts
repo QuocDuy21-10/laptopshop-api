@@ -42,6 +42,20 @@ const schema = z
     SEPAY_BANK_CODE: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     SEPAY_ACCOUNT_NUMBER: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     SEPAY_ACCOUNT_NAME: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    ADVISOR_AI_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    GROQ_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    GROQ_MODEL: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    GROQ_STRUCTURED_OUTPUT_MODE: z
+      .enum(["strict", "best_effort", "json_object"])
+      .default("json_object"),
+    ADVISOR_AI_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(30_000).default(10_000),
+    ADVISOR_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(100).max(2_000).default(500),
+    ADVISOR_GUEST_DAILY_LIMIT: z.coerce.number().int().positive().default(5),
+    ADVISOR_USER_DAILY_LIMIT: z.coerce.number().int().positive().default(10),
+    ADVISOR_GLOBAL_DAILY_LIMIT: z.coerce.number().int().positive().default(30),
     GIT_SHA: z.preprocess(emptyToUndefined, z.string().optional()),
   })
   .superRefine((e, ctx) => {
@@ -82,6 +96,20 @@ const schema = z
             message: `${key} is required when BANK_TRANSFER_ENABLED=true`,
           });
       }
+    }
+    if (e.ADVISOR_AI_ENABLED) {
+      if (!e.GROQ_API_KEY)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["GROQ_API_KEY"],
+          message: "GROQ_API_KEY is required when ADVISOR_AI_ENABLED=true",
+        });
+      if (!e.GROQ_MODEL)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["GROQ_MODEL"],
+          message: "GROQ_MODEL is required when ADVISOR_AI_ENABLED=true",
+        });
     }
   })
   .transform((e) => ({ ...e, ADMIN_PASSWORD: e.ADMIN_PASSWORD ?? "123456" }));

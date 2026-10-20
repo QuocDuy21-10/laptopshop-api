@@ -1,3 +1,3 @@
-import { createApp } from "../../src/app";
+import { createApp, type AppDeps } from "../../src/app";
 
-export const buildApp = () => createApp();
+export const buildApp = (deps: AppDeps = {}) => createApp(deps);

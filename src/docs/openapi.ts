@@ -110,6 +110,42 @@ const Product = registry.register(
     warrantyMonths: z.number().int().nullable(),
   }),
 );
+const AdvisorRequest = registry.register(
+  "AdvisorRequest",
+  z
+    .object({
+      budgetMax: z.number().int().min(5_000_000).max(200_000_000),
+      usage: z.enum(["CODING", "GAMING", "OFFICE", "CREATIVE"]),
+      priorities: z
+        .array(z.enum(["PERFORMANCE", "PORTABILITY", "BATTERY", "DISPLAY", "VALUE"]))
+        .max(3),
+      minRamGb: z.union([z.literal(8), z.literal(16), z.literal(32)]).optional(),
+      workloads: z
+        .array(z.enum(["DOCKER_VM", "ESPORTS", "AAA_GAMING", "PHOTO_VIDEO", "CAD_3D"]))
+        .max(5)
+        .optional(),
+      note: z.string().max(500).optional(),
+    })
+    .openapi("AdvisorRequest"),
+);
+const AdvisorRecommendation = registry.register(
+  "AdvisorRecommendation",
+  z.object({
+    product: Product,
+    matchScore: z.number().int().min(0).max(100),
+    highlights: z.array(z.string()),
+    reason: z.string(),
+    tradeoffs: z.array(z.string()),
+  }),
+);
+const AdvisorResult = registry.register(
+  "AdvisorResult",
+  z.object({
+    mode: z.enum(["ai_enhanced", "rule_based"]),
+    recommendations: z.array(AdvisorRecommendation),
+    suggestions: z.array(z.string()),
+  }),
+);
 const Option = z.object({ name: z.string(), value: z.string() });
 const Cart = registry.register(
   "Cart",
@@ -263,7 +299,10 @@ const StockMovement = registry.register(
 const binary = z.string().openapi({ type: "string", format: "binary" });
 const data = (schema: z.ZodTypeAny) => z.object({ data: schema });
 const page = (schema: z.ZodTypeAny) => z.object({ data: z.array(schema), meta: Meta });
-const json = (schema: z.ZodTypeAny) => ({ content: { "application/json": { schema } } });
+const json = (schema: z.ZodTypeAny) => ({
+  required: true,
+  content: { "application/json": { schema } },
+});
 const multipart = (schema: z.ZodTypeAny) => ({
   content: { "multipart/form-data": { schema } },
 });
@@ -274,7 +313,7 @@ type Op = {
   path: string;
   summary: string;
   tag: string;
-  auth?: "user" | "admin";
+  auth?: "optional" | "user" | "admin";
   request?: RouteConfig["request"];
   ok: [status: number, description: string, schema?: z.ZodTypeAny];
   errors?: Record<number, string>;
@@ -293,7 +332,11 @@ const op = (o: Op) => {
     path: o.path,
     summary: o.summary,
     tags: [o.tag],
-    ...(o.auth ? { security: secured } : {}),
+    ...(o.auth === "optional"
+      ? { security: [{}, ...secured] }
+      : o.auth
+        ? { security: secured }
+        : {}),
     request: o.request,
     responses: {
       [status]: o.csv
@@ -371,6 +414,16 @@ op({
 });
 
 // products
+op({
+  method: "post",
+  path: `${v1}/advisor/recommend`,
+  summary: "Recommend laptops from structured preferences",
+  tag: "advisor",
+  auth: "optional",
+  request: { body: json(AdvisorRequest) },
+  ok: [200, "OK", data(AdvisorResult)],
+  errors: { 400: "Invalid preferences", 429: "Too many advisor requests" },
+});
 op({
   method: "get",
   path: `${v1}/products`,
