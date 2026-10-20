@@ -1,6 +1,7 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
 
 import request from "supertest";
+import { logger } from "lib/logger";
 import { prismaError, prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { ADMIN, USER, cookieFor } from "../../helpers/auth";
@@ -20,15 +21,47 @@ const detail = {
   movements: [],
 };
 const summary = { ...detail, items: undefined, movements: undefined, _count: { items: 1 } };
+const movement = {
+  id: 7,
+  productId: 1,
+  delta: 2,
+  reason: "RESTOCK",
+  orderId: null,
+  actorId: ADMIN.id,
+  note: null,
+  balanceBefore: 0,
+  balanceAfter: 2,
+  receiptId: detail.id,
+  idempotencyKey: null,
+  requestHash: null,
+  createdAt: new Date("2026-10-20T03:01:00Z"),
+  product: { name: "Asus" },
+  actor: { id: ADMIN.id, fullName: "Admin", username: "admin@gmail.com" },
+};
 const endpoint = "/api/v1/admin/inventory/receipts";
 
 beforeEach(() => {
+  jest.restoreAllMocks();
+  jest.spyOn(logger, "info");
   resetPrisma();
   prismaMock.product.findMany.mockResolvedValue([product]);
   prismaMock.stockReceipt.create.mockResolvedValue(detail);
   prismaMock.stockReceipt.findUnique.mockResolvedValue(detail);
   prismaMock.stockReceipt.findUniqueOrThrow.mockResolvedValue(detail);
   prismaMock.stockReceipt.updateMany.mockResolvedValue({ count: 1 });
+  prismaMock.stockReceiptItem.findMany.mockResolvedValue([
+    { productId: 1, quantity: 2, unitCost: 1200 },
+  ]);
+  prismaMock.product.update.mockResolvedValue({ quantity: 2 });
+  prismaMock.stockMovement.create.mockResolvedValue({ id: movement.id });
+  prismaMock.stockMovement.findMany.mockResolvedValue([movement]);
+  prismaMock.stockReceipt.findUniqueOrThrow.mockResolvedValue({
+    ...detail,
+    status: "POSTED",
+    postedAt: new Date("2026-10-20T03:01:00Z"),
+    postedBy: detail.createdBy,
+    movements: [movement],
+  });
 });
 
 describe("receipt draft routes", () => {
@@ -114,5 +147,63 @@ describe("receipt draft routes", () => {
       .set("Cookie", cookieFor(USER))
       .send({ items: [{ productId: 1, quantity: 1 }] });
     expect(res.status).toBe(403);
+  });
+
+  it("posts a draft exactly once and logs metadata without payload", async () => {
+    const res = await request(buildApp())
+      .post(`${endpoint}/${detail.id}/post`)
+      .set("Cookie", cookieFor(ADMIN));
+    expect(res.status).toBe(200);
+    expect(res.body.data.created).toBe(true);
+    expect(prismaMock.stockMovement.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ receiptId: detail.id, reason: "RESTOCK", delta: 2 }),
+    });
+    const logFields = (logger.info as jest.Mock).mock.calls
+      .map(([fields]) => fields)
+      .find((fields) => fields && typeof fields === "object" && "receiptId" in fields) as Record<
+      string,
+      unknown
+    >;
+    expect(logFields).toEqual(expect.objectContaining({ receiptId: detail.id, actorId: ADMIN.id }));
+    expect(logFields).not.toHaveProperty("note");
+    expect(logFields).not.toHaveProperty("unitCost");
+  });
+
+  it("replays an already posted receipt without moving stock", async () => {
+    prismaMock.stockReceipt.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.stockReceipt.findUnique.mockResolvedValue({ ...detail, status: "POSTED" });
+    const res = await request(buildApp())
+      .post(`${endpoint}/${detail.id}/post`)
+      .set("Cookie", cookieFor(ADMIN));
+    expect(res.status).toBe(200);
+    expect(res.body.data.created).toBe(false);
+    expect(prismaMock.stockMovement.create).not.toHaveBeenCalled();
+  });
+
+  it("returns errors for missing, empty and inactive receipts", async () => {
+    prismaMock.stockReceipt.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.stockReceipt.findUnique.mockResolvedValue(null);
+    expect(
+      (
+        await request(buildApp())
+          .post(`${endpoint}/${detail.id}/post`)
+          .set("Cookie", cookieFor(ADMIN))
+      ).status,
+    ).toBe(404);
+
+    prismaMock.stockReceipt.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.stockReceiptItem.findMany.mockResolvedValue([]);
+    const empty = await request(buildApp())
+      .post(`${endpoint}/${detail.id}/post`)
+      .set("Cookie", cookieFor(ADMIN));
+    expect(empty.status).toBe(400);
+
+    prismaMock.stockReceiptItem.findMany.mockResolvedValue([{ productId: 1, quantity: 2 }]);
+    prismaMock.product.findMany.mockResolvedValue([]);
+    const inactive = await request(buildApp())
+      .post(`${endpoint}/${detail.id}/post`)
+      .set("Cookie", cookieFor(ADMIN));
+    expect(inactive.status).toBe(409);
+    expect(inactive.body.error.code).toBe("PRODUCT_UNAVAILABLE");
   });
 });

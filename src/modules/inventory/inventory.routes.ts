@@ -9,6 +9,7 @@ import {
   createReceiptHandler,
   getReceiptHandler,
   listReceiptsHandler,
+  postReceiptHandler,
   updateReceiptHandler,
 } from "modules/inventory/inventory-receipts.controller";
 import {
@@ -43,4 +44,9 @@ adminInventoryRoutes.patch(
   "/receipts/:id",
   validate({ params: receiptIdParams, body: updateReceiptBody }),
   updateReceiptHandler,
+);
+adminInventoryRoutes.post(
+  "/receipts/:id/post",
+  validate({ params: receiptIdParams }),
+  postReceiptHandler,
 );

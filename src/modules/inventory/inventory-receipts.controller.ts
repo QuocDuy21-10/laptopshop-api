@@ -9,6 +9,7 @@ import {
   createReceipt,
   getReceipt,
   listReceipts,
+  postReceipt,
   updateReceipt,
 } from "modules/inventory/inventory-receipts.service";
 
@@ -33,5 +34,11 @@ export const updateReceiptHandler: RequestHandler = async (req, res) => {
       (res.locals.params as ReceiptIdParams).id,
       req.body as UpdateReceiptBody,
     ),
+  });
+};
+
+export const postReceiptHandler: RequestHandler = async (req, res) => {
+  res.json({
+    data: await postReceipt((res.locals.params as ReceiptIdParams).id, req.auth!.id),
   });
 };
