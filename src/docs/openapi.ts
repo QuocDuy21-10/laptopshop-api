@@ -38,6 +38,12 @@ import {
   exportMovementsQuery,
   listMovementsQuery,
 } from "modules/inventory/inventory.schema";
+import {
+  createReceiptBody,
+  listReceiptsQuery,
+  receiptIdParams,
+  updateReceiptBody,
+} from "modules/inventory/inventory-receipts.schema";
 import { ORDER_STATUSES } from "modules/orders/order-status";
 import {
   paymentEventQuery,
@@ -288,11 +294,58 @@ const StockMovement = registry.register(
     productId: z.number(),
     productName: z.string(),
     delta: z.number(),
+    balanceBefore: z.number().int().nullable(),
+    balanceAfter: z.number().int().nullable(),
     reason: z.string(),
     orderId: z.number().nullable(),
+    receiptId: z.string().uuid().nullable(),
+    receiptCode: z.string().nullable(),
     actor: Actor,
     note: z.string().nullable(),
     createdAt: z.string().datetime(),
+  }),
+);
+const StockReceiptItem = registry.register(
+  "StockReceiptItem",
+  z.object({
+    id: z.number().int(),
+    productId: z.number().int(),
+    productName: z.string(),
+    image: z.string().nullable(),
+    isActive: z.boolean(),
+    quantity: z.number().int(),
+    unitCost: z.number().int().nullable(),
+  }),
+);
+const StockReceiptSummary = registry.register(
+  "StockReceiptSummary",
+  z.object({
+    id: z.string().uuid(),
+    code: z.string(),
+    supplierName: z.string().nullable(),
+    status: z.enum(["DRAFT", "POSTED"]),
+    note: z.string().nullable(),
+    createdAt: z.string().datetime(),
+    postedAt: z.string().datetime().nullable(),
+    createdBy: Actor,
+    postedBy: Actor,
+    itemCount: z.number().int(),
+  }),
+);
+const StockReceiptDetail = registry.register(
+  "StockReceiptDetail",
+  z.object({
+    id: z.string().uuid(),
+    code: z.string(),
+    supplierName: z.string().nullable(),
+    status: z.enum(["DRAFT", "POSTED"]),
+    note: z.string().nullable(),
+    createdAt: z.string().datetime(),
+    postedAt: z.string().datetime().nullable(),
+    createdBy: Actor,
+    postedBy: Actor,
+    items: z.array(StockReceiptItem),
+    movements: z.array(StockMovement),
   }),
 );
 
@@ -316,6 +369,7 @@ type Op = {
   auth?: "optional" | "user" | "admin";
   request?: RouteConfig["request"];
   ok: [status: number, description: string, schema?: z.ZodTypeAny];
+  additionalOk?: Array<[status: number, description: string, schema?: z.ZodTypeAny]>;
   errors?: Record<number, string>;
   csv?: boolean;
 };
@@ -326,7 +380,7 @@ const op = (o: Op) => {
     ...(o.auth === "admin" ? { 403: "Not an admin" } : {}),
     ...o.errors,
   };
-  const [status, description, schema] = o.ok;
+  const successResponses = [o.ok, ...(o.additionalOk ?? [])];
   registry.registerPath({
     method: o.method,
     path: o.path,
@@ -339,11 +393,16 @@ const op = (o: Op) => {
         : {}),
     request: o.request,
     responses: {
-      [status]: o.csv
-        ? { description, content: { "text/csv": { schema: z.string() } } }
-        : schema
-          ? { description, ...json(schema) }
-          : { description },
+      ...Object.fromEntries(
+        successResponses.map(([successStatus, successDescription, successSchema]) => [
+          successStatus,
+          o.csv
+            ? { description: successDescription, content: { "text/csv": { schema: z.string() } } }
+            : successSchema
+              ? { description: successDescription, ...json(successSchema) }
+              : { description: successDescription },
+        ]),
+      ),
       ...Object.fromEntries(
         Object.entries(errors).map(([code, d]) => [code, { description: d, ...json(ErrorBody) }]),
       ),
@@ -806,9 +865,27 @@ op({
   summary: "Adjust stock (restock or stock-take correction)",
   tag: "admin",
   auth: "admin",
-  request: { body: json(adjustmentBody) },
-  ok: [201, "Adjusted", data(z.object({ product: Product, movement: StockMovement }))],
-  errors: { 400: "Invalid input", 404: "Product not found", 409: "Stock would go negative" },
+  request: {
+    headers: z.object({ "Idempotency-Key": z.string().min(1).max(64).optional() }),
+    body: json(adjustmentBody),
+  },
+  ok: [
+    201,
+    "Adjusted",
+    data(z.object({ product: Product, movement: StockMovement, created: z.boolean() })),
+  ],
+  additionalOk: [
+    [
+      200,
+      "Replayed adjustment",
+      data(z.object({ product: Product, movement: StockMovement, created: z.boolean() })),
+    ],
+  ],
+  errors: {
+    400: "Invalid input",
+    404: "Product not found",
+    409: "Stock would go negative or idempotency key was reused",
+  },
 });
 op({
   method: "get",
@@ -819,6 +896,74 @@ op({
   request: { query: listMovementsQuery },
   ok: [200, "OK", page(StockMovement)],
   errors: { 400: "Invalid filter" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/inventory/receipts`,
+  summary: "List stock receipts",
+  tag: "admin",
+  auth: "admin",
+  request: { query: listReceiptsQuery },
+  ok: [200, "OK", page(StockReceiptSummary)],
+  errors: { 400: "Invalid filter" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/inventory/receipts`,
+  summary: "Create a draft stock receipt",
+  tag: "admin",
+  auth: "admin",
+  request: { body: json(createReceiptBody) },
+  ok: [201, "Created", data(StockReceiptDetail)],
+  errors: { 400: "Invalid input", 409: "Product unavailable" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/inventory/receipts/{id}`,
+  summary: "Get stock receipt detail",
+  tag: "admin",
+  auth: "admin",
+  request: { params: receiptIdParams },
+  ok: [200, "OK", data(StockReceiptDetail)],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/inventory/receipts/{id}`,
+  summary: "Update a draft stock receipt",
+  tag: "admin",
+  auth: "admin",
+  request: { params: receiptIdParams, body: json(updateReceiptBody) },
+  ok: [200, "Updated", data(StockReceiptDetail)],
+  errors: {
+    400: "Invalid input",
+    404: "Not found",
+    409: "Receipt is not a draft or product unavailable",
+  },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/inventory/receipts/{id}/post`,
+  summary: "Post a stock receipt",
+  tag: "admin",
+  auth: "admin",
+  request: { params: receiptIdParams },
+  ok: [
+    200,
+    "Posted or replayed",
+    data(
+      z.object({
+        receipt: StockReceiptDetail,
+        movements: z.array(StockMovement),
+        created: z.boolean(),
+      }),
+    ),
+  ],
+  errors: {
+    400: "Receipt is empty",
+    404: "Not found",
+    409: "Invalid status or product unavailable",
+  },
 });
 
 export const buildOpenApiDocument = () =>

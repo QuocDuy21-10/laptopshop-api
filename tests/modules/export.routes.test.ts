@@ -84,13 +84,19 @@ describe("CSV exports", () => {
         orderId: 50,
         actorId: 2,
         note: null,
+        balanceBefore: 4,
+        balanceAfter: 2,
+        receiptId: "00000000-0000-4000-8000-000000000001",
+        idempotencyKey: null,
+        requestHash: null,
         createdAt: new Date("2026-10-19T03:00:00Z"),
         product: { name: "Asus" },
         actor: { id: 2, fullName: "B", username: "b@x" },
+        receipt: { code: "PN-20261020-ABCDEF12" },
       },
     ]);
     const res = await get("/api/v1/admin/inventory/movements/export.csv?productId=1");
     expect(res.status).toBe(200);
-    expect(res.text).toContain("2026-10-19 10:00,1,Asus,-2,ORDER,50,B,");
+    expect(res.text).toContain("2026-10-19 10:00,1,Asus,-2,4,2,ORDER,50,PN-20261020-ABCDEF12,B,");
   });
 });

@@ -27,9 +27,15 @@ const movementRow = {
   orderId: null,
   actorId: ADMIN.id,
   note: null,
+  balanceBefore: 3,
+  balanceAfter: 8,
+  receiptId: "00000000-0000-4000-8000-000000000001",
+  idempotencyKey: null,
+  requestHash: null,
   createdAt: new Date("2026-10-19T03:00:00Z"),
   product: { name: "Asus" },
   actor: { id: ADMIN.id, fullName: "Admin", username: "admin@gmail.com" },
+  receipt: { code: "PN-20261020-ABCDEF12" },
 };
 const adjust = (body: object, who = ADMIN) =>
   request(buildApp())
@@ -168,6 +174,13 @@ describe("GET /api/v1/admin/inventory/movements", () => {
       },
     });
     expect(args.orderBy).toEqual([{ createdAt: "desc" }, { id: "desc" }]);
-    expect(res.body.data[0]).toMatchObject({ productName: "Asus", reason: "RESTOCK", delta: 5 });
+    expect(res.body.data[0]).toMatchObject({
+      productName: "Asus",
+      reason: "RESTOCK",
+      delta: 5,
+      balanceBefore: 3,
+      balanceAfter: 8,
+      receiptCode: "PN-20261020-ABCDEF12",
+    });
   });
 });

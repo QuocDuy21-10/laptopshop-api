@@ -228,8 +228,11 @@ const MOVEMENT_COLUMNS: CsvColumn<MovementRow>[] = [
   { header: "Mã SP", value: (m) => m.productId },
   { header: "Sản phẩm", value: (m) => m.product.name },
   { header: "Thay đổi", value: (m) => m.delta },
+  { header: "Tồn trước", value: (m) => m.balanceBefore },
+  { header: "Tồn sau", value: (m) => m.balanceAfter },
   { header: "Lý do", value: (m) => m.reason },
   { header: "Mã đơn", value: (m) => m.orderId },
+  { header: "Phiếu nhập", value: (m) => m.receipt?.code },
   {
     header: "Người thao tác",
     value: (m) => (m.actor ? (m.actor.fullName ?? m.actor.username) : null),
