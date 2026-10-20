@@ -30,7 +30,7 @@ describe("GET /api/v1/products", () => {
     expect(res.body.meta).toEqual({ page: 1, pageSize: 10, total: 1, totalPages: 1 });
     expect(prismaMock.product.findMany).toHaveBeenCalledWith({
       where: { isActive: true },
-      orderBy: { id: "asc" },
+      orderBy: [{ id: "asc" }],
       skip: 0,
       take: 10,
     });
@@ -45,11 +45,13 @@ describe("GET /api/v1/products", () => {
     expect(prismaMock.product.findMany).toHaveBeenCalledWith({
       where: {
         isActive: true,
-        factory: { in: ["ASUS", "DELL"] },
-        target: { in: ["GAMING"] },
-        OR: [{ price: { lt: 10_000_000 } }, { price: { gt: 20_000_000 } }],
+        AND: [
+          { factory: { in: ["ASUS", "DELL"] } },
+          { target: { in: ["GAMING"] } },
+          { OR: [{ price: { lt: 10_000_000 } }, { price: { gt: 20_000_000 } }] },
+        ],
       },
-      orderBy: { price: "desc" },
+      orderBy: [{ price: "desc" }, { id: "asc" }],
       skip: 5,
       take: 5,
     });

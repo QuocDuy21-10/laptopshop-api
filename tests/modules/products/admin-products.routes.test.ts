@@ -60,7 +60,7 @@ describe("GET /api/v1/admin/products", () => {
     await asAdmin(request(buildApp()).get("/api/v1/admin/products?isActive=false&stock=low"));
     expect(prismaMock.product.findMany.mock.calls[0][0].where).toEqual({
       isActive: false,
-      quantity: { lte: 5 },
+      AND: [{ quantity: { lte: 5 } }],
     });
   });
 

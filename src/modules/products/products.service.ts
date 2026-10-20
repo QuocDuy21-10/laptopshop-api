@@ -8,9 +8,6 @@ import { toProductDto } from "modules/products/products.mapper";
 import {
   AdminExportProductsQuery,
   AdminListProductsQuery,
-  LOW_STOCK_THRESHOLD,
-  PRICE_RANGES,
-  PriceRange,
   ProductBody,
   ProductPatchBody,
 } from "modules/products/products.schema";
@@ -19,34 +16,17 @@ import {
   mergeProductSpecState,
   type ProductSpecState,
 } from "modules/products/products.normalization";
+import { productWhere } from "modules/products/products.filter";
 
 const nonNullEntries = (data: Record<string, unknown>) =>
   Object.fromEntries(
     Object.entries(data).filter(([, value]) => value !== null && value !== undefined),
   );
 
-// public callers always see only active products; admin may filter either way
-// public callers always see only active products; admin may filter either way
-export const productWhere = (
-  q: AdminExportProductsQuery,
-  admin: boolean,
-): Prisma.ProductWhereInput => ({
-  ...(admin ? (q.isActive === undefined ? {} : { isActive: q.isActive }) : { isActive: true }),
-  ...(q.stock === "low" ? { quantity: { lte: LOW_STOCK_THRESHOLD } } : {}),
-  // MySQL utf8mb4_unicode_ci makes contains case-insensitive
-  ...(q.q ? { name: { contains: q.q } } : {}),
-  ...(q.factory.length ? { factory: { in: q.factory } } : {}),
-  ...(q.target.length ? { target: { in: q.target } } : {}),
-  ...(q.price.length
-    ? { OR: q.price.map((range) => ({ price: PRICE_RANGES[range as PriceRange] })) }
-    : {}),
-});
-
 export const listProducts = async (q: AdminListProductsQuery, admin = false) => {
-  const where = productWhere(q, admin);
-  const orderBy: Prisma.ProductOrderByWithRelationInput = q.sort
-    ? { price: q.sort === "price_asc" ? "asc" : "desc" }
-    : { id: "asc" };
+  const where = productWhere(q, { admin });
+  const orderBy: Prisma.ProductOrderByWithRelationInput | Prisma.ProductOrderByWithRelationInput[] =
+    q.sort ? [{ price: q.sort === "price_asc" ? "asc" : "desc" }, { id: "asc" }] : [{ id: "asc" }];
   const [total, rows] = await Promise.all([
     prisma.product.count({ where }),
     prisma.product.findMany({ where, orderBy, ...pageArgs(q) }),
@@ -245,7 +225,7 @@ const PRODUCT_COLUMNS: CsvColumn<Product>[] = [
 ];
 
 export const exportProducts = async (q: AdminExportProductsQuery) => {
-  const where = productWhere(q, true);
+  const where = productWhere(q, { admin: true });
   assertExportSize(await prisma.product.count({ where }));
   return toCsv(PRODUCT_COLUMNS, await prisma.product.findMany({ where, orderBy: { id: "asc" } }));
 };
