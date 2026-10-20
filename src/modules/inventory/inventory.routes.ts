@@ -6,10 +6,22 @@ import {
   listMovementsHandler,
 } from "modules/inventory/inventory.controller";
 import {
+  createReceiptHandler,
+  getReceiptHandler,
+  listReceiptsHandler,
+  updateReceiptHandler,
+} from "modules/inventory/inventory-receipts.controller";
+import {
   adjustmentBody,
   exportMovementsQuery,
   listMovementsQuery,
 } from "modules/inventory/inventory.schema";
+import {
+  createReceiptBody,
+  listReceiptsQuery,
+  receiptIdParams,
+  updateReceiptBody,
+} from "modules/inventory/inventory-receipts.schema";
 
 export const adminInventoryRoutes = Router();
 
@@ -23,4 +35,12 @@ adminInventoryRoutes.get(
   "/movements/export.csv",
   validate({ query: exportMovementsQuery }),
   exportMovementsHandler,
+);
+adminInventoryRoutes.get("/receipts", validate({ query: listReceiptsQuery }), listReceiptsHandler);
+adminInventoryRoutes.post("/receipts", validate({ body: createReceiptBody }), createReceiptHandler);
+adminInventoryRoutes.get("/receipts/:id", validate({ params: receiptIdParams }), getReceiptHandler);
+adminInventoryRoutes.patch(
+  "/receipts/:id",
+  validate({ params: receiptIdParams, body: updateReceiptBody }),
+  updateReceiptHandler,
 );
