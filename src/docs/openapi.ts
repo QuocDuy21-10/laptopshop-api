@@ -280,6 +280,7 @@ const ReviewImage = registry.register(
   "ReviewImage",
   z.object({
     id: z.number(),
+    url: z.string().url(),
     mimeType: z.literal("image/webp"),
     byteSize: z.number().int(),
     width: z.number().int(),
@@ -301,6 +302,7 @@ const PublicReview = registry.register(
     content: z.string(),
     author: ReviewAuthor,
     verifiedPurchase: z.literal(true),
+    images: z.array(ReviewImage),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   }),
@@ -326,6 +328,7 @@ const OwnerReview = registry.register(
     status: z.enum(["PUBLISHED", "HIDDEN"]),
     deletedAt: z.string().datetime().nullable(),
     verifiedPurchase: z.literal(true),
+    images: z.array(ReviewImage),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   }),
@@ -367,6 +370,7 @@ const AdminReviewListItem = registry.register(
     moderatedBy: z
       .object({ id: z.number(), username: z.string(), fullName: z.string().nullable() })
       .nullable(),
+    images: z.array(ReviewImage),
   }),
 );
 const AdminReviewDetail = registry.register("AdminReviewDetail", AdminReviewListItem);

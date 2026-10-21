@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
+import { env } from "config/env";
 import { AppError, isUniqueViolation, notFound } from "lib/errors";
 import { pageArgs, pageMeta } from "lib/http";
 import {
@@ -20,7 +21,10 @@ import {
   type PublicReviewDto,
   type PublicReviewRow,
   type ReviewSummaryDto,
+  type ReviewImageDto,
 } from "modules/reviews/reviews.mapper";
+import { createReviewImageStorage } from "lib/storage/s3-review-image-storage";
+import type { ReviewImageRow } from "modules/reviews/review-images.mapper";
 import type { ListProductReviewsQuery } from "modules/reviews/reviews.schema";
 import type {
   AdminListReviewsQuery,
@@ -28,6 +32,39 @@ import type {
   ModerateReviewBody,
   UpdateReviewBody,
 } from "modules/reviews/reviews.schema";
+
+const reviewImageStorage = createReviewImageStorage(env);
+
+const signReviewImages = async (
+  images: ReviewImageRow[] | undefined,
+): Promise<ReviewImageDto[]> => {
+  if (!reviewImageStorage || !images?.length) return [];
+  return Promise.all(
+    images.map(async (image) => ({
+      id: image.id,
+      url: await reviewImageStorage.getSignedReadUrl(
+        image.objectKey,
+        env.REVIEW_IMAGE_URL_TTL_SECONDS,
+      ),
+      mimeType: image.mimeType as "image/webp",
+      byteSize: image.byteSize,
+      width: image.width,
+      height: image.height,
+      position: image.position,
+      status: image.status,
+      deletedAt: image.deletedAt,
+      createdAt: image.createdAt,
+      updatedAt: image.updatedAt,
+    })),
+  );
+};
+
+const toPublicReviewWithImages = async (row: PublicReviewRow) =>
+  toPublicReviewDto(row, await signReviewImages(row.images));
+const toOwnerReviewWithImages = async (row: OwnerReviewRow) =>
+  toOwnerReviewDto(row, await signReviewImages(row.images));
+const toAdminReviewWithImages = async (row: AdminReviewRow) =>
+  toAdminReviewDto(row, await signReviewImages(row.images));
 
 const publicReviewWhere = (productId: number, rating?: number): Prisma.ReviewWhereInput => ({
   productId,
@@ -133,7 +170,7 @@ export const listPublishedReviews = async (
     }),
   ]);
   return {
-    items: (rows as PublicReviewRow[]).map(toPublicReviewDto),
+    items: await Promise.all((rows as PublicReviewRow[]).map(toPublicReviewWithImages)),
     meta: pageMeta(query, total),
   };
 };
@@ -171,7 +208,7 @@ export const getReviewEligibility = async (
     return {
       eligible: false,
       reason: "ALREADY_REVIEWED",
-      existingReview: toOwnerReviewDto(existing),
+      existingReview: await toOwnerReviewWithImages(existing),
       willRequireModeration: false,
     };
   }
@@ -239,7 +276,7 @@ export const createReview = async (
       where: { id: existing.id },
       select: ownerReviewSelect,
     })) as OwnerReviewRow;
-    return toOwnerReviewDto(reactivated);
+    return toOwnerReviewWithImages(reactivated);
   }
 
   try {
@@ -256,7 +293,7 @@ export const createReview = async (
       },
       select: ownerReviewSelect,
     });
-    return toOwnerReviewDto(review as OwnerReviewRow);
+    return toOwnerReviewWithImages(review as OwnerReviewRow);
   } catch (error) {
     if (isUniqueViolation(error))
       throw new AppError("You already reviewed this product", 409, "REVIEW_ALREADY_EXISTS");
@@ -289,20 +326,50 @@ export const updateMyReview = async (
     },
     select: ownerReviewSelect,
   });
-  return toOwnerReviewDto(review as OwnerReviewRow);
+  return toOwnerReviewWithImages(review as OwnerReviewRow);
 };
 
 export const deleteMyReview = async (userId: number, reviewId: number): Promise<void> => {
-  const existing = await prisma.review.findFirst({
-    where: { id: reviewId, userId },
-    select: { id: true, deletedAt: true },
+  const deletedImages = await prisma.$transaction(async (tx) => {
+    const existing = await tx.review.findFirst({
+      where: { id: reviewId, userId },
+      select: { id: true, deletedAt: true },
+    });
+    if (!existing) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
+    if (existing.deletedAt !== null) return [];
+    const now = new Date();
+    await tx.review.update({
+      where: { id: reviewId, userId },
+      data: { deletedAt: now },
+    });
+    const images =
+      (await tx.reviewImage.findMany({
+        where: { reviewId, status: { in: ["PENDING", "READY"] }, deletedAt: null },
+        select: { id: true, objectKey: true },
+      })) ?? [];
+    if (images.length)
+      await tx.reviewImage.updateMany({
+        where: { id: { in: images.map((image) => image.id) } },
+        data: { status: "DELETING", deletedAt: now },
+      });
+    return images;
   });
-  if (!existing) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
-  if (existing.deletedAt !== null) return;
-  await prisma.review.update({
-    where: { id: reviewId, userId },
-    data: { deletedAt: new Date() },
-  });
+  if (reviewImageStorage && deletedImages.length) {
+    await Promise.all(
+      deletedImages.map(async (image) => {
+        try {
+          await reviewImageStorage.deleteObject(image.objectKey);
+          await prisma.reviewImage.update({
+            where: { id: image.id },
+            data: { storageDeletedAt: new Date() },
+            select: { id: true },
+          });
+        } catch {
+          // The DELETING row is retained for reconciliation.
+        }
+      }),
+    );
+  }
 };
 
 export const listAdminReviews = async (
@@ -318,7 +385,10 @@ export const listAdminReviews = async (
       ...pageArgs(query),
     }),
   ]);
-  return { items: (rows as AdminReviewRow[]).map(toAdminReviewDto), meta: pageMeta(query, total) };
+  return {
+    items: await Promise.all((rows as AdminReviewRow[]).map(toAdminReviewWithImages)),
+    meta: pageMeta(query, total),
+  };
 };
 
 export const getAdminReviewSummary = async (): Promise<AdminReviewSummaryDto> => {
@@ -352,7 +422,7 @@ export const getAdminReview = async (reviewId: number): Promise<AdminReviewDetai
     select: adminReviewSelect,
   })) as AdminReviewRow | null;
   if (!review) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
-  return toAdminReviewDto(review);
+  return toAdminReviewWithImages(review);
 };
 
 export const moderateReview = async (

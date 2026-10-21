@@ -10,7 +10,6 @@ jest.mock("modules/reviews/review-images.processor", () => ({
 }));
 
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
-import { AppError } from "lib/errors";
 import {
   addReviewImages,
   deleteReviewImage,

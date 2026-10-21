@@ -1,6 +1,7 @@
 import { prisma } from "config/client";
 import {
   createReview,
+  deleteMyReview,
   getAdminReviewSummary,
   moderateReview,
 } from "modules/reviews/reviews.service";
@@ -90,6 +91,42 @@ describe("review database invariants", () => {
         },
       }),
     ).rejects.toThrow();
+  });
+
+  it("soft-deletes review images and does not restore them on rewrite", async () => {
+    const user = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(user.id, product.id);
+    const review = await createReview(user.id, product.id, {
+      rating: 5,
+      content: "Nội dung đủ dài cho review có ảnh trước khi xoá.",
+      isAnonymous: true,
+    });
+    await prisma.reviewImage.create({
+      data: {
+        reviewId: review.id,
+        objectKey: `reviews/${review.id}/old.webp`,
+        mimeType: "image/webp",
+        byteSize: 10,
+        width: 10,
+        height: 10,
+        position: 0,
+        status: "READY",
+      },
+    });
+
+    await deleteMyReview(user.id, review.id);
+    expect(
+      await prisma.reviewImage.count({ where: { reviewId: review.id, status: "DELETING" } }),
+    ).toBe(1);
+
+    const rewritten = await createReview(user.id, product.id, {
+      rating: 4,
+      content: "Nội dung viết lại không kế thừa ảnh cũ.",
+      isAnonymous: true,
+    });
+    expect(rewritten.images).toEqual([]);
+    expect(item.id).toBeGreaterThan(0);
   });
 
   it("rejects rating outside 1..5 at the database boundary", async () => {
