@@ -42,14 +42,9 @@ describe("toPublicReviewDto", () => {
         id: 22,
         url: "https://signed.example/22.webp",
         mimeType: "image/webp",
-        byteSize: 10,
         width: 100,
         height: 50,
         position: 0,
-        status: "READY",
-        deletedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
       },
     ]);
 

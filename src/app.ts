@@ -18,8 +18,6 @@ import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
 import { createAdvisorService, type AdvisorService } from "modules/advisor/advisor.service";
 import { createReviewImageStorage } from "lib/storage/s3-review-image-storage";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
-import { AppError } from "lib/errors";
-import type { ReviewImageStorage } from "lib/storage/review-image-storage";
 
 export interface AppDeps {
   limitStores?: { global?: Store; auth?: Store; advisor?: Store; reviewImages?: Store };
@@ -61,30 +59,12 @@ export const createApp = (deps: AppDeps = {}): Express => {
       service: createAdvisorService({ repository: new PrismaAdvisorRepository() }),
       identitySecret: env.JWT_SECRET,
     } as const);
-  const unavailableReviewImageStorage: ReviewImageStorage = {
-    putObject: async () => {
-      throw new AppError(
-        "Review image storage is unavailable",
-        503,
-        "REVIEW_IMAGE_STORAGE_UNAVAILABLE",
-      );
-    },
-    deleteObject: async () => undefined,
-    objectExists: async () => false,
-    getSignedReadUrl: async () => {
-      throw new AppError(
-        "Review image storage is unavailable",
-        503,
-        "REVIEW_IMAGE_STORAGE_UNAVAILABLE",
-      );
-    },
-  };
   const reviewImages =
     deps.reviewImages !== undefined
       ? deps.reviewImages
       : (() => {
           const storage = createReviewImageStorage(env);
-          return { storage: storage ?? unavailableReviewImageStorage };
+          return storage ? { storage } : null;
         })();
   app.use(
     "/api/v1",

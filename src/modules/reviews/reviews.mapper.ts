@@ -5,14 +5,9 @@ export type ReviewImageDto = {
   id: number;
   url: string;
   mimeType: "image/webp";
-  byteSize: number;
   width: number;
   height: number;
   position: number;
-  status: "PENDING" | "READY" | "DELETING";
-  deletedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
 };
 
 export const publicReviewSelect = {

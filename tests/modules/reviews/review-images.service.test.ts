@@ -72,7 +72,7 @@ describe("review image lifecycle service", () => {
     prismaMock.reviewImage.updateMany.mockResolvedValue({ count: 1 });
 
     await expect(addReviewImages(storage(), 7, 18, [file("one")])).resolves.toEqual([
-      expect.objectContaining({ id: 21, status: "READY" }),
+      expect.objectContaining({ id: 21, url: "https://signed.example/image.webp" }),
     ]);
   });
 
@@ -119,7 +119,7 @@ describe("review image lifecycle service", () => {
     prismaMock.review.findFirst.mockResolvedValue(review);
     prismaMock.reviewImage.findMany.mockResolvedValue([image(), image({ id: 22, position: 1 })]);
 
-    await expect(reorderReviewImages(7, 18, [21, 21])).rejects.toMatchObject({
+    await expect(reorderReviewImages(storage(), 7, 18, [21, 21])).rejects.toMatchObject({
       code: "REVIEW_IMAGE_ORDER_INVALID",
     });
     expect(prismaMock.reviewImage.update).not.toHaveBeenCalled();

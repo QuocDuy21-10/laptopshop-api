@@ -35,7 +35,7 @@ export const createReviewImageHandlers = (deps: ReviewImageDeps) => ({
   reorder: async (req: Request, res: Response) => {
     const reviewId = Number(res.locals.reviewImageReviewId);
     const { imageIds } = req.body as ReviewImageOrderBody;
-    res.json({ data: await reorderReviewImages(req.auth!.id, reviewId, imageIds) });
+    res.json({ data: await reorderReviewImages(deps, req.auth!.id, reviewId, imageIds) });
   },
   remove: async (req: Request, res: Response) => {
     const reviewId = Number(res.locals.reviewImageReviewId);

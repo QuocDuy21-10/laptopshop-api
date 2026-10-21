@@ -282,14 +282,9 @@ const ReviewImage = registry.register(
     id: z.number(),
     url: z.string().url(),
     mimeType: z.literal("image/webp"),
-    byteSize: z.number().int(),
     width: z.number().int(),
     height: z.number().int(),
     position: z.number().int().min(0).max(255),
-    status: z.enum(["PENDING", "READY", "DELETING"]),
-    deletedAt: z.string().datetime().nullable(),
-    createdAt: z.string().datetime(),
-    updatedAt: z.string().datetime(),
   }),
 );
 const PublicReview = registry.register(

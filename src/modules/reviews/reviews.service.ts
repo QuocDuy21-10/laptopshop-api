@@ -47,14 +47,9 @@ const signReviewImages = async (
         env.REVIEW_IMAGE_URL_TTL_SECONDS,
       ),
       mimeType: image.mimeType as "image/webp",
-      byteSize: image.byteSize,
       width: image.width,
       height: image.height,
       position: image.position,
-      status: image.status,
-      deletedAt: image.deletedAt,
-      createdAt: image.createdAt,
-      updatedAt: image.updatedAt,
     })),
   );
 };
@@ -349,8 +344,13 @@ export const deleteMyReview = async (userId: number, reviewId: number): Promise<
       })) ?? [];
     if (images.length)
       await tx.reviewImage.updateMany({
-        where: { id: { in: images.map((image) => image.id) } },
+        where: { id: { in: images.map((image) => image.id) }, status: "READY" },
         data: { status: "DELETING", deletedAt: now },
+      });
+    if (images.length)
+      await tx.reviewImage.updateMany({
+        where: { id: { in: images.map((image) => image.id) }, status: "PENDING" },
+        data: { deletedAt: now },
       });
     return images;
   });

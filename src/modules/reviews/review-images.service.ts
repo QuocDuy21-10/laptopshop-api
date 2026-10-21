@@ -104,19 +104,35 @@ export const addReviewImages = async (
   const processed = await Promise.all(files.map(processReviewImage));
   const now = nowOf(deps);
   const reservations = (await reserveImages(userId, reviewId, processed, now)) as ReviewImageRow[];
-  const uploaded = reservations.filter(Boolean);
-
-  try {
-    await Promise.all(
-      reservations.map((row, index) =>
-        deps.storage.putObject({
-          key: row.objectKey,
-          body: processed[index].buffer,
-          contentLength: processed[index].byteSize,
-        }),
-      ),
-    );
-  } catch (error) {
+  const uploads = await Promise.allSettled(
+    reservations.map((row, index) =>
+      deps.storage.putObject({
+        key: row.objectKey,
+        body: processed[index].buffer,
+        contentLength: processed[index].byteSize,
+      }),
+    ),
+  );
+  const uploaded = reservations.filter((_, index) => uploads[index].status === "fulfilled");
+  let finalized = 0;
+  if (uploads.every((result) => result.status === "fulfilled")) {
+    const result = await prisma.$transaction(async (tx) => {
+      const reviewRows = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM reviews WHERE id = ${reviewId} AND deletedAt IS NULL FOR UPDATE
+      `;
+      if (!reviewRows.length) return { count: 0 };
+      return tx.reviewImage.updateMany({
+        where: {
+          id: { in: reservations.map((row) => row.id) },
+          status: "PENDING",
+          deletedAt: null,
+        },
+        data: { status: "READY" },
+      });
+    });
+    finalized = result.count;
+  }
+  if (uploads.some((result) => result.status === "rejected") || finalized !== reservations.length) {
     await markFailedReservations(
       reservations.map((row) => row.id),
       now,
@@ -126,25 +142,23 @@ export const addReviewImages = async (
       "Review image storage is unavailable",
       503,
       "REVIEW_IMAGE_STORAGE_UNAVAILABLE",
-      {
-        cause: error instanceof Error ? error.message : "unknown",
-      },
     );
   }
 
-  await prisma.reviewImage.updateMany({
-    where: { id: { in: reservations.map((row) => row.id) }, status: "PENDING" },
-    data: { status: "READY" },
-  });
   const ready = await prisma.reviewImage.findMany({
-    where: { id: { in: reservations.map((row) => row.id) } },
+    where: { id: { in: reservations.map((row) => row.id) }, status: "READY", deletedAt: null },
     orderBy: { position: "asc" },
     select: reviewImageSelect,
   });
-  return (ready as ReviewImageRow[]).map(toOwnerReviewImageDto);
+  return Promise.all(
+    (ready as ReviewImageRow[]).map(async (row) =>
+      toOwnerReviewImageDto(row, await deps.storage.getSignedReadUrl(row.objectKey, 900)),
+    ),
+  );
 };
 
 export const reorderReviewImages = async (
+  deps: ReviewImageDeps,
   userId: number,
   reviewId: number,
   imageIds: number[],
@@ -179,7 +193,11 @@ export const reorderReviewImages = async (
       orderBy: { position: "asc" },
       select: reviewImageSelect,
     });
-    return (reordered as ReviewImageRow[]).map(toOwnerReviewImageDto);
+    return Promise.all(
+      (reordered as ReviewImageRow[]).map(async (row) =>
+        toOwnerReviewImageDto(row, await deps.storage.getSignedReadUrl(row.objectKey, 900)),
+      ),
+    );
   });
 };
 
@@ -202,6 +220,16 @@ export const deleteReviewImage = async (
       data: { status: "DELETING", deletedAt: nowOf(deps) },
       select: reviewImageSelect,
     });
+    const remaining = (await tx.reviewImage.findMany({
+      where: { reviewId, status: "READY", deletedAt: null, id: { not: imageId } },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
+      select: { id: true },
+    })) as Array<{ id: number }>;
+    await Promise.all(
+      remaining.map((item, position) =>
+        tx.reviewImage.update({ where: { id: item.id }, data: { position }, select: { id: true } }),
+      ),
+    );
     return image;
   });
   if (!reservation) return;

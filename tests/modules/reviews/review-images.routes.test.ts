@@ -35,28 +35,22 @@ describe("review image routes", () => {
       .post("/api/v1/reviews/18/images")
       .attach("images", Buffer.from("x"), "x.png");
 
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(404);
     expect(addReviewImages).not.toHaveBeenCalled();
   });
 
   it("checks owner before Multer and forwards multiple files", async () => {
     prismaMock.review.findFirst.mockResolvedValue({ id: 18, status: "PUBLISHED", deletedAt: null });
-    jest
-      .mocked(addReviewImages)
-      .mockResolvedValue([
-        {
-          id: 21,
-          mimeType: "image/webp",
-          byteSize: 10,
-          width: 10,
-          height: 10,
-          position: 0,
-          status: "READY",
-          deletedAt: null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ]);
+    jest.mocked(addReviewImages).mockResolvedValue([
+      {
+        id: 21,
+        url: "https://signed.test/21.webp",
+        mimeType: "image/webp",
+        width: 10,
+        height: 10,
+        position: 0,
+      },
+    ]);
 
     const res = await request(buildApp({ reviewImages: { storage } } as never))
       .post("/api/v1/reviews/18/images")
@@ -101,7 +95,12 @@ describe("review image routes", () => {
       .set("Cookie", cookieFor(USER))
       .send({ imageIds: [21, 22] });
     expect(valid.status).toBe(200);
-    expect(reorderReviewImages).toHaveBeenCalledWith(USER.id, 18, [21, 22]);
+    expect(reorderReviewImages).toHaveBeenCalledWith(
+      expect.objectContaining({ storage }),
+      USER.id,
+      18,
+      [21, 22],
+    );
   });
 
   it("deletes an owned image with 204", async () => {
