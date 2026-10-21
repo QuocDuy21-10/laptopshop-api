@@ -368,6 +368,7 @@ const AdminReviewListItem = registry.register(
       .object({ id: z.number(), username: z.string(), fullName: z.string().nullable() })
       .nullable(),
     images: z.array(ReviewImage),
+    helpfulCount: z.number().int().min(0),
   }),
 );
 const AdminReviewDetail = registry.register("AdminReviewDetail", AdminReviewListItem);

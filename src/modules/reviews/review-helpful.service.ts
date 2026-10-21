@@ -8,10 +8,12 @@ const publicReviewWhere = {
 };
 
 const getPublicReview = async (client: Prisma.TransactionClient, reviewId: number) => {
-  const review = await client.review.findFirst({
-    where: { id: reviewId, ...publicReviewWhere },
-    select: { id: true, userId: true },
-  });
+  const [review] = await client.$queryRaw<Array<{ id: number; userId: number }>>(Prisma.sql`
+    SELECT id, userId
+    FROM reviews
+    WHERE id = ${reviewId} AND status = 'PUBLISHED' AND deletedAt IS NULL
+    FOR UPDATE
+  `);
   if (!review) throw new AppError("Review not found", 404, "REVIEW_NOT_PUBLIC");
   return review;
 };
@@ -29,7 +31,7 @@ export const listMyHelpfulReviewIds = async (userId: number, reviewIds: number[]
 };
 
 export const markReviewHelpful = async (userId: number, reviewId: number) => {
-  await prisma.$transaction(async (tx) => {
+  return prisma.$transaction(async (tx) => {
     const review = await getPublicReview(tx, reviewId);
     if (review.userId === userId) {
       throw new AppError("You cannot vote for your own review", 409, "REVIEW_HELPFUL_SELF_VOTE");
@@ -39,10 +41,9 @@ export const markReviewHelpful = async (userId: number, reviewId: number) => {
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
     }
+    const helpfulCount = await tx.reviewHelpful.count({ where: { reviewId } });
+    return { reviewId, helpfulCount, helpful: true as const };
   });
-  await getPublicReview(prisma, reviewId);
-  const helpfulCount = await prisma.reviewHelpful.count({ where: { reviewId } });
-  return { reviewId, helpfulCount, helpful: true as const };
 };
 
 export const unmarkReviewHelpful = async (userId: number, reviewId: number) => {

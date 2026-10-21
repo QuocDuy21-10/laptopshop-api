@@ -131,6 +131,7 @@ export const adminReviewSelect = {
     orderBy: { position: "asc" },
     select: reviewImageSelect,
   },
+  _count: { select: { helpfulVotes: true } },
 } satisfies Prisma.ReviewSelect;
 
 export type AdminReviewRow = Prisma.ReviewGetPayload<{ select: typeof adminReviewSelect }>;
@@ -161,6 +162,7 @@ export const toAdminReviewDto = (
   },
   moderatedBy: review.moderatedBy,
   images,
+  helpfulCount: review._count?.helpfulVotes ?? 0,
 });
 
 export type AdminReviewListItemDto = ReturnType<typeof toAdminReviewDto>;
