@@ -2,9 +2,14 @@
 
 Guidance for AI coding agents (Codex, Cursor, Copilot, Gemini, etc.). The single source of truth for commands, architecture and conventions is [CLAUDE.md](CLAUDE.md); read it first.
 
+Before starting any task, read and follow these rule files:
+
+- `.codex/rules/git-workflow.md`
+
 Before finishing any change, run and pass: `npm run lint && npm run typecheck && npm test` (no DB or Redis needed; Prisma is mocked). Changes to checkout, cancel or stock logic must also pass `npm run test:int` (real MySQL, see CLAUDE.md).
 
 Rules that are easy to miss:
+
 - Never read `process.env` outside `src/config/env.ts`; never commit `.env`.
 - Use `lib/logger.ts`, not `console`; throw `AppError` with a stable `code` for expected errors.
 - Use bare path aliases (`modules/*`, `lib/*`, ...), not relative imports.
