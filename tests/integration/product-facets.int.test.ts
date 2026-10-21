@@ -196,6 +196,13 @@ describe("product facets on MySQL", () => {
       expect.arrayContaining([{ value: "standard", count: 1 }]),
     );
   });
+
+  it("returns the boolean in-stock facet using the public true value", async () => {
+    await create({ name: "Available", price: 10_000_000, quantity: 2, isActive: true });
+    await create({ name: "Empty", price: 10_000_000, quantity: 0, isActive: true });
+    const result = await getProductFacets(allQuery());
+    expect(result.groups.inStock).toEqual(expect.arrayContaining([{ value: "true", count: 1 }]));
+  });
 });
 
 const allQuery = (q?: string) => ({

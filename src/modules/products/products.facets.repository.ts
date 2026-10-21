@@ -100,10 +100,11 @@ const thresholdBranch = (
   operator: ">=" | "<=",
   values: readonly number[],
   query: ProductFilterQuery,
+  labels: readonly string[] = values.map(String),
 ) =>
   values.map(
-    (value) => Prisma.sql`
-    SELECT ${key} AS facetKey, ${String(value)} AS value, COUNT(*) AS count
+    (value, index) => Prisma.sql`
+    SELECT ${key} AS facetKey, ${labels[index]} AS value, COUNT(*) AS count
     FROM base b
     ${andWhere([...filterConditions(query, key), Prisma.sql`${Prisma.raw(`b.${column}`)} ${Prisma.raw(operator)} ${value}`])}
   `,
@@ -155,7 +156,7 @@ export const queryProductFacetRows = async (
     ...thresholdBranch("minBatteryWh", "batteryWh", ">=", BATTERY_MINIMUMS, query),
     ...thresholdBranch("maxWeightGrams", "weightGrams", "<=", WEIGHT_MAXIMUMS, query),
     ...thresholdBranch("minWarrantyMonths", "warrantyMonths", ">=", WARRANTY_MINIMUMS, query),
-    ...thresholdBranch("inStock", "quantity", ">=", [1], query),
+    ...thresholdBranch("inStock", "quantity", ">=", [1], query, ["true"]),
   ];
   return prisma.$queryRaw<FacetAggregateRow[]>(Prisma.sql`
     WITH base AS (SELECT p.* FROM products p ${baseWhere})
