@@ -4,6 +4,7 @@ export const resetDb = async () => {
   await prisma.paymentWebhookEvent.deleteMany();
   await prisma.paymentProviderCheckpoint.deleteMany();
   await prisma.payment.deleteMany();
+  await prisma.review.deleteMany();
   await prisma.stockReceiptItem.deleteMany();
   await prisma.stockMovement.deleteMany();
   await prisma.stockReceipt.deleteMany();
@@ -71,4 +72,23 @@ export const receiver = {
   receiverName: "R",
   receiverAddress: "Addr",
   receiverPhone: "0900000000",
+};
+
+export const createCompletedOrderItem = async (userId: number, productId: number) => {
+  const order = await prisma.order.create({
+    data: {
+      totalPrice: 1000,
+      ...receiver,
+      status: "COMPLETED",
+      paymentMethod: "COD",
+      paymentStatus: "PAYMENT_SUCCESS",
+      completedAt: new Date(),
+      userId,
+      orderDetails: {
+        create: { productId, price: 1000, quantity: 1 },
+      },
+    },
+    include: { orderDetails: true },
+  });
+  return order.orderDetails[0];
 };
