@@ -11,6 +11,10 @@ const V1_PATHS = [
   "/api/v1/products/facets",
   "/api/v1/products/compare",
   "/api/v1/products/{id}",
+  "/api/v1/products/{id}/reviews",
+  "/api/v1/products/{id}/reviews/summary",
+  "/api/v1/products/{id}/reviews/eligibility",
+  "/api/v1/reviews/{id}",
   "/api/v1/advisor/recommend",
   "/api/v1/cart",
   "/api/v1/cart/items",
@@ -44,6 +48,10 @@ const V1_PATHS = [
   "/api/v1/admin/payment-events",
   "/api/v1/admin/payment-events/{id}",
   "/api/v1/admin/payment-events/{id}/resolve",
+  "/api/v1/admin/reviews",
+  "/api/v1/admin/reviews/summary",
+  "/api/v1/admin/reviews/{id}",
+  "/api/v1/admin/reviews/{id}/moderation",
 ];
 const secured = [{ cookieAuth: [] }, { bearerAuth: [] }];
 
@@ -90,6 +98,45 @@ describe("openapi document", () => {
     const properties = doc.components?.schemas?.AdvisorRequest as any;
     expect(properties.properties.workloads).toBeDefined();
     expect(properties.required ?? []).not.toContain("workloads");
+  });
+
+  it("documents the verified review paths and their security boundaries", () => {
+    expect(op("/api/v1/products/{id}/reviews", "get").security).toBeUndefined();
+    expect(op("/api/v1/products/{id}/reviews", "post").security).toEqual(secured);
+    expect(op("/api/v1/products/{id}/reviews/eligibility", "get").security).toEqual(secured);
+    expect(op("/api/v1/admin/reviews", "get").security).toEqual(secured);
+    expect(op("/api/v1/admin/reviews/{id}/moderation", "patch").responses[403]).toBeDefined();
+  });
+
+  it("keeps the public review schema free of private and moderation fields", () => {
+    const publicReview = doc.components?.schemas?.PublicReview as any;
+    expect(publicReview.properties).toEqual(
+      expect.not.objectContaining({
+        userId: expect.anything(),
+        username: expect.anything(),
+        orderDetailId: expect.anything(),
+        status: expect.anything(),
+      }),
+    );
+    expect(doc.components?.schemas).toEqual(
+      expect.objectContaining({
+        PublicReview: expect.anything(),
+        ReviewSummary: expect.anything(),
+        ReviewEligibility: expect.anything(),
+        OwnerReview: expect.anything(),
+        AdminReviewListItem: expect.anything(),
+        AdminReviewDetail: expect.anything(),
+        AdminReviewSummary: expect.anything(),
+      }),
+    );
+  });
+
+  it("requires the review create fields", () => {
+    const create = op("/api/v1/products/{id}/reviews", "post");
+    const body = create.requestBody.content["application/json"].schema as any;
+    expect(body.required).toEqual(expect.arrayContaining(["rating", "content", "isAnonymous"]));
+    expect(create.responses[201]).toBeDefined();
+    expect(create.responses[409]).toBeDefined();
   });
 
   it("documents the checkout idempotency header", () => {
