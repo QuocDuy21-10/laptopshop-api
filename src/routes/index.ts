@@ -13,13 +13,20 @@ import { dashboardRoutes } from "modules/dashboard/dashboard.routes";
 import { notFoundHandler } from "middlewares/error.middleware";
 import { adminPaymentRoutes, paymentRoutes } from "modules/payments/payments.routes";
 import { createAdvisorRoutes, type AdvisorRouteDeps } from "modules/advisor/advisor.routes";
+import {
+  productReviewRoutes,
+  reviewRoutes,
+  adminReviewRoutes,
+} from "modules/reviews/reviews.routes";
 
 export const createApiV1Router = (advisor: AdvisorRouteDeps) => {
   const router = express.Router();
   router.use(originCheck(env.CORS_ORIGINS));
 
   router.use("/auth", authRoutes);
+  router.use("/products", productReviewRoutes);
   router.use("/products", productRoutes);
+  router.use("/reviews", reviewRoutes);
   router.use("/users", usersRoutes);
   router.use("/cart", cartRoutes);
   router.use("/orders", orderRoutes);
@@ -35,6 +42,7 @@ export const createApiV1Router = (advisor: AdvisorRouteDeps) => {
   admin.use("/dashboard", dashboardRoutes);
   admin.use("/inventory", adminInventoryRoutes);
   admin.use("/payment-events", adminPaymentRoutes);
+  admin.use("/reviews", adminReviewRoutes);
   router.use("/admin", admin);
 
   router.use(notFoundHandler);

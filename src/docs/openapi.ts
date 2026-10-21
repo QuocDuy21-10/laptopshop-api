@@ -51,6 +51,13 @@ import {
   paymentProviderParam,
   resolvePaymentEventBody,
 } from "modules/payments/payments.schema";
+import {
+  adminListReviewsQuery,
+  createReviewBody,
+  listProductReviewsQuery,
+  moderateReviewBody,
+  updateReviewBody,
+} from "modules/reviews/reviews.schema";
 
 extendZodWithOpenApi(z);
 
@@ -260,6 +267,99 @@ const PaymentEvent = registry.register(
     receivedAt: z.string().datetime(),
     resolvedAt: z.string().datetime().nullable(),
     resolvedById: z.number().nullable(),
+  }),
+);
+const ReviewAuthor = registry.register(
+  "ReviewAuthor",
+  z.object({ name: z.string(), anonymous: z.boolean() }),
+);
+const PublicReview = registry.register(
+  "PublicReview",
+  z.object({
+    id: z.number(),
+    productId: z.number(),
+    rating: z.number().int().min(1).max(5),
+    title: z.string().nullable(),
+    content: z.string(),
+    author: ReviewAuthor,
+    verifiedPurchase: z.literal(true),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  }),
+);
+const ReviewSummary = registry.register(
+  "ReviewSummary",
+  z.object({
+    productId: z.number(),
+    averageRating: z.number().nullable(),
+    totalReviews: z.number().int(),
+    distribution: z.record(z.enum(["1", "2", "3", "4", "5"]), z.number().int()),
+  }),
+);
+const OwnerReview = registry.register(
+  "OwnerReview",
+  z.object({
+    id: z.number(),
+    productId: z.number(),
+    rating: z.number().int().min(1).max(5),
+    title: z.string().nullable(),
+    content: z.string(),
+    isAnonymous: z.boolean(),
+    status: z.enum(["PUBLISHED", "HIDDEN"]),
+    deletedAt: z.string().datetime().nullable(),
+    verifiedPurchase: z.literal(true),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  }),
+);
+const ReviewEligibility = registry.register(
+  "ReviewEligibility",
+  z.object({
+    eligible: z.boolean(),
+    reason: z
+      .enum(["NOT_PURCHASED", "ORDER_NOT_COMPLETED", "PAYMENT_NOT_CONFIRMED", "ALREADY_REVIEWED"])
+      .nullable(),
+    existingReview: z.union([OwnerReview, z.null()]),
+    willRequireModeration: z.boolean(),
+  }),
+);
+const AdminReviewListItem = registry.register(
+  "AdminReviewListItem",
+  z.object({
+    id: z.number(),
+    rating: z.number().int(),
+    title: z.string().nullable(),
+    content: z.string(),
+    isAnonymous: z.boolean(),
+    status: z.enum(["PUBLISHED", "HIDDEN"]),
+    deletedAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+    contentUpdatedAt: z.string().datetime(),
+    hiddenReason: z.string().nullable(),
+    moderatedAt: z.string().datetime().nullable(),
+    author: z.object({ id: z.number(), username: z.string(), fullName: z.string().nullable() }),
+    product: z.object({ id: z.number(), name: z.string() }),
+    purchase: z.object({
+      orderId: z.number(),
+      orderDetailId: z.number(),
+      status: z.string(),
+      paymentStatus: z.string(),
+      completedAt: z.string().datetime().nullable(),
+    }),
+    moderatedBy: z
+      .object({ id: z.number(), username: z.string(), fullName: z.string().nullable() })
+      .nullable(),
+  }),
+);
+const AdminReviewDetail = registry.register("AdminReviewDetail", AdminReviewListItem);
+const AdminReviewSummary = registry.register(
+  "AdminReviewSummary",
+  z.object({
+    totalReviews: z.number().int(),
+    publishedReviews: z.number().int(),
+    hiddenReviews: z.number().int(),
+    deletedReviews: z.number().int(),
+    averageRating: z.number().nullable(),
   }),
 );
 const PaymentMethods = z.array(
@@ -556,6 +656,68 @@ op({
   request: id,
   ok: [200, "OK", data(Product)],
   errors: { 404: "Not found" },
+});
+op({
+  method: "get",
+  path: `${v1}/products/{id}/reviews`,
+  summary: "List public product reviews",
+  tag: "reviews",
+  request: { ...id, query: listProductReviewsQuery },
+  ok: [200, "OK", page(PublicReview)],
+  errors: { 400: "Invalid filter", 404: "Product not found or hidden" },
+});
+op({
+  method: "get",
+  path: `${v1}/products/{id}/reviews/summary`,
+  summary: "Get public review summary",
+  tag: "reviews",
+  request: id,
+  ok: [200, "OK", data(ReviewSummary)],
+  errors: { 404: "Product not found or hidden" },
+});
+op({
+  method: "get",
+  path: `${v1}/products/{id}/reviews/eligibility`,
+  summary: "Check review eligibility",
+  tag: "reviews",
+  auth: "user",
+  request: id,
+  ok: [200, "OK", data(ReviewEligibility)],
+  errors: { 403: "Not eligible" },
+});
+op({
+  method: "post",
+  path: `${v1}/products/{id}/reviews`,
+  summary: "Create or rewrite a verified purchase review",
+  tag: "reviews",
+  auth: "user",
+  request: { ...id, body: json(createReviewBody) },
+  ok: [201, "Created", data(OwnerReview)],
+  errors: {
+    403: "Not eligible",
+    404: "Product not found",
+    409: "Already reviewed or public name unavailable",
+  },
+});
+op({
+  method: "patch",
+  path: `${v1}/reviews/{id}`,
+  summary: "Edit my review",
+  tag: "reviews",
+  auth: "user",
+  request: { ...id, body: json(updateReviewBody) },
+  ok: [200, "Updated", data(OwnerReview)],
+  errors: { 404: "Review not found", 409: "Review deleted or public name unavailable" },
+});
+op({
+  method: "delete",
+  path: `${v1}/reviews/{id}`,
+  summary: "Soft-delete my review",
+  tag: "reviews",
+  auth: "user",
+  request: id,
+  ok: [204, "Deleted"],
+  errors: { 404: "Review not found" },
 });
 
 // cart
@@ -894,6 +1056,44 @@ op({
   request: { params: z.object({ id: z.string().uuid() }), body: json(resolvePaymentEventBody) },
   ok: [200, "Resolved", data(PaymentEvent)],
   errors: { 404: "Not found", 409: "Event is not reviewable" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/reviews`,
+  summary: "List product reviews for moderation",
+  tag: "admin",
+  auth: "admin",
+  request: { query: adminListReviewsQuery },
+  ok: [200, "OK", page(AdminReviewListItem)],
+  errors: { 400: "Invalid filter" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/reviews/summary`,
+  summary: "Review moderation summary",
+  tag: "admin",
+  auth: "admin",
+  ok: [200, "OK", data(AdminReviewSummary)],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/reviews/{id}`,
+  summary: "Review moderation detail",
+  tag: "admin",
+  auth: "admin",
+  request: id,
+  ok: [200, "OK", data(AdminReviewDetail)],
+  errors: { 404: "Review not found" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/reviews/{id}/moderation`,
+  summary: "Hide or restore a review",
+  tag: "admin",
+  auth: "admin",
+  request: { ...id, body: json(moderateReviewBody) },
+  ok: [200, "Updated", data(AdminReviewDetail)],
+  errors: { 400: "Invalid moderation input", 404: "Review not found", 409: "Review deleted" },
 });
 op({
   method: "post",
