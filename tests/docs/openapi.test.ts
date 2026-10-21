@@ -57,6 +57,7 @@ const V1_PATHS = [
   "/api/v1/admin/reviews/summary",
   "/api/v1/admin/reviews/{id}",
   "/api/v1/admin/reviews/{id}/moderation",
+  "/api/v1/admin/reviews/{id}/reply",
 ];
 const secured = [{ cookieAuth: [] }, { bearerAuth: [] }];
 
@@ -111,6 +112,8 @@ describe("openapi document", () => {
     expect(op("/api/v1/products/{id}/reviews/eligibility", "get").security).toEqual(secured);
     expect(op("/api/v1/admin/reviews", "get").security).toEqual(secured);
     expect(op("/api/v1/admin/reviews/{id}/moderation", "patch").responses[403]).toBeDefined();
+    expect(op("/api/v1/admin/reviews/{id}/reply", "put").security).toEqual(secured);
+    expect(op("/api/v1/admin/reviews/{id}/reply", "delete").responses[204]).toBeDefined();
     expect(op("/api/v1/reviews/{id}/images", "post").security).toEqual(secured);
     expect(op("/api/v1/reviews/helpful", "get").security).toEqual(secured);
     expect(op("/api/v1/reviews/{id}/helpful", "put").security).toEqual(secured);
@@ -141,6 +144,8 @@ describe("openapi document", () => {
         AdminReviewListItem: expect.anything(),
         AdminReviewDetail: expect.anything(),
         AdminReviewSummary: expect.anything(),
+        PublicOfficialReply: expect.anything(),
+        AdminOfficialReply: expect.anything(),
       }),
     );
     expect((publicReview.properties as any).helpfulCount).toBeDefined();

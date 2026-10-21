@@ -25,6 +25,8 @@ import {
   unmarkReviewHelpful,
 } from "modules/reviews/review-helpful.service";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
+import { deleteOfficialReply, putOfficialReply } from "modules/reviews/review-replies.service";
+import type { PutReviewReplyBody } from "modules/reviews/reviews.schema";
 import {
   addReviewImages,
   deleteReviewImage,
@@ -101,6 +103,17 @@ export const getAdminReviewHandler: RequestHandler = async (_req, res) => {
 export const moderateReviewHandler: RequestHandler = async (req, res) => {
   const { id } = res.locals.params as IdParams;
   res.json({ data: await moderateReview(req.auth!.id, id, req.body as ModerateReviewBody) });
+};
+
+export const putOfficialReplyHandler: RequestHandler = async (req, res) => {
+  const { id } = res.locals.params as IdParams;
+  res.json({ data: await putOfficialReply(req.auth!.id, id, req.body as PutReviewReplyBody) });
+};
+
+export const deleteOfficialReplyHandler: RequestHandler = async (req, res) => {
+  const { id } = res.locals.params as IdParams;
+  await deleteOfficialReply(req.auth!.id, id);
+  res.sendStatus(204);
 };
 
 export const createReviewHelpfulHandlers = () => ({

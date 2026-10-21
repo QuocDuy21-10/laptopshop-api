@@ -2,6 +2,7 @@ import {
   createReviewBody,
   listProductReviewsQuery,
   helpfulReviewIdsQuery,
+  putReviewReplyBody,
 } from "modules/reviews/reviews.schema";
 
 describe("review schemas", () => {
@@ -51,5 +52,14 @@ describe("review schemas", () => {
         reviewIds: Array.from({ length: 51 }, (_, i) => i + 1).join(","),
       }),
     ).toThrow();
+  });
+
+  it("strictly trims and bounds official reply content", () => {
+    expect(putReviewReplyBody.parse({ content: "  Phản hồi chính thức  " })).toEqual({
+      content: "Phản hồi chính thức",
+    });
+    expect(() => putReviewReplyBody.parse({ content: "" })).toThrow();
+    expect(() => putReviewReplyBody.parse({ content: "x", extra: true })).toThrow();
+    expect(() => putReviewReplyBody.parse({ content: "x".repeat(1001) })).toThrow();
   });
 });

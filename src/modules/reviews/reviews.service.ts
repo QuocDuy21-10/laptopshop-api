@@ -379,6 +379,10 @@ export const deleteMyReview = async (userId: number, reviewId: number): Promise<
       data: { deletedAt: now },
     });
     await tx.reviewHelpful.deleteMany({ where: { reviewId } });
+    await tx.reviewReply.updateMany({
+      where: { reviewId, deletedAt: null },
+      data: { deletedAt: now },
+    });
     const images =
       (await tx.reviewImage.findMany({
         where: { reviewId, status: { in: ["PENDING", "READY"] }, deletedAt: null },
