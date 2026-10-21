@@ -4,6 +4,7 @@ import {
   deleteMyReview,
   getAdminReviewSummary,
   moderateReview,
+  updateMyReview,
 } from "modules/reviews/reviews.service";
 import { createCompletedOrderItem, createProduct, createUser, resetDb } from "./fixtures";
 
@@ -247,6 +248,65 @@ describe("review database invariants", () => {
     expect(
       (await prisma.review.findUniqueOrThrow({ where: { id: deleted.id } })).deletedAt,
     ).toBeNull();
+  });
+
+  it("never writes moderation metadata after a concurrent customer delete", async () => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const user = await createUser();
+      const admin = await createUser();
+      const product = await createProduct(2);
+      const item = await createCompletedOrderItem(user.id, product.id);
+      const review = await prisma.review.create({
+        data: {
+          ...reviewData(user.id, product.id, item.id),
+          status: "HIDDEN",
+          hiddenReason: "Cần xem lại",
+        },
+      });
+
+      await Promise.allSettled([
+        moderateReview(admin.id, review.id, { status: "PUBLISHED" }),
+        deleteMyReview(user.id, review.id),
+      ]);
+
+      const final = await prisma.review.findUniqueOrThrow({ where: { id: review.id } });
+      expect(final.deletedAt).not.toBeNull();
+      if (final.status === "PUBLISHED" && final.moderatedAt) {
+        expect(final.moderatedById).toBe(admin.id);
+        expect(final.hiddenReason).toBeNull();
+        expect(final.moderatedAt.getTime()).toBeLessThanOrEqual(final.deletedAt!.getTime());
+      } else {
+        expect(final.status).toBe("HIDDEN");
+        expect(final.hiddenReason).toBe("Cần xem lại");
+        expect(final.moderatedAt).toBeNull();
+        expect(final.moderatedById).toBeNull();
+      }
+    }
+  });
+
+  it("never updates review content after a concurrent customer delete", async () => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const user = await createUser();
+      const product = await createProduct(2);
+      const item = await createCompletedOrderItem(user.id, product.id);
+      const review = await prisma.review.create({ data: reviewData(user.id, product.id, item.id) });
+
+      await Promise.allSettled([
+        updateMyReview(user.id, review.id, { content: "Nội dung mới đủ dài sau chỉnh sửa." }),
+        deleteMyReview(user.id, review.id),
+      ]);
+
+      const final = await prisma.review.findUniqueOrThrow({ where: { id: review.id } });
+      expect(final.deletedAt).not.toBeNull();
+      expect([
+        "Máy chạy ổn định cho công việc hằng ngày.",
+        "Nội dung mới đủ dài sau chỉnh sửa.",
+      ]).toContain(final.content);
+      if (final.content === "Nội dung mới đủ dài sau chỉnh sửa.") {
+        expect(final.rating).toBe(5);
+      }
+      expect(final.contentUpdatedAt.getTime()).toBeLessThanOrEqual(final.deletedAt!.getTime());
+    }
   });
 
   it("never republishes a hidden review through delete and rewrite", async () => {

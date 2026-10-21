@@ -34,7 +34,10 @@ const adminReviewRow = {
   moderatedBy: null,
 };
 
-beforeEach(resetPrisma);
+beforeEach(() => {
+  resetPrisma();
+  prismaMock.$queryRaw.mockResolvedValue([{ id: 18, status: "PUBLISHED", deletedAt: null }]);
+});
 
 describe("admin review routes", () => {
   it("rejects non-admins", async () => {
@@ -69,10 +72,24 @@ describe("admin review routes", () => {
           rating: 5,
           status: "HIDDEN",
           deletedAt: null,
+          createdAt: {
+            gte: new Date("2026-09-30T17:00:00.000Z"),
+            lt: new Date("2026-10-31T17:00:00.000Z"),
+          },
         }),
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       }),
     );
+  });
+
+  it("rejects an admin date range that is reversed", async () => {
+    const res = await request(buildApp())
+      .get("/api/v1/admin/reviews?from=2026-10-21&to=2026-10-20")
+      .set("Cookie", cookieFor(ADMIN));
+
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("VALIDATION_ERROR");
+    expect(prismaMock.review.findMany).not.toHaveBeenCalled();
   });
 
   it("returns summary with average limited to active public reviews", async () => {
@@ -124,15 +141,14 @@ describe("admin review routes", () => {
   });
 
   it("hides a review with actor, reason and timestamp", async () => {
-    prismaMock.review.findUnique
-      .mockResolvedValueOnce(adminReviewRow)
-      .mockResolvedValueOnce({
-        ...adminReviewRow,
-        status: "HIDDEN",
-        hiddenReason: "Không phù hợp",
-        moderatedById: ADMIN.id,
-      });
-    prismaMock.review.update.mockResolvedValue({
+    prismaMock.review.findUnique.mockResolvedValueOnce(adminReviewRow).mockResolvedValueOnce({
+      ...adminReviewRow,
+      status: "HIDDEN",
+      hiddenReason: "Không phù hợp",
+      moderatedById: ADMIN.id,
+    });
+    prismaMock.review.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.review.findUnique.mockResolvedValue({
       ...adminReviewRow,
       status: "HIDDEN",
       hiddenReason: "Không phù hợp",
@@ -145,8 +161,9 @@ describe("admin review routes", () => {
       .send({ status: "HIDDEN", reason: "Không phù hợp" });
 
     expect(res.status).toBe(200);
-    expect(prismaMock.review.update).toHaveBeenCalledWith(
+    expect(prismaMock.review.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: 18, deletedAt: null, status: "PUBLISHED" },
         data: expect.objectContaining({
           status: "HIDDEN",
           hiddenReason: "Không phù hợp",
@@ -166,7 +183,9 @@ describe("admin review routes", () => {
     prismaMock.review.findUnique
       .mockResolvedValueOnce(hidden)
       .mockResolvedValueOnce({ ...adminReviewRow, status: "PUBLISHED", hiddenReason: null });
-    prismaMock.review.update.mockResolvedValue({
+    prismaMock.$queryRaw.mockResolvedValue([{ id: 18, status: "HIDDEN", deletedAt: null }]);
+    prismaMock.review.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.review.findUnique.mockResolvedValue({
       ...adminReviewRow,
       status: "PUBLISHED",
       hiddenReason: null,
@@ -178,8 +197,9 @@ describe("admin review routes", () => {
       .send({ status: "PUBLISHED" });
 
     expect(res.status).toBe(200);
-    expect(prismaMock.review.update).toHaveBeenCalledWith(
+    expect(prismaMock.review.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
+        where: { id: 18, deletedAt: null, status: "HIDDEN" },
         data: expect.objectContaining({ status: "PUBLISHED", hiddenReason: null }),
       }),
     );
@@ -202,7 +222,9 @@ describe("admin review routes", () => {
     prismaMock.review.findUnique
       .mockResolvedValueOnce(hidden)
       .mockResolvedValueOnce({ ...hidden, hiddenReason: "Mới" });
-    prismaMock.review.update.mockResolvedValue({ ...hidden, hiddenReason: "Mới" });
+    prismaMock.$queryRaw.mockResolvedValue([{ id: 18, status: "HIDDEN", deletedAt: null }]);
+    prismaMock.review.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.review.findUnique.mockResolvedValue({ ...hidden, hiddenReason: "Mới" });
 
     const res = await request(buildApp())
       .patch("/api/v1/admin/reviews/18/moderation")
@@ -210,7 +232,21 @@ describe("admin review routes", () => {
       .send({ status: "HIDDEN", reason: "Mới" });
 
     expect(res.status).toBe(200);
-    expect(prismaMock.review.update).toHaveBeenCalled();
+    expect(prismaMock.review.updateMany).toHaveBeenCalled();
+  });
+
+  it("returns a conflict when moderation loses the review state race", async () => {
+    prismaMock.review.findUnique.mockResolvedValue(adminReviewRow);
+    prismaMock.review.updateMany.mockResolvedValue({ count: 0 });
+
+    const res = await request(buildApp())
+      .patch("/api/v1/admin/reviews/18/moderation")
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ status: "HIDDEN", reason: "Không phù hợp" });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("REVIEW_STATE_CHANGED");
+    expect(prismaMock.review.findUnique).toHaveBeenCalledTimes(1);
   });
 
   it("cannot restore a deleted review", async () => {
