@@ -16,12 +16,13 @@ const roundRating = (rating: number | null): number | null =>
 export const getReviewStatsForProductIds = async (productIds: number[]) => {
   if (!productIds.length) return new Map<number, ProductReviewSummary>();
 
-  const rows = await prisma.review.groupBy({
-    by: ["productId"],
-    where: { productId: { in: productIds }, status: "PUBLISHED", deletedAt: null },
-    _avg: { rating: true },
-    _count: { _all: true },
-  });
+  const rows =
+    (await prisma.review.groupBy({
+      by: ["productId"],
+      where: { productId: { in: productIds }, status: "PUBLISHED", deletedAt: null },
+      _avg: { rating: true },
+      _count: { _all: true },
+    })) ?? [];
   const byProductId = new Map(
     rows.map(
       (row) =>
