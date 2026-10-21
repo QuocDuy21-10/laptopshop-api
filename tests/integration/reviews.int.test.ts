@@ -57,6 +57,65 @@ describe("review database invariants", () => {
     expect(item.id).toBeGreaterThan(0);
   });
 
+  it("lets exactly one concurrent reactivation clear deletedAt", async () => {
+    const user = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(user.id, product.id);
+    const deleted = await prisma.review.create({
+      data: {
+        ...reviewData(user.id, product.id, item.id),
+        deletedAt: new Date(),
+      },
+    });
+
+    const results = await Promise.allSettled([
+      createReview(user.id, product.id, {
+        rating: 5,
+        content: "Nội dung viết lại lần một đủ dài.",
+        isAnonymous: true,
+      }),
+      createReview(user.id, product.id, {
+        rating: 4,
+        content: "Nội dung viết lại lần hai đủ dài.",
+        isAnonymous: true,
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(
+      results
+        .filter((result) => result.status === "rejected")
+        .map((result) => (result as PromiseRejectedResult).reason.code),
+    ).toEqual(["REVIEW_ALREADY_EXISTS"]);
+    expect(
+      (await prisma.review.findUniqueOrThrow({ where: { id: deleted.id } })).deletedAt,
+    ).toBeNull();
+  });
+
+  it("never republishes a hidden review through delete and rewrite", async () => {
+    const user = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(user.id, product.id);
+    const hidden = await prisma.review.create({
+      data: {
+        ...reviewData(user.id, product.id, item.id),
+        status: "HIDDEN",
+        deletedAt: new Date(),
+      },
+    });
+
+    const rewritten = await createReview(user.id, product.id, {
+      rating: 5,
+      content: "Nội dung ẩn được viết lại đủ dài.",
+      isAnonymous: true,
+    });
+
+    expect(rewritten.status).toBe("HIDDEN");
+    expect((await prisma.review.findUniqueOrThrow({ where: { id: hidden.id } })).status).toBe(
+      "HIDDEN",
+    );
+  });
+
   it("allows only one review per user and product", async () => {
     const user = await createUser();
     const product = await createProduct(3);

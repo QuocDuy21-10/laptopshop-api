@@ -7,8 +7,14 @@ import {
   getProductReviewSummaryHandler,
   getReviewEligibilityHandler,
   listProductReviewsHandler,
+  updateMyReviewHandler,
+  deleteMyReviewHandler,
 } from "modules/reviews/reviews.controller";
-import { createReviewBody, listProductReviewsQuery } from "modules/reviews/reviews.schema";
+import {
+  createReviewBody,
+  listProductReviewsQuery,
+  updateReviewBody,
+} from "modules/reviews/reviews.schema";
 
 export const productReviewRoutes = Router();
 
@@ -36,4 +42,11 @@ productReviewRoutes.get(
 );
 
 export const reviewRoutes = Router();
+reviewRoutes.patch(
+  "/:id",
+  authenticate,
+  validate({ params: idParams, body: updateReviewBody }),
+  updateMyReviewHandler,
+);
+reviewRoutes.delete("/:id", authenticate, validate({ params: idParams }), deleteMyReviewHandler);
 export const adminReviewRoutes = Router();

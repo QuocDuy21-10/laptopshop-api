@@ -17,7 +17,9 @@ export const createReviewBody = z
   })
   .strict();
 
-export const updateReviewBody = createReviewBody.partial();
+export const updateReviewBody = createReviewBody
+  .partial()
+  .refine((value) => Object.keys(value).length > 0, "At least one review field is required");
 
 export type CreateReviewBody = z.infer<typeof createReviewBody>;
 export type UpdateReviewBody = z.infer<typeof updateReviewBody>;

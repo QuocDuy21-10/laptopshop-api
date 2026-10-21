@@ -30,6 +30,12 @@ const ownerReviewRow = {
   contentUpdatedAt: new Date("2026-10-21T04:00:00.000Z"),
 };
 
+const hiddenOwnerReviewRow = { ...ownerReviewRow, status: "HIDDEN" as const };
+const deletedOwnerReviewRow = {
+  ...ownerReviewRow,
+  deletedAt: new Date("2026-10-20T03:00:00.000Z"),
+};
+
 beforeEach(resetPrisma);
 
 describe("GET /api/v1/products/:id/reviews", () => {
@@ -209,5 +215,141 @@ describe("review eligibility and creation", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
+  });
+});
+
+describe("customer review lifecycle", () => {
+  it("lets the owner edit a review and keeps hidden status", async () => {
+    prismaMock.review.findFirst.mockResolvedValue(hiddenOwnerReviewRow);
+    prismaMock.review.update.mockResolvedValue({
+      ...hiddenOwnerReviewRow,
+      content: "Nội dung mới đủ dài hơn.",
+      contentUpdatedAt: new Date("2026-10-21T05:00:00.000Z"),
+    });
+
+    const res = await request(buildApp())
+      .patch("/api/v1/reviews/18")
+      .set("Cookie", cookieFor(USER))
+      .send({ content: "Nội dung mới đủ dài hơn." });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe("HIDDEN");
+    expect(prismaMock.review.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 18, userId: USER.id },
+        data: expect.objectContaining({ content: "Nội dung mới đủ dài hơn." }),
+      }),
+    );
+  });
+
+  it("requires fullName when an owner changes to public name", async () => {
+    prismaMock.review.findFirst.mockResolvedValue(ownerReviewRow);
+    prismaMock.user.findUnique.mockResolvedValue({ fullName: null });
+
+    const res = await request(buildApp())
+      .patch("/api/v1/reviews/18")
+      .set("Cookie", cookieFor(USER))
+      .send({ isAnonymous: false });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("REVIEW_FULL_NAME_REQUIRED");
+  });
+
+  it("allows editing a review for an inactive product", async () => {
+    prismaMock.review.findFirst.mockResolvedValue(ownerReviewRow);
+    prismaMock.review.update.mockResolvedValue(ownerReviewRow);
+
+    const res = await request(buildApp())
+      .patch("/api/v1/reviews/18")
+      .set("Cookie", cookieFor(USER))
+      .send({ rating: 4 });
+
+    expect(res.status).toBe(200);
+  });
+
+  it("returns not found for another owner or a missing review", async () => {
+    prismaMock.review.findFirst.mockResolvedValue(null);
+
+    const res = await request(buildApp())
+      .patch("/api/v1/reviews/18")
+      .set("Cookie", cookieFor({ id: 2, role: "USER" }))
+      .send({ rating: 4 });
+
+    expect(res.status).toBe(404);
+    expect(res.body.error.code).toBe("REVIEW_NOT_FOUND");
+  });
+
+  it("rejects editing a soft-deleted review", async () => {
+    prismaMock.review.findFirst.mockResolvedValue(deletedOwnerReviewRow);
+
+    const res = await request(buildApp())
+      .patch("/api/v1/reviews/18")
+      .set("Cookie", cookieFor(USER))
+      .send({ rating: 4 });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("REVIEW_DELETED");
+  });
+
+  it("soft-deletes a review and makes repeated DELETE idempotent", async () => {
+    prismaMock.review.findFirst
+      .mockResolvedValueOnce(ownerReviewRow)
+      .mockResolvedValueOnce(deletedOwnerReviewRow);
+
+    const first = await request(buildApp())
+      .delete("/api/v1/reviews/18")
+      .set("Cookie", cookieFor(USER));
+    const second = await request(buildApp())
+      .delete("/api/v1/reviews/18")
+      .set("Cookie", cookieFor(USER));
+
+    expect(first.status).toBe(204);
+    expect(second.status).toBe(204);
+    expect(prismaMock.review.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 18, userId: USER.id },
+        data: { deletedAt: expect.any(Date) },
+      }),
+    );
+  });
+
+  it("allows rewriting a deleted public review", async () => {
+    prismaMock.product.findUnique.mockResolvedValue({ id: 12 });
+    prismaMock.review.findUnique
+      .mockResolvedValueOnce(deletedOwnerReviewRow)
+      .mockResolvedValueOnce({ ...ownerReviewRow, deletedAt: null });
+    prismaMock.orderDetail.findFirst.mockResolvedValue({ id: 91 });
+    prismaMock.review.updateMany.mockResolvedValue({ count: 1 });
+
+    const res = await request(buildApp())
+      .post("/api/v1/products/12/reviews")
+      .set("Cookie", cookieFor(USER))
+      .send({ rating: 5, content: "Nội dung viết lại đủ dài.", isAnonymous: true });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe("PUBLISHED");
+    expect(prismaMock.review.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 18, userId: USER.id, deletedAt: { not: null } } }),
+    );
+  });
+
+  it("keeps a previously hidden review hidden when it is rewritten", async () => {
+    prismaMock.product.findUnique.mockResolvedValue({ id: 12 });
+    prismaMock.review.findUnique
+      .mockResolvedValueOnce({
+        ...hiddenOwnerReviewRow,
+        deletedAt: new Date("2026-10-20T03:00:00.000Z"),
+      })
+      .mockResolvedValueOnce({ ...hiddenOwnerReviewRow, deletedAt: null });
+    prismaMock.orderDetail.findFirst.mockResolvedValue({ id: 91 });
+    prismaMock.review.updateMany.mockResolvedValue({ count: 1 });
+
+    const res = await request(buildApp())
+      .post("/api/v1/products/12/reviews")
+      .set("Cookie", cookieFor(USER))
+      .send({ rating: 5, content: "Nội dung ẩn viết lại đủ dài.", isAnonymous: true });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.status).toBe("HIDDEN");
   });
 });

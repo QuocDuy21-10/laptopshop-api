@@ -8,6 +8,7 @@ import {
   toOwnerReviewDto,
   toPublicReviewDto,
   type OwnerReviewDto,
+  type OwnerReviewRow,
   type ReviewEligibilityDto,
   type ReviewEligibilityReason,
   type PublicReviewDto,
@@ -16,6 +17,7 @@ import {
 } from "modules/reviews/reviews.mapper";
 import type { ListProductReviewsQuery } from "modules/reviews/reviews.schema";
 import type { CreateReviewBody } from "modules/reviews/reviews.schema";
+import type { UpdateReviewBody } from "modules/reviews/reviews.schema";
 
 const publicReviewWhere = (productId: number, rating?: number): Prisma.ReviewWhereInput => ({
   productId,
@@ -45,11 +47,22 @@ const reviewNotEligible = (reason: Exclude<ReviewEligibilityReason, "ALREADY_REV
     reason,
   });
 
-const getExistingReview = (userId: number, productId: number) =>
-  prisma.review.findUnique({
+const getExistingReview = async (userId: number, productId: number) =>
+  (await prisma.review.findUnique({
     where: { userId_productId: { userId, productId } },
     select: ownerReviewSelect,
-  });
+  })) as OwnerReviewRow | null;
+
+const requirePublicName = async (userId: number, isAnonymous: boolean) => {
+  if (isAnonymous) return;
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { fullName: true } });
+  if (!user?.fullName?.trim())
+    throw new AppError(
+      "A full name is required for a public review",
+      409,
+      "REVIEW_FULL_NAME_REQUIRED",
+    );
+};
 
 const purchaseRows = (userId: number, productId: number) =>
   prisma.orderDetail.findMany({
@@ -171,17 +184,28 @@ export const createReview = async (
   });
   if (!purchase) throw reviewNotEligible("ORDER_NOT_COMPLETED");
 
-  if (!input.isAnonymous) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { fullName: true },
+  await requirePublicName(userId, input.isAnonymous);
+
+  if (existing?.deletedAt !== null && existing !== null) {
+    const { count } = await prisma.review.updateMany({
+      where: { id: existing.id, userId, deletedAt: { not: null } },
+      data: {
+        rating: input.rating,
+        title: input.title?.trim() || null,
+        content: input.content.trim(),
+        isAnonymous: input.isAnonymous,
+        orderDetailId: purchase.id,
+        deletedAt: null,
+        contentUpdatedAt: new Date(),
+      },
     });
-    if (!user?.fullName?.trim())
-      throw new AppError(
-        "A full name is required for a public review",
-        409,
-        "REVIEW_FULL_NAME_REQUIRED",
-      );
+    if (count === 0)
+      throw new AppError("You already reviewed this product", 409, "REVIEW_ALREADY_EXISTS");
+    const reactivated = (await prisma.review.findUnique({
+      where: { id: existing.id },
+      select: ownerReviewSelect,
+    })) as OwnerReviewRow;
+    return toOwnerReviewDto(reactivated);
   }
 
   try {
@@ -198,10 +222,51 @@ export const createReview = async (
       },
       select: ownerReviewSelect,
     });
-    return toOwnerReviewDto(review);
+    return toOwnerReviewDto(review as OwnerReviewRow);
   } catch (error) {
     if (isUniqueViolation(error))
       throw new AppError("You already reviewed this product", 409, "REVIEW_ALREADY_EXISTS");
     throw error;
   }
+};
+
+export const updateMyReview = async (
+  userId: number,
+  reviewId: number,
+  input: UpdateReviewBody,
+): Promise<OwnerReviewDto> => {
+  const existing = (await prisma.review.findFirst({
+    where: { id: reviewId, userId },
+    select: ownerReviewSelect,
+  })) as OwnerReviewRow | null;
+  if (!existing) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
+  if (existing.deletedAt !== null)
+    throw new AppError("Review has been deleted", 409, "REVIEW_DELETED");
+  if (input.isAnonymous === false) await requirePublicName(userId, false);
+
+  const review = await prisma.review.update({
+    where: { id: reviewId, userId },
+    data: {
+      ...(input.rating === undefined ? {} : { rating: input.rating }),
+      ...(input.title === undefined ? {} : { title: input.title.trim() || null }),
+      ...(input.content === undefined ? {} : { content: input.content.trim() }),
+      ...(input.isAnonymous === undefined ? {} : { isAnonymous: input.isAnonymous }),
+      contentUpdatedAt: new Date(),
+    },
+    select: ownerReviewSelect,
+  });
+  return toOwnerReviewDto(review as OwnerReviewRow);
+};
+
+export const deleteMyReview = async (userId: number, reviewId: number): Promise<void> => {
+  const existing = await prisma.review.findFirst({
+    where: { id: reviewId, userId },
+    select: { id: true, deletedAt: true },
+  });
+  if (!existing) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
+  if (existing.deletedAt !== null) return;
+  await prisma.review.update({
+    where: { id: reviewId, userId },
+    data: { deletedAt: new Date() },
+  });
 };
