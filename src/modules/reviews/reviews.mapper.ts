@@ -72,6 +72,69 @@ export type ReviewEligibilityDto = {
   willRequireModeration: boolean;
 };
 
+export const adminReviewSelect = {
+  id: true,
+  userId: true,
+  productId: true,
+  orderDetailId: true,
+  rating: true,
+  title: true,
+  content: true,
+  isAnonymous: true,
+  status: true,
+  deletedAt: true,
+  createdAt: true,
+  contentUpdatedAt: true,
+  hiddenReason: true,
+  moderatedAt: true,
+  user: { select: { id: true, username: true, fullName: true } },
+  product: { select: { id: true, name: true } },
+  orderDetail: {
+    select: {
+      id: true,
+      order: { select: { id: true, status: true, paymentStatus: true, completedAt: true } },
+    },
+  },
+  moderatedBy: { select: { id: true, username: true, fullName: true } },
+} satisfies Prisma.ReviewSelect;
+
+export type AdminReviewRow = Prisma.ReviewGetPayload<{ select: typeof adminReviewSelect }>;
+
+export const toAdminReviewDto = (review: AdminReviewRow) => ({
+  id: review.id,
+  rating: review.rating,
+  title: review.title,
+  content: review.content,
+  isAnonymous: review.isAnonymous,
+  status: review.status,
+  deletedAt: review.deletedAt,
+  createdAt: review.createdAt,
+  contentUpdatedAt: review.contentUpdatedAt,
+  hiddenReason: review.hiddenReason,
+  moderatedAt: review.moderatedAt,
+  author: review.user,
+  product: review.product,
+  purchase: {
+    orderId: review.orderDetail.order.id,
+    orderDetailId: review.orderDetail.id,
+    status: review.orderDetail.order.status,
+    paymentStatus: review.orderDetail.order.paymentStatus,
+    completedAt: review.orderDetail.order.completedAt,
+  },
+  moderatedBy: review.moderatedBy,
+});
+
+export type AdminReviewListItemDto = ReturnType<typeof toAdminReviewDto>;
+export type AdminReviewDetailDto = ReturnType<typeof toAdminReviewDto>;
+
+export type AdminReviewSummaryDto = {
+  totalReviews: number;
+  publishedReviews: number;
+  hiddenReviews: number;
+  deletedReviews: number;
+  averageRating: number | null;
+};
+
 export type ReviewSummaryDto = {
   productId: number;
   averageRating: number | null;

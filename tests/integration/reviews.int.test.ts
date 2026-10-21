@@ -1,5 +1,9 @@
 import { prisma } from "config/client";
-import { createReview } from "modules/reviews/reviews.service";
+import {
+  createReview,
+  getAdminReviewSummary,
+  moderateReview,
+} from "modules/reviews/reviews.service";
 import { createCompletedOrderItem, createProduct, createUser, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
@@ -114,6 +118,22 @@ describe("review database invariants", () => {
     expect((await prisma.review.findUniqueOrThrow({ where: { id: hidden.id } })).status).toBe(
       "HIDDEN",
     );
+  });
+
+  it("updates admin summary across create, moderation and soft delete", async () => {
+    const user = await createUser();
+    const admin = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(user.id, product.id);
+    const review = await prisma.review.create({ data: reviewData(user.id, product.id, item.id) });
+
+    expect((await getAdminReviewSummary()).publishedReviews).toBe(1);
+    await moderateReview(admin.id, review.id, { status: "HIDDEN", reason: "Cần xem lại" });
+    expect((await getAdminReviewSummary()).hiddenReviews).toBe(1);
+    await moderateReview(admin.id, review.id, { status: "PUBLISHED" });
+    expect((await getAdminReviewSummary()).publishedReviews).toBe(1);
+    await prisma.review.update({ where: { id: review.id }, data: { deletedAt: new Date() } });
+    expect((await getAdminReviewSummary()).deletedReviews).toBe(1);
   });
 
   it("allows only one review per user and product", async () => {

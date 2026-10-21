@@ -5,10 +5,16 @@ import { pageArgs, pageMeta } from "lib/http";
 import {
   publicReviewSelect,
   ownerReviewSelect,
+  adminReviewSelect,
+  toAdminReviewDto,
   toOwnerReviewDto,
   toPublicReviewDto,
   type OwnerReviewDto,
   type OwnerReviewRow,
+  type AdminReviewDetailDto,
+  type AdminReviewListItemDto,
+  type AdminReviewRow,
+  type AdminReviewSummaryDto,
   type ReviewEligibilityDto,
   type ReviewEligibilityReason,
   type PublicReviewDto,
@@ -16,8 +22,12 @@ import {
   type ReviewSummaryDto,
 } from "modules/reviews/reviews.mapper";
 import type { ListProductReviewsQuery } from "modules/reviews/reviews.schema";
-import type { CreateReviewBody } from "modules/reviews/reviews.schema";
-import type { UpdateReviewBody } from "modules/reviews/reviews.schema";
+import type {
+  AdminListReviewsQuery,
+  CreateReviewBody,
+  ModerateReviewBody,
+  UpdateReviewBody,
+} from "modules/reviews/reviews.schema";
 
 const publicReviewWhere = (productId: number, rating?: number): Prisma.ReviewWhereInput => ({
   productId,
@@ -82,6 +92,30 @@ const reviewOrderBy = (
   if (sort === "lowest") return [{ rating: "asc" }, { createdAt: "desc" }, { id: "desc" }];
   return [{ createdAt: "desc" }, { id: "desc" }];
 };
+
+const adminReviewWhere = (query: AdminListReviewsQuery): Prisma.ReviewWhereInput => ({
+  ...(query.productId === undefined ? {} : { productId: query.productId }),
+  ...(query.rating === undefined ? {} : { rating: query.rating }),
+  ...(query.status === undefined ? {} : { status: query.status }),
+  ...(query.deleted === undefined ? {} : { deletedAt: query.deleted ? { not: null } : null }),
+  ...(query.q
+    ? {
+        OR: [
+          { product: { name: { contains: query.q } } },
+          { user: { fullName: { contains: query.q } } },
+          { user: { username: { contains: query.q } } },
+        ],
+      }
+    : {}),
+  ...(query.from || query.to
+    ? {
+        createdAt: {
+          ...(query.from ? { gte: new Date(`${query.from}T00:00:00.000Z`) } : {}),
+          ...(query.to ? { lt: new Date(`${query.to}T23:59:59.999Z`) } : {}),
+        },
+      }
+    : {}),
+});
 
 export const listPublishedReviews = async (
   productId: number,
@@ -269,4 +303,80 @@ export const deleteMyReview = async (userId: number, reviewId: number): Promise<
     where: { id: reviewId, userId },
     data: { deletedAt: new Date() },
   });
+};
+
+export const listAdminReviews = async (
+  query: AdminListReviewsQuery,
+): Promise<{ items: AdminReviewListItemDto[]; meta: ReturnType<typeof pageMeta> }> => {
+  const where = adminReviewWhere(query);
+  const [total, rows] = await Promise.all([
+    prisma.review.count({ where }),
+    prisma.review.findMany({
+      where,
+      select: adminReviewSelect,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...pageArgs(query),
+    }),
+  ]);
+  return { items: (rows as AdminReviewRow[]).map(toAdminReviewDto), meta: pageMeta(query, total) };
+};
+
+export const getAdminReviewSummary = async (): Promise<AdminReviewSummaryDto> => {
+  const [totalReviews, publishedReviews, hiddenReviews, deletedReviews, groups] = await Promise.all(
+    [
+      prisma.review.count({ where: { deletedAt: null } }),
+      prisma.review.count({ where: { status: "PUBLISHED", deletedAt: null } }),
+      prisma.review.count({ where: { status: "HIDDEN", deletedAt: null } }),
+      prisma.review.count({ where: { deletedAt: { not: null } } }),
+      prisma.review.groupBy({
+        by: ["rating"],
+        where: { status: "PUBLISHED", deletedAt: null },
+        _count: { _all: true },
+      }),
+    ],
+  );
+  const publicTotal = groups.reduce((sum, group) => sum + group._count._all, 0);
+  const weighted = groups.reduce((sum, group) => sum + group.rating * group._count._all, 0);
+  return {
+    totalReviews,
+    publishedReviews,
+    hiddenReviews,
+    deletedReviews,
+    averageRating: publicTotal ? Math.round((weighted / publicTotal) * 10) / 10 : null,
+  };
+};
+
+export const getAdminReview = async (reviewId: number): Promise<AdminReviewDetailDto> => {
+  const review = (await prisma.review.findUnique({
+    where: { id: reviewId },
+    select: adminReviewSelect,
+  })) as AdminReviewRow | null;
+  if (!review) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
+  return toAdminReviewDto(review);
+};
+
+export const moderateReview = async (
+  adminId: number,
+  reviewId: number,
+  input: ModerateReviewBody,
+): Promise<AdminReviewDetailDto> => {
+  const current = await prisma.review.findUnique({
+    where: { id: reviewId },
+    select: { id: true, status: true, deletedAt: true },
+  });
+  if (!current) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
+  if (current.deletedAt !== null)
+    throw new AppError("Review has been deleted", 409, "REVIEW_DELETED");
+  if (current.status === "PUBLISHED" && input.status === "PUBLISHED")
+    return getAdminReview(reviewId);
+  await prisma.review.update({
+    where: { id: reviewId },
+    data: {
+      status: input.status,
+      hiddenReason: input.status === "HIDDEN" ? input.reason! : null,
+      moderatedById: adminId,
+      moderatedAt: new Date(),
+    },
+  });
+  return getAdminReview(reviewId);
 };

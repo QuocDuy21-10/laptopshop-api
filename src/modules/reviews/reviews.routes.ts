@@ -4,15 +4,21 @@ import { authenticate } from "middlewares/authenticate";
 import { validate } from "middlewares/validate";
 import {
   createReviewHandler,
+  getAdminReviewHandler,
+  getAdminReviewSummaryHandler,
   getProductReviewSummaryHandler,
   getReviewEligibilityHandler,
+  listAdminReviewsHandler,
   listProductReviewsHandler,
+  moderateReviewHandler,
   updateMyReviewHandler,
   deleteMyReviewHandler,
 } from "modules/reviews/reviews.controller";
 import {
+  adminListReviewsQuery,
   createReviewBody,
   listProductReviewsQuery,
+  moderateReviewBody,
   updateReviewBody,
 } from "modules/reviews/reviews.schema";
 
@@ -50,3 +56,11 @@ reviewRoutes.patch(
 );
 reviewRoutes.delete("/:id", authenticate, validate({ params: idParams }), deleteMyReviewHandler);
 export const adminReviewRoutes = Router();
+adminReviewRoutes.get("/summary", getAdminReviewSummaryHandler);
+adminReviewRoutes.get("/", validate({ query: adminListReviewsQuery }), listAdminReviewsHandler);
+adminReviewRoutes.get("/:id", validate({ params: idParams }), getAdminReviewHandler);
+adminReviewRoutes.patch(
+  "/:id/moderation",
+  validate({ params: idParams, body: moderateReviewBody }),
+  moderateReviewHandler,
+);

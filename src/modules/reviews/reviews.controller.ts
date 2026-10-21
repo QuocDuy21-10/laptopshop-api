@@ -4,12 +4,18 @@ import { listPublishedReviews, getPublishedReviewSummary } from "modules/reviews
 import {
   createReview,
   deleteMyReview,
+  getAdminReview,
+  getAdminReviewSummary,
   getReviewEligibility,
+  listAdminReviews,
+  moderateReview,
   updateMyReview,
 } from "modules/reviews/reviews.service";
 import type {
+  AdminListReviewsQuery,
   CreateReviewBody,
   ListProductReviewsQuery,
+  ModerateReviewBody,
   UpdateReviewBody,
 } from "modules/reviews/reviews.schema";
 
@@ -45,4 +51,23 @@ export const deleteMyReviewHandler: RequestHandler = async (req, res) => {
   const { id } = res.locals.params as IdParams;
   await deleteMyReview(req.auth!.id, id);
   res.sendStatus(204);
+};
+
+export const listAdminReviewsHandler: RequestHandler = async (_req, res) => {
+  const result = await listAdminReviews(res.locals.query as AdminListReviewsQuery);
+  res.json({ data: result.items, meta: result.meta });
+};
+
+export const getAdminReviewSummaryHandler: RequestHandler = async (_req, res) => {
+  res.json({ data: await getAdminReviewSummary() });
+};
+
+export const getAdminReviewHandler: RequestHandler = async (_req, res) => {
+  const { id } = res.locals.params as IdParams;
+  res.json({ data: await getAdminReview(id) });
+};
+
+export const moderateReviewHandler: RequestHandler = async (req, res) => {
+  const { id } = res.locals.params as IdParams;
+  res.json({ data: await moderateReview(req.auth!.id, id, req.body as ModerateReviewBody) });
 };
