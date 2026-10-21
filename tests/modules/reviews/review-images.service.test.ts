@@ -115,6 +115,36 @@ describe("review image lifecycle service", () => {
     );
   });
 
+  it("waits for every upload to settle before cleaning a failed batch", async () => {
+    const deps = storage();
+    let releaseLateUpload!: () => void;
+    const lateUpload = new Promise<void>((resolve) => {
+      releaseLateUpload = resolve;
+    });
+    const putObject = deps.storage.putObject as jest.Mock;
+    putObject
+      .mockRejectedValueOnce(new Error("first upload failed"))
+      .mockImplementationOnce(() => lateUpload);
+    prismaMock.review.findFirst.mockResolvedValue(review);
+    prismaMock.reviewImage.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        image({ status: "DELETING" }),
+        image({ id: 22, position: 1, status: "DELETING" }),
+      ]);
+    prismaMock.reviewImage.create
+      .mockResolvedValueOnce(image({ status: "PENDING" }))
+      .mockResolvedValueOnce(image({ id: 22, position: 1, status: "PENDING" }));
+    prismaMock.reviewImage.updateMany.mockResolvedValue({ count: 2 });
+
+    const pending = addReviewImages(deps, 7, 18, [file("one"), file("two")]);
+    await Promise.resolve();
+    expect(deps.storage.deleteObject).not.toHaveBeenCalled();
+    releaseLateUpload();
+    await expect(pending).rejects.toMatchObject({ code: "REVIEW_IMAGE_STORAGE_UNAVAILABLE" });
+    expect(deps.storage.deleteObject).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects an incomplete or duplicate reorder set", async () => {
     prismaMock.review.findFirst.mockResolvedValue(review);
     prismaMock.reviewImage.findMany.mockResolvedValue([image(), image({ id: 22, position: 1 })]);
