@@ -6,6 +6,7 @@ import {
   adminExportProductsQuery,
   adminListProductsQuery,
   compareQuery,
+  productFacetsQuery,
   listProductsQuery,
   productBody,
   productPatchBody,
@@ -18,6 +19,7 @@ import {
   getAdminProductHandler,
   getFiltersHandler,
   getProductHandler,
+  getProductFacetsHandler,
   listAdminProductsHandler,
   listProductsHandler,
   updateProductHandler,
@@ -27,6 +29,7 @@ export const productRoutes = Router();
 
 productRoutes.get("/", validate({ query: listProductsQuery }), listProductsHandler);
 productRoutes.get("/filters", getFiltersHandler);
+productRoutes.get("/facets", validate({ query: productFacetsQuery }), getProductFacetsHandler);
 // must stay above "/:id", which would otherwise capture "compare"
 productRoutes.get("/compare", validate({ query: compareQuery }), compareProductsHandler);
 productRoutes.get("/:id", validate({ params: idParams }), getProductHandler);

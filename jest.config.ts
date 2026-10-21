@@ -7,7 +7,7 @@ const config: Config = {
   setupFiles: ["<rootDir>/tests/setup-env.ts"],
   transform: { "^.+\\.ts$": ["ts-jest", { diagnostics: false }] },
   moduleNameMapper: {
-    "^(config|middlewares|models|routes|lib|docs|modules)/(.*)$":
+    "^(config|middlewares|models|routes|lib|docs|modules|scripts)/(.*)$":
       "<rootDir>/src/$1/$2",
   },
   clearMocks: true,

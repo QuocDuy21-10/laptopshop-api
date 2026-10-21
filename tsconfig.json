@@ -15,6 +15,7 @@
       "lib/*": ["./src/lib/*"],
       "docs/*": ["./src/docs/*"],
       "modules/*": ["./src/modules/*"],
+      "scripts/*": ["./src/scripts/*"],
     }
   },
   "include": ["src", "tests", "jest.config.ts", "jest.int.config.ts"]
