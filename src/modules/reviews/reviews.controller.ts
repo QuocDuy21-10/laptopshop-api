@@ -1,4 +1,4 @@
-import type { RequestHandler } from "express";
+import type { Request, RequestHandler, Response } from "express";
 import { type IdParams } from "lib/http";
 import { listPublishedReviews, getPublishedReviewSummary } from "modules/reviews/reviews.service";
 import {
@@ -18,6 +18,31 @@ import type {
   ModerateReviewBody,
   UpdateReviewBody,
 } from "modules/reviews/reviews.schema";
+import type { ReviewImageDeps } from "modules/reviews/review-images.service";
+import {
+  addReviewImages,
+  deleteReviewImage,
+  reorderReviewImages,
+} from "modules/reviews/review-images.service";
+import type { ReviewImageOrderBody } from "modules/reviews/reviews.schema";
+
+export const createReviewImageHandlers = (deps: ReviewImageDeps) => ({
+  add: async (req: Request, res: Response) => {
+    const reviewId = Number(res.locals.reviewImageReviewId);
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    res.status(201).json({ data: await addReviewImages(deps, req.auth!.id, reviewId, files) });
+  },
+  reorder: async (req: Request, res: Response) => {
+    const reviewId = Number(res.locals.reviewImageReviewId);
+    const { imageIds } = req.body as ReviewImageOrderBody;
+    res.json({ data: await reorderReviewImages(req.auth!.id, reviewId, imageIds) });
+  },
+  remove: async (req: Request, res: Response) => {
+    const reviewId = Number(res.locals.reviewImageReviewId);
+    await deleteReviewImage(deps, req.auth!.id, reviewId, Number(req.params.imageId));
+    res.sendStatus(204);
+  },
+});
 
 export const listProductReviewsHandler: RequestHandler = async (_req, res) => {
   const { id } = res.locals.params as { id: number };

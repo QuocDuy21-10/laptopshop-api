@@ -56,6 +56,9 @@ import {
   createReviewBody,
   listProductReviewsQuery,
   moderateReviewBody,
+  reviewImageDeleteParams,
+  reviewImageOrderBody,
+  reviewImageParams,
   updateReviewBody,
 } from "modules/reviews/reviews.schema";
 
@@ -272,6 +275,21 @@ const PaymentEvent = registry.register(
 const ReviewAuthor = registry.register(
   "ReviewAuthor",
   z.object({ name: z.string(), anonymous: z.boolean() }),
+);
+const ReviewImage = registry.register(
+  "ReviewImage",
+  z.object({
+    id: z.number(),
+    mimeType: z.literal("image/webp"),
+    byteSize: z.number().int(),
+    width: z.number().int(),
+    height: z.number().int(),
+    position: z.number().int().min(0).max(255),
+    status: z.enum(["PENDING", "READY", "DELETING"]),
+    deletedAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  }),
 );
 const PublicReview = registry.register(
   "PublicReview",
@@ -718,6 +736,44 @@ op({
   request: id,
   ok: [204, "Deleted"],
   errors: { 404: "Review not found" },
+});
+op({
+  method: "post",
+  path: `${v1}/reviews/{id}/images`,
+  summary: "Add images to my review",
+  tag: "reviews",
+  auth: "user",
+  request: {
+    params: reviewImageParams,
+    body: multipart(z.object({ images: z.array(binary).min(1).max(3) })),
+  },
+  ok: [201, "Created", data(z.array(ReviewImage))],
+  errors: {
+    404: "Review not found",
+    409: "Image limit reached",
+    413: "Image too large",
+    503: "Storage unavailable",
+  },
+});
+op({
+  method: "patch",
+  path: `${v1}/reviews/{id}/images/order`,
+  summary: "Reorder my review images",
+  tag: "reviews",
+  auth: "user",
+  request: { params: reviewImageParams, body: json(reviewImageOrderBody) },
+  ok: [200, "Updated", data(z.array(ReviewImage))],
+  errors: { 400: "Invalid image order", 404: "Review not found" },
+});
+op({
+  method: "delete",
+  path: `${v1}/reviews/{id}/images/{imageId}`,
+  summary: "Delete one of my review images",
+  tag: "reviews",
+  auth: "user",
+  request: { params: reviewImageDeleteParams },
+  ok: [204, "Deleted"],
+  errors: { 404: "Review or image not found" },
 });
 
 // cart

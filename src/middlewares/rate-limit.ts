@@ -14,7 +14,12 @@ export const createRedisLimitStore = (client: RedisClientType, prefix: string): 
   });
 
 // separate stores (different key prefixes) so the two limiters never share counters
-export const createLimiters = (stores?: { global?: Store; auth?: Store; advisor?: Store }) => ({
+export const createLimiters = (stores?: {
+  global?: Store;
+  auth?: Store;
+  advisor?: Store;
+  reviewImages?: Store;
+}) => ({
   globalLimiter: rateLimit({
     windowMs: 15 * 60 * 1000,
     limit: 300,
@@ -40,5 +45,13 @@ export const createLimiters = (stores?: { global?: Store; auth?: Store; advisor?
     keyGenerator: (req) => req.advisorRequester?.key ?? req.ip,
     passOnStoreError: true,
     store: stores?.advisor,
+  }),
+  reviewImagesLimiter: rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 30,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: tooMany,
+    store: stores?.reviewImages,
   }),
 });
