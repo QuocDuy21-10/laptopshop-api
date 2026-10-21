@@ -18,6 +18,7 @@ export const REFRESH_RATE_MINIMUMS = [60, 90, 120, 144, 165, 240] as const;
 export const BATTERY_MINIMUMS = [40, 50, 60, 80] as const;
 export const WEIGHT_MAXIMUMS = [1200, 1500, 2000, 2500, 3000] as const;
 export const WARRANTY_MINIMUMS = [12, 24, 36] as const;
+export const MIN_RATING_THRESHOLDS = [3, 4] as const;
 
 export const FACTORIES = factoryOptions.map((o) => o.value);
 export const TARGETS = targetOptions.map((o) => o.value);
@@ -39,6 +40,7 @@ export type ProductFacetKey =
   | "minBatteryWh"
   | "maxWeightGrams"
   | "minWarrantyMonths"
+  | "minRating"
   | "inStock";
 export type FacetMode = "MULTI" | "SINGLE_MIN" | "SINGLE_MAX" | "BOOLEAN";
 export type FacetKind = "categorical" | "exact" | "bucket";
@@ -148,6 +150,16 @@ export const facetDefinitions: readonly FacetDefinition[] = [
     mode: "SINGLE_MIN",
     kind: "bucket",
     options: numericOptions(WARRANTY_MINIMUMS, "tháng"),
+  },
+  {
+    key: "minRating",
+    name: "Đánh giá tối thiểu",
+    mode: "SINGLE_MIN",
+    kind: "bucket",
+    options: [
+      { value: "4", name: "Từ 4 sao" },
+      { value: "3", name: "Từ 3 sao" },
+    ],
   },
   {
     key: "inStock",

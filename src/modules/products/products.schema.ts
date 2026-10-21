@@ -6,6 +6,7 @@ import {
   FACTORIES,
   GPU_BRANDS,
   GPU_TYPES,
+  MIN_RATING_THRESHOLDS,
   PANEL_TYPES,
   PRICE_RANGES,
   REFRESH_RATE_MINIMUMS,
@@ -19,6 +20,7 @@ import {
 export {
   FACTORIES,
   LOW_STOCK_THRESHOLD,
+  MIN_RATING_THRESHOLDS,
   PRICE_RANGES,
   TARGETS,
 } from "modules/products/products.facets";
@@ -102,6 +104,7 @@ export const productFilterFields = {
   minBatteryWh: threshold(BATTERY_MINIMUMS).optional(),
   maxWeightGrams: threshold(WEIGHT_MAXIMUMS).optional(),
   minWarrantyMonths: threshold(WARRANTY_MINIMUMS).optional(),
+  minRating: threshold(MIN_RATING_THRESHOLDS).optional(),
   inStock: flag.optional(),
   q: z.string().trim().min(1).max(100).optional(),
 };
@@ -111,11 +114,12 @@ export type ProductFilterQuery = z.infer<typeof productFacetsQuery>;
 
 export const listProductsQuery = pageQuery.extend({
   ...productFilterFields,
-  sort: z.enum(["price_asc", "price_desc"]).optional(),
+  sort: z.enum(["price_asc", "price_desc", "rating_desc"]).optional(),
 });
 export type ListProductsQuery = z.infer<typeof listProductsQuery>;
 
-export const adminListProductsQuery = listProductsQuery.extend({
+export const adminListProductsQuery = listProductsQuery.omit({ sort: true }).extend({
+  sort: z.enum(["price_asc", "price_desc"]).optional(),
   isActive: flag.optional(),
   stock: z.enum(["low"]).optional(),
 });
