@@ -107,6 +107,7 @@ describe("GET /api/v1/products/:id", () => {
     const res = await request(buildApp()).get("/api/v1/products/1");
     expect(res.status).toBe(200);
     expect(res.body.data.name).toBe("Asus");
+    expect(res.body.data.reviewSummary).toEqual({ averageRating: null, totalReviews: 0 });
   });
 
   it("returns 404 for a hidden product", async () => {

@@ -62,7 +62,9 @@ export const listProducts = async (
 export const getProduct = async (id: number, admin = false) => {
   const product = await prisma.product.findUnique({ where: { id } });
   if (!product || (!admin && !product.isActive)) throw notFound("Product");
-  return toProductDto(product);
+  if (admin) return toProductDto(product);
+  const summaries = await getReviewStatsForProductIds([product.id]);
+  return toCatalogProductDto(product, summaries.get(product.id));
 };
 
 export const compareProducts = async (ids: number[]) => {
