@@ -30,7 +30,7 @@ describe("GET /api/v1/products", () => {
     expect(res.body.meta).toEqual({ page: 1, pageSize: 10, total: 1, totalPages: 1 });
     expect(prismaMock.product.findMany).toHaveBeenCalledWith({
       where: { isActive: true },
-      orderBy: { id: "asc" },
+      orderBy: [{ id: "asc" }],
       skip: 0,
       take: 10,
     });
@@ -45,11 +45,13 @@ describe("GET /api/v1/products", () => {
     expect(prismaMock.product.findMany).toHaveBeenCalledWith({
       where: {
         isActive: true,
-        factory: { in: ["ASUS", "DELL"] },
-        target: { in: ["GAMING"] },
-        OR: [{ price: { lt: 10_000_000 } }, { price: { gt: 20_000_000 } }],
+        AND: [
+          { factory: { in: ["ASUS", "DELL"] } },
+          { target: { in: ["GAMING"] } },
+          { OR: [{ price: { lt: 10_000_000 } }, { price: { gt: 20_000_000 } }] },
+        ],
       },
-      orderBy: { price: "desc" },
+      orderBy: [{ price: "desc" }, { id: "asc" }],
       skip: 5,
       take: 5,
     });
@@ -72,6 +74,11 @@ describe("GET /api/v1/products", () => {
 
   it("rejects an unknown factory", async () => {
     const res = await request(buildApp()).get("/api/v1/products?factory=NOKIA");
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a repeated advanced filter query parameter", async () => {
+    const res = await request(buildApp()).get("/api/v1/products?cpuBrand=INTEL&cpuBrand=AMD");
     expect(res.status).toBe(400);
   });
 
@@ -112,6 +119,31 @@ describe("GET /api/v1/products/filters", () => {
     expect(res.status).toBe(200);
     expect(res.body.data.factoryOptions).toContainEqual({ name: "Asus", value: "ASUS" });
     expect(res.body.data.targetOptions.length).toBeGreaterThan(0);
+    expect(
+      res.body.data.facetDefinitions.map((definition: { key: string }) => definition.key),
+    ).toEqual(
+      expect.arrayContaining(["cpuBrand", "gpuBrand", "gpuType", "ramGb", "panelType", "inStock"]),
+    );
+  });
+});
+
+describe("GET /api/v1/products/facets", () => {
+  it("returns dynamic counts with the parsed filter query", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([
+      { facetKey: "__total__", value: "__total__", count: BigInt(2) },
+      { facetKey: "cpuBrand", value: "INTEL", count: BigInt(2) },
+    ]);
+    const res = await request(buildApp()).get("/api/v1/products/facets?cpuBrand=INTEL&ramGb=16");
+    expect(res.status).toBe(200);
+    expect(res.body.data.total).toBe(2);
+    expect(res.body.data.groups.cpuBrand).toEqual(
+      expect.arrayContaining([{ value: "INTEL", count: 2 }]),
+    );
+  });
+
+  it("rejects an unknown facet value", async () => {
+    const res = await request(buildApp()).get("/api/v1/products/facets?cpuBrand=UNKNOWN");
+    expect(res.status).toBe(400);
   });
 });
 

@@ -69,7 +69,7 @@ describe("CSV exports", () => {
     expect(res.text).toContain("1,Asus,ASUS,GAMING,100,2,0,0");
     expect(prismaMock.product.findMany.mock.calls[0][0].where).toEqual({
       isActive: false,
-      quantity: { lte: 5 },
+      AND: [{ quantity: { lte: 5 } }],
     });
   });
 

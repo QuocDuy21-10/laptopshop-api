@@ -40,30 +40,39 @@ export const advisorRequestSchema = z
 
 export type AdvisorInput = z.infer<typeof advisorRequestSchema>;
 export type AdvisorMode = "ai_enhanced" | "rule_based";
-export type AdvisorCandidate = Pick<
-  Product,
-  | "id"
-  | "name"
-  | "price"
-  | "image"
-  | "detailDesc"
-  | "shortDesc"
-  | "quantity"
-  | "sold"
-  | "factory"
-  | "target"
-  | "isActive"
-  | "cpu"
-  | "gpu"
-  | "ramGb"
-  | "storageGb"
-  | "screenSizeInch"
-  | "screenResolution"
-  | "refreshRateHz"
-  | "batteryWh"
-  | "weightGrams"
-  | "warrantyMonths"
->;
+export type AdvisorCandidate = Omit<
+  Pick<
+    Product,
+    | "id"
+    | "name"
+    | "price"
+    | "image"
+    | "detailDesc"
+    | "shortDesc"
+    | "quantity"
+    | "sold"
+    | "factory"
+    | "target"
+    | "isActive"
+    | "cpu"
+    | "cpuBrand"
+    | "gpu"
+    | "gpuBrand"
+    | "gpuType"
+    | "ramGb"
+    | "storageGb"
+    | "screenSizeInch"
+    | "screenResolution"
+    | "resolutionTier"
+    | "panelType"
+    | "refreshRateHz"
+    | "batteryWh"
+    | "weightGrams"
+    | "warrantyMonths"
+  >,
+  "cpuBrand" | "gpuBrand" | "gpuType" | "resolutionTier" | "panelType"
+> &
+  Partial<Pick<Product, "cpuBrand" | "gpuBrand" | "gpuType" | "resolutionTier" | "panelType">>;
 
 export type AdvisorFeature =
   "cpu" | "gpu" | "ramStorage" | "battery" | "portability" | "display" | "value";

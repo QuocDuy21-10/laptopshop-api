@@ -1,0 +1,6 @@
+ALTER TABLE `products`
+  ADD COLUMN `cpuBrand` VARCHAR(20) NULL,
+  ADD COLUMN `gpuBrand` VARCHAR(20) NULL,
+  ADD COLUMN `gpuType` VARCHAR(20) NULL,
+  ADD COLUMN `resolutionTier` VARCHAR(20) NULL,
+  ADD COLUMN `panelType` VARCHAR(20) NULL;

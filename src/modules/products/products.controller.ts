@@ -7,6 +7,7 @@ import {
   AdminListProductsQuery,
   CompareQuery,
   ListProductsQuery,
+  ProductFilterQuery,
   ProductBody,
   ProductPatchBody,
 } from "modules/products/products.schema";
@@ -19,6 +20,8 @@ import {
   listProducts,
   updateProduct,
 } from "modules/products/products.service";
+import { publicFacetDefinitions } from "modules/products/products.facets";
+import { getProductFacets } from "modules/products/products.facets.service";
 
 export const listProductsHandler: RequestHandler = async (_req, res) => {
   const { items, meta } = await listProducts(res.locals.query as ListProductsQuery);
@@ -43,7 +46,11 @@ export const getAdminProductHandler: RequestHandler = async (_req, res) => {
 };
 
 export const getFiltersHandler: RequestHandler = (_req, res) => {
-  res.json({ data: { factoryOptions, targetOptions } });
+  res.json({ data: { factoryOptions, targetOptions, facetDefinitions: publicFacetDefinitions } });
+};
+
+export const getProductFacetsHandler: RequestHandler = async (_req, res) => {
+  res.json({ data: await getProductFacets(res.locals.query as ProductFilterQuery) });
 };
 
 export const createProductHandler: RequestHandler = async (req, res) => {

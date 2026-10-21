@@ -15,6 +15,7 @@
     "test": "jest",
     "test:cov": "jest --coverage",
     "test:int": "jest -c jest.int.config.ts --runInBand",
+    "products:audit-facets": "ts-node -r tsconfig-paths/register src/scripts/audit-product-facets.ts",
     "inventory:verify-ledger": "ts-node -r tsconfig-paths/register src/scripts/verify-stock-ledger.ts",
     "prisma:deploy": "prisma migrate deploy",
     "prepare": "husky"

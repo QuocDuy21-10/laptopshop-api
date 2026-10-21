@@ -60,6 +60,13 @@ describe("rule-based advisor explanation", () => {
     const recommendation = buildRuleBasedRecommendation(ranked({ evidence: [] }), input);
     expect(recommendation.highlights.length).toBeLessThanOrEqual(3);
     expect(recommendation.reason).not.toMatch(/CPU mạnh|GPU phù hợp|pin lâu/i);
+    expect(recommendation.product).toMatchObject({
+      cpuBrand: null,
+      gpuBrand: null,
+      gpuType: null,
+      resolutionTier: null,
+      panelType: null,
+    });
   });
 
   it("creates at most two tradeoffs and explains missing hardware safely", () => {
