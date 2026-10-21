@@ -18,6 +18,12 @@ enum ReviewStatus {
   HIDDEN
 }
 
+enum ReviewImageStatus {
+  PENDING
+  READY
+  DELETING
+}
+
 model User {
   id          Int     @id @default(autoincrement())
   username    String  @unique @db.VarChar(255)
@@ -178,6 +184,8 @@ model Review {
   moderatedAt   DateTime?
   moderatedById Int?
 
+  images ReviewImage[]
+
   user        User        @relation("ReviewAuthor", fields: [userId], references: [id], onDelete: Restrict)
   product     Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
   orderDetail OrderDetail @relation(fields: [orderDetailId], references: [id], onDelete: Restrict)
@@ -187,6 +195,28 @@ model Review {
   @@index([productId, status, deletedAt, createdAt])
   @@index([status, deletedAt, createdAt])
   @@map("reviews")
+}
+
+model ReviewImage {
+  id               Int               @id @default(autoincrement())
+  reviewId         Int
+  objectKey        String            @unique @db.VarChar(512)
+  mimeType         String            @db.VarChar(50)
+  byteSize         Int
+  width            Int
+  height           Int
+  position         Int               @db.UnsignedTinyInt
+  status           ReviewImageStatus @default(PENDING)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  deletedAt        DateTime?
+  storageDeletedAt DateTime?
+
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+
+  @@index([reviewId, status, position])
+  @@index([status, updatedAt])
+  @@map("review_images")
 }
 
 model RefreshToken {

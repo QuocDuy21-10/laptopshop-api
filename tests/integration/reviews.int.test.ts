@@ -21,6 +21,77 @@ const reviewData = (userId: number, productId: number, orderDetailId: number, ra
 });
 
 describe("review database invariants", () => {
+  it("persists review images through the review relation and preserves them during moderation", async () => {
+    const user = await createUser();
+    const admin = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(user.id, product.id);
+    const review = await prisma.review.create({ data: reviewData(user.id, product.id, item.id) });
+
+    const image = await prisma.reviewImage.create({
+      data: {
+        reviewId: review.id,
+        objectKey: `reviews/${review.id}/one.webp`,
+        mimeType: "image/webp",
+        byteSize: 120,
+        width: 800,
+        height: 600,
+        position: 0,
+        status: "READY",
+      },
+    });
+
+    expect(image.status).toBe("READY");
+    expect(
+      (
+        await prisma.review.findUniqueOrThrow({
+          where: { id: review.id },
+          include: { images: true },
+        })
+      ).images,
+    ).toHaveLength(1);
+
+    await moderateReview(admin.id, review.id, { status: "HIDDEN", reason: "Cần xem lại" });
+    expect(
+      await prisma.reviewImage.count({ where: { reviewId: review.id, status: "READY" } }),
+    ).toBe(1);
+  });
+
+  it("allows only the declared image lifecycle states and unique object keys", async () => {
+    const user = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(user.id, product.id);
+    const review = await prisma.review.create({ data: reviewData(user.id, product.id, item.id) });
+    const objectKey = `reviews/${review.id}/pending.webp`;
+
+    await prisma.reviewImage.create({
+      data: {
+        reviewId: review.id,
+        objectKey,
+        mimeType: "image/webp",
+        byteSize: 10,
+        width: 10,
+        height: 10,
+        position: 0,
+        status: "PENDING",
+      },
+    });
+    await expect(
+      prisma.reviewImage.create({
+        data: {
+          reviewId: review.id,
+          objectKey,
+          mimeType: "image/webp",
+          byteSize: 10,
+          width: 10,
+          height: 10,
+          position: 1,
+          status: "DELETING",
+        },
+      }),
+    ).rejects.toThrow();
+  });
+
   it("rejects rating outside 1..5 at the database boundary", async () => {
     const user = await createUser();
     const product = await createProduct(2);
