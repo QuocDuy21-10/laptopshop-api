@@ -20,7 +20,13 @@ import { createReviewImageStorage } from "lib/storage/s3-review-image-storage";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
 
 export interface AppDeps {
-  limitStores?: { global?: Store; auth?: Store; advisor?: Store; reviewImages?: Store };
+  limitStores?: {
+    global?: Store;
+    auth?: Store;
+    advisor?: Store;
+    reviewImages?: Store;
+    reviewHelpful?: Store;
+  };
   advisor?: { service: AdvisorService; identitySecret: string };
   reviewImages?: ReviewImageDeps | null;
   readyChecks?: Array<() => Promise<unknown>>;
@@ -47,9 +53,8 @@ export const createApp = (deps: AppDeps = {}): Express => {
   app.use(express.urlencoded({ extended: true, limit: "100kb" }));
   app.use(hpp());
 
-  const { globalLimiter, authLimiter, advisorLimiter, reviewImagesLimiter } = createLimiters(
-    deps.limitStores,
-  );
+  const { globalLimiter, authLimiter, advisorLimiter, reviewImagesLimiter, reviewHelpfulLimiter } =
+    createLimiters(deps.limitStores);
   app.use(globalLimiter);
   app.post(["/api/v1/auth/login", "/api/v1/auth/register"], authLimiter);
 
@@ -72,6 +77,7 @@ export const createApp = (deps: AppDeps = {}): Express => {
       { ...advisor, requestLimiter: advisorLimiter },
       reviewImages,
       reviewImagesLimiter,
+      reviewHelpfulLimiter,
     ),
   );
   deps.registerExtras?.(app);

@@ -25,6 +25,29 @@ export const updateReviewBody = createReviewBody
 export type CreateReviewBody = z.infer<typeof createReviewBody>;
 export type UpdateReviewBody = z.infer<typeof updateReviewBody>;
 
+const helpfulReviewIds = z.preprocess(
+  (value) => (Array.isArray(value) ? value.join(",") : value),
+  z.string().transform((value, ctx) => {
+    const ids = value
+      .split(",")
+      .map((item) => Number(item.trim()))
+      .filter((item) => Number.isInteger(item));
+    if (!value.trim() || ids.length !== value.split(",").length || ids.some((id) => id <= 0)) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "reviewIds must be positive integers" });
+      return z.NEVER;
+    }
+    const unique = [...new Set(ids)];
+    if (unique.length > 50) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: "At most 50 review IDs are allowed" });
+      return z.NEVER;
+    }
+    return unique;
+  }),
+);
+
+export const helpfulReviewIdsQuery = z.object({ reviewIds: helpfulReviewIds });
+export type HelpfulReviewIdsQuery = z.infer<typeof helpfulReviewIdsQuery>;
+
 const day = z.string().date();
 
 export const adminListReviewsQuery = pageQuery.extend({

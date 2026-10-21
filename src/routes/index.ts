@@ -17,6 +17,7 @@ import {
   productReviewRoutes,
   reviewRoutes,
   adminReviewRoutes,
+  createReviewHelpfulRoutes,
 } from "modules/reviews/reviews.routes";
 import { createReviewImageRoutes } from "modules/reviews/review-images.routes";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
@@ -25,6 +26,7 @@ export const createApiV1Router = (
   advisor: AdvisorRouteDeps,
   reviewImages: ReviewImageDeps | null = null,
   reviewImagesLimiter?: RequestHandler,
+  reviewHelpfulLimiter?: RequestHandler,
 ) => {
   const router = express.Router();
   router.use(originCheck(env.CORS_ORIGINS));
@@ -34,6 +36,7 @@ export const createApiV1Router = (
   router.use("/products", productRoutes);
   if (reviewImages)
     router.use("/reviews", createReviewImageRoutes(reviewImages, reviewImagesLimiter));
+  router.use("/reviews", createReviewHelpfulRoutes(reviewHelpfulLimiter));
   router.use("/reviews", reviewRoutes);
   router.use("/users", usersRoutes);
   router.use("/cart", cartRoutes);
