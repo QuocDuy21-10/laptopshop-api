@@ -319,7 +319,7 @@ const ReviewEligibility = registry.register(
     reason: z
       .enum(["NOT_PURCHASED", "ORDER_NOT_COMPLETED", "PAYMENT_NOT_CONFIRMED", "ALREADY_REVIEWED"])
       .nullable(),
-    existingReview: OwnerReview.nullable(),
+    existingReview: z.union([OwnerReview, z.null()]),
     willRequireModeration: z.boolean(),
   }),
 );
