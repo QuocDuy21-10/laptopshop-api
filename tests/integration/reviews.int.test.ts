@@ -84,6 +84,47 @@ describe("review database invariants", () => {
     expect(await prisma.reviewHelpful.count({ where: { reviewId: review.id } })).toBe(2);
   });
 
+  it("enforces one official reply with creator and updater audit through moderation", async () => {
+    const customer = await createUser();
+    const firstAdmin = await createUser();
+    const secondAdmin = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(customer.id, product.id);
+    const review = await prisma.review.create({
+      data: reviewData(customer.id, product.id, item.id),
+    });
+
+    const reply = await prisma.reviewReply.create({
+      data: {
+        reviewId: review.id,
+        content: "LaptopShop cảm ơn bạn đã chia sẻ trải nghiệm.",
+        createdById: firstAdmin.id,
+        updatedById: firstAdmin.id,
+      },
+    });
+
+    expect(reply.createdById).toBe(firstAdmin.id);
+    expect(reply.updatedById).toBe(firstAdmin.id);
+    await expect(
+      prisma.reviewReply.create({
+        data: {
+          reviewId: review.id,
+          content: "Phản hồi thứ hai không được phép.",
+          createdById: secondAdmin.id,
+          updatedById: secondAdmin.id,
+        },
+      }),
+    ).rejects.toThrow();
+
+    await moderateReview(firstAdmin.id, review.id, { status: "HIDDEN", reason: "Cần xem lại" });
+    await moderateReview(firstAdmin.id, review.id, { status: "PUBLISHED" });
+
+    const preserved = await prisma.reviewReply.findUniqueOrThrow({ where: { reviewId: review.id } });
+    expect(preserved.content).toBe(reply.content);
+    expect(preserved.createdById).toBe(firstAdmin.id);
+    expect(preserved.updatedById).toBe(firstAdmin.id);
+  });
+
   it("allows only the declared image lifecycle states and unique object keys", async () => {
     const user = await createUser();
     const product = await createProduct(2);

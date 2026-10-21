@@ -89,6 +89,11 @@ export const moderateReviewBody = z
 export type AdminListReviewsQuery = z.infer<typeof adminListReviewsQuery>;
 export type ModerateReviewBody = z.infer<typeof moderateReviewBody>;
 
+export const putReviewReplyBody = z
+  .object({ content: z.string().trim().min(1).max(1000) })
+  .strict();
+export type PutReviewReplyBody = z.infer<typeof putReviewReplyBody>;
+
 export const reviewImageParams = idParams.extend({});
 export const reviewImageDeleteParams = idParams.extend({
   imageId: z.coerce.number().int().positive(),

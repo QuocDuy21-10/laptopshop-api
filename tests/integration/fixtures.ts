@@ -6,6 +6,7 @@ export const resetDb = async () => {
   await prisma.payment.deleteMany();
   await prisma.reviewImage.deleteMany();
   await prisma.reviewHelpful.deleteMany();
+  await prisma.reviewReply.deleteMany();
   await prisma.review.deleteMany();
   await prisma.stockReceiptItem.deleteMany();
   await prisma.stockMovement.deleteMany();

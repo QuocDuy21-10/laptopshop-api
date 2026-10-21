@@ -61,6 +61,7 @@ import {
   reviewImageParams,
   updateReviewBody,
   helpfulReviewIdsQuery,
+  putReviewReplyBody,
 } from "modules/reviews/reviews.schema";
 
 extendZodWithOpenApi(z);
@@ -288,6 +289,22 @@ const ReviewImage = registry.register(
     position: z.number().int().min(0).max(255),
   }),
 );
+const PublicOfficialReply = registry.register(
+  "PublicOfficialReply",
+  z.object({
+    content: z.string(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  }),
+);
+const AdminOfficialReply = registry.register(
+  "AdminOfficialReply",
+  PublicOfficialReply.extend({
+    id: z.number(),
+    createdBy: z.object({ id: z.number(), username: z.string(), fullName: z.string().nullable() }),
+    updatedBy: z.object({ id: z.number(), username: z.string(), fullName: z.string().nullable() }),
+  }),
+);
 const PublicReview = registry.register(
   "PublicReview",
   z.object({
@@ -302,6 +319,7 @@ const PublicReview = registry.register(
     helpfulCount: z.number().int().min(0),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
+    officialReply: z.union([PublicOfficialReply, z.null()]),
   }),
 );
 const ReviewSummary = registry.register(
@@ -369,6 +387,7 @@ const AdminReviewListItem = registry.register(
       .nullable(),
     images: z.array(ReviewImage),
     helpfulCount: z.number().int().min(0),
+    officialReply: z.union([AdminOfficialReply, z.null()]),
   }),
 );
 const AdminReviewDetail = registry.register("AdminReviewDetail", AdminReviewListItem);
@@ -589,6 +608,26 @@ op({
   request: { body: json(registerBody) },
   ok: [201, "Registered; sets auth cookies", userData],
   errors: { 400: "Invalid input", 409: "Email taken" },
+});
+op({
+  method: "put",
+  path: `${v1}/admin/reviews/{id}/reply`,
+  summary: "Create, update or reactivate an official review reply",
+  tag: "admin",
+  auth: "admin",
+  request: { ...id, body: json(putReviewReplyBody) },
+  ok: [200, "Updated", data(AdminOfficialReply)],
+  errors: { 400: "Invalid reply content", 404: "Review not found", 409: "Review deleted" },
+});
+op({
+  method: "delete",
+  path: `${v1}/admin/reviews/{id}/reply`,
+  summary: "Soft-delete an official review reply",
+  tag: "admin",
+  auth: "admin",
+  request: id,
+  ok: [204, "Deleted", z.null()],
+  errors: { 404: "Review not found", 409: "Review deleted" },
 });
 op({
   method: "post",

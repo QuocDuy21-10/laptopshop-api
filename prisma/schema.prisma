@@ -47,6 +47,8 @@ model User {
   reviews                 Review[]              @relation("ReviewAuthor")
   moderatedReviews        Review[]              @relation("ReviewModerator")
   reviewHelpfulVotes      ReviewHelpful[]
+  reviewRepliesCreated    ReviewReply[]         @relation("ReviewReplyCreator")
+  reviewRepliesUpdated    ReviewReply[]         @relation("ReviewReplyUpdater")
 
   @@map("users")
 }
@@ -187,6 +189,7 @@ model Review {
 
   images ReviewImage[]
   helpfulVotes ReviewHelpful[]
+  reply ReviewReply?
 
   user        User        @relation("ReviewAuthor", fields: [userId], references: [id], onDelete: Restrict)
   product     Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
@@ -232,6 +235,24 @@ model ReviewHelpful {
   @@id([reviewId, userId])
   @@index([userId, createdAt])
   @@map("review_helpful")
+}
+
+model ReviewReply {
+  id          Int       @id @default(autoincrement())
+  reviewId    Int       @unique
+  content     String    @db.VarChar(1000)
+  createdById Int
+  updatedById Int
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  review    Review @relation(fields: [reviewId], references: [id], onDelete: Restrict)
+  createdBy User   @relation("ReviewReplyCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy User   @relation("ReviewReplyUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  @@index([deletedAt, updatedAt])
+  @@map("review_replies")
 }
 
 model RefreshToken {

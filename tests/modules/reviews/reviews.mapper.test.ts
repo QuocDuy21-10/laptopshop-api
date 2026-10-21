@@ -72,4 +72,22 @@ describe("toPublicReviewDto", () => {
     });
     expect(dto.images[0]).not.toHaveProperty("objectKey");
   });
+
+  it("maps an official reply publicly without admin identity fields", () => {
+    const dto = toPublicReviewDto({
+      ...baseRow,
+      reply: {
+        content: "Cảm ơn bạn.",
+        createdAt: new Date("2026-10-21T05:00:00.000Z"),
+        updatedAt: new Date("2026-10-21T05:00:00.000Z"),
+      },
+    });
+
+    expect(dto.officialReply).toEqual({
+      content: "Cảm ơn bạn.",
+      createdAt: new Date("2026-10-21T05:00:00.000Z"),
+      updatedAt: new Date("2026-10-21T05:00:00.000Z"),
+    });
+    expect(dto.officialReply).not.toHaveProperty("createdById");
+  });
 });

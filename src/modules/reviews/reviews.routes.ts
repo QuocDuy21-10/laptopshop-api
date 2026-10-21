@@ -14,6 +14,8 @@ import {
   updateMyReviewHandler,
   deleteMyReviewHandler,
   createReviewHelpfulHandlers,
+  putOfficialReplyHandler,
+  deleteOfficialReplyHandler,
 } from "modules/reviews/reviews.controller";
 import {
   adminListReviewsQuery,
@@ -22,6 +24,7 @@ import {
   moderateReviewBody,
   updateReviewBody,
   helpfulReviewIdsQuery,
+  putReviewReplyBody,
 } from "modules/reviews/reviews.schema";
 
 export const createReviewHelpfulRoutes = (limiter?: RequestHandler) => {
@@ -80,4 +83,14 @@ adminReviewRoutes.patch(
   "/:id/moderation",
   validate({ params: idParams, body: moderateReviewBody }),
   moderateReviewHandler,
+);
+adminReviewRoutes.put(
+  "/:id/reply",
+  validate({ params: idParams, body: putReviewReplyBody }),
+  putOfficialReplyHandler,
+);
+adminReviewRoutes.delete(
+  "/:id/reply",
+  validate({ params: idParams }),
+  deleteOfficialReplyHandler,
 );

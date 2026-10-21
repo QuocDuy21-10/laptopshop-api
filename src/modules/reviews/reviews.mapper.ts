@@ -25,13 +25,22 @@ export const publicReviewSelect = {
     orderBy: { position: "asc" },
     select: reviewImageSelect,
   },
+  reply: {
+    where: { deletedAt: null },
+    select: { content: true, createdAt: true, updatedAt: true },
+  },
   _count: { select: { helpfulVotes: true } },
 } satisfies Prisma.ReviewSelect;
 
 export type PublicReviewRow = Prisma.ReviewGetPayload<{ select: typeof publicReviewSelect }>;
 
 export const toPublicReviewDto = (
-  review: PublicReviewRow | (Omit<PublicReviewRow, "images"> & { images?: ReviewImageRow[] }),
+  review:
+    | PublicReviewRow
+    | (Omit<PublicReviewRow, "images" | "reply"> & {
+        images?: ReviewImageRow[];
+        reply?: PublicReviewRow["reply"];
+      }),
   images: ReviewImageDto[] = [],
 ) => ({
   id: review.id,
@@ -48,6 +57,13 @@ export const toPublicReviewDto = (
   helpfulCount: review._count?.helpfulVotes ?? 0,
   createdAt: review.createdAt,
   updatedAt: review.contentUpdatedAt,
+  officialReply: review.reply
+    ? {
+        content: review.reply.content,
+        createdAt: review.reply.createdAt,
+        updatedAt: review.reply.updatedAt,
+      }
+    : null,
 });
 
 export type PublicReviewDto = ReturnType<typeof toPublicReviewDto>;
@@ -126,6 +142,17 @@ export const adminReviewSelect = {
     },
   },
   moderatedBy: { select: { id: true, username: true, fullName: true } },
+  reply: {
+    select: {
+      id: true,
+      content: true,
+      createdAt: true,
+      updatedAt: true,
+      deletedAt: true,
+      createdBy: { select: { id: true, username: true, fullName: true } },
+      updatedBy: { select: { id: true, username: true, fullName: true } },
+    },
+  },
   images: {
     where: { status: "READY", deletedAt: null },
     orderBy: { position: "asc" },
@@ -137,7 +164,12 @@ export const adminReviewSelect = {
 export type AdminReviewRow = Prisma.ReviewGetPayload<{ select: typeof adminReviewSelect }>;
 
 export const toAdminReviewDto = (
-  review: AdminReviewRow | (Omit<AdminReviewRow, "images"> & { images?: ReviewImageRow[] }),
+  review:
+    | AdminReviewRow
+    | (Omit<AdminReviewRow, "images" | "reply"> & {
+        images?: ReviewImageRow[];
+        reply?: AdminReviewRow["reply"];
+      }),
   images: ReviewImageDto[] = [],
 ) => ({
   id: review.id,
@@ -163,6 +195,16 @@ export const toAdminReviewDto = (
   moderatedBy: review.moderatedBy,
   images,
   helpfulCount: review._count?.helpfulVotes ?? 0,
+  officialReply: review.reply && review.reply.deletedAt === null
+    ? {
+        id: review.reply.id,
+        content: review.reply.content,
+        createdAt: review.reply.createdAt,
+        updatedAt: review.reply.updatedAt,
+        createdBy: review.reply.createdBy,
+        updatedBy: review.reply.updatedBy,
+      }
+    : null,
 });
 
 export type AdminReviewListItemDto = ReturnType<typeof toAdminReviewDto>;
