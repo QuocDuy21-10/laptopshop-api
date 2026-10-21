@@ -60,6 +60,7 @@ import {
   reviewImageOrderBody,
   reviewImageParams,
   updateReviewBody,
+  helpfulReviewIdsQuery,
 } from "modules/reviews/reviews.schema";
 
 extendZodWithOpenApi(z);
@@ -298,6 +299,7 @@ const PublicReview = registry.register(
     author: ReviewAuthor,
     verifiedPurchase: z.literal(true),
     images: z.array(ReviewImage),
+    helpfulCount: z.number().int().min(0),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   }),
@@ -377,6 +379,18 @@ const AdminReviewSummary = registry.register(
     hiddenReviews: z.number().int(),
     deletedReviews: z.number().int(),
     averageRating: z.number().nullable(),
+  }),
+);
+const HelpfulReviewState = registry.register(
+  "HelpfulReviewState",
+  z.object({ reviewIds: z.array(z.number().int().positive()) }),
+);
+const HelpfulMutation = registry.register(
+  "HelpfulMutation",
+  z.object({
+    reviewId: z.number().int().positive(),
+    helpfulCount: z.number().int().min(0),
+    helpful: z.boolean(),
   }),
 );
 const PaymentMethods = z.array(
@@ -735,6 +749,36 @@ op({
   request: id,
   ok: [204, "Deleted"],
   errors: { 404: "Review not found" },
+});
+op({
+  method: "get",
+  path: `${v1}/reviews/helpful`,
+  summary: "List helpful votes for the current user",
+  tag: "reviews",
+  auth: "user",
+  request: { query: helpfulReviewIdsQuery },
+  ok: [200, "OK", data(HelpfulReviewState)],
+  errors: { 400: "Invalid or excessive review IDs" },
+});
+op({
+  method: "put",
+  path: `${v1}/reviews/{id}/helpful`,
+  summary: "Mark a public review as helpful",
+  tag: "reviews",
+  auth: "user",
+  request: id,
+  ok: [200, "Updated", data(HelpfulMutation)],
+  errors: { 404: "Review not found or not public", 409: "Cannot vote for own review" },
+});
+op({
+  method: "delete",
+  path: `${v1}/reviews/{id}/helpful`,
+  summary: "Remove the current user's helpful vote",
+  tag: "reviews",
+  auth: "user",
+  request: id,
+  ok: [200, "Updated", data(HelpfulMutation)],
+  errors: { 404: "Review not found or not public" },
 });
 op({
   method: "post",
