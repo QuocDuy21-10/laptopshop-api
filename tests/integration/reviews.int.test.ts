@@ -58,6 +58,31 @@ describe("review database invariants", () => {
     ).toBe(1);
   });
 
+  it("enforces one helpful membership per user, supports multiple users, and preserves votes across hide/restore", async () => {
+    const firstUser = await createUser();
+    const secondUser = await createUser();
+    const admin = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(firstUser.id, product.id);
+    const review = await prisma.review.create({
+      data: reviewData(firstUser.id, product.id, item.id),
+    });
+
+    await prisma.reviewHelpful.create({ data: { reviewId: review.id, userId: secondUser.id } });
+    await expect(
+      prisma.reviewHelpful.create({ data: { reviewId: review.id, userId: secondUser.id } }),
+    ).rejects.toThrow();
+
+    const thirdUser = await createUser();
+    await prisma.reviewHelpful.create({ data: { reviewId: review.id, userId: thirdUser.id } });
+    expect(await prisma.reviewHelpful.count({ where: { reviewId: review.id } })).toBe(2);
+
+    await moderateReview(admin.id, review.id, { status: "HIDDEN", reason: "Cần xem lại" });
+    expect(await prisma.reviewHelpful.count({ where: { reviewId: review.id } })).toBe(2);
+    await moderateReview(admin.id, review.id, { status: "PUBLISHED" });
+    expect(await prisma.reviewHelpful.count({ where: { reviewId: review.id } })).toBe(2);
+  });
+
   it("allows only the declared image lifecycle states and unique object keys", async () => {
     const user = await createUser();
     const product = await createProduct(2);
