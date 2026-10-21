@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Cho phép owner thêm, xoá và sắp xếp tối đa ba ảnh đã chuẩn hoá cho review, dùng MinIO local và S3-compatible private storage ở production.
+**Goal:** Cho phép owner thêm, xoá và sắp xếp tối đa ba ảnh đã chuẩn hoá cho review, dùng RustFS local và S3-compatible private storage ở production.
 
 **Architecture:** API xác minh owner trước khi xử lý multipart, chuẩn hoá ảnh trong memory, giữ lifecycle `PENDING → READY → DELETING` trong MySQL và đưa object operations qua `ReviewImageStorage`. Storefront lưu review JSON trước rồi upload ảnh, hiển thị partial-success/retry rõ ràng; public/admin DTO chỉ nhận signed read URL sau khi áp dụng authorization.
 
-**Tech Stack:** Express 5, TypeScript, Prisma 6/MySQL 8.4, Multer memory storage, Sharp, AWS SDK v3 S3 client/presigner, MinIO, Jest/Supertest, Next.js 16, React Query, Vitest, Playwright.
+**Tech Stack:** Express 5, TypeScript, Prisma 6/MySQL 8.4, Multer memory storage, Sharp, AWS SDK v3 S3 client/presigner, RustFS, Jest/Supertest, Next.js 16, React Query, Vitest, Playwright.
 
 **Spec:** `docs/superpowers/specs/2026-10-21-product-reviews-phase-4-design.md`
 
@@ -48,7 +48,7 @@
 - Produces: `ReviewImageStorage`, `PutReviewImageObject`, `createReviewImageStorage(config): ReviewImageStorage | null`.
 - Produces config fields `REVIEW_IMAGES_ENABLED`, `REVIEW_IMAGE_S3_*`, `REVIEW_IMAGE_URL_TTL_SECONDS` exactly as the spec.
 
-- [ ] **Step 1: Add failing environment tests** for disabled defaults, enabled-without-bucket failure, paired static credentials, MinIO endpoint/path-style configuration and TTL bounds.
+- [ ] **Step 1: Add failing environment tests** for disabled defaults, enabled-without-bucket failure, paired static credentials, RustFS endpoint/path-style configuration and TTL bounds.
 
 - [ ] **Step 2: Run the environment tests and verify failure.**
 
@@ -88,7 +88,7 @@ git add package.json package-lock.json .env.example src/config/env.ts src/lib/st
 git commit -m "feat: add review image storage adapter"
 ```
 
-### Task 2: MinIO local and integration-test infrastructure
+### Task 2: RustFS local and integration-test infrastructure
 
 **Files:**
 - Modify: `docker-compose.yml`
@@ -98,7 +98,7 @@ git commit -m "feat: add review image storage adapter"
 
 **Interfaces:**
 - Consumes: `createReviewImageStorage(config)` from Task 1.
-- Produces: local MinIO API on `localhost:9000`, console on `localhost:9001`, private bucket `laptopshop-review-images`; integration config uses a separate test bucket.
+- Produces: local RustFS S3 API on `localhost:9000`, console on `localhost:9001`, private bucket `laptopshop-review-images`; integration config uses a separate test bucket on port `9002`.
 
 - [ ] **Step 1: Add the real-storage integration test** that puts a WebP fixture buffer, verifies `objectExists`, reads through a signed URL, deletes twice, then observes `false`.
 
@@ -106,23 +106,23 @@ git commit -m "feat: add review image storage adapter"
 
 Run: `npm run test:int -- tests/integration/review-image-storage.int.test.ts`
 
-Expected: FAIL because MinIO/test variables are absent.
+Expected: FAIL because RustFS/test variables are absent.
 
-- [ ] **Step 3: Add `minio`, `minio-init` and `minio-test` Compose services** with healthchecks and idempotent private-bucket creation. Keep `minio-data` as MinIO persistence; remove no existing product-image volume in this task.
+- [ ] **Step 3: Add `rustfs`, `rustfs-init` and `rustfs-test` Compose services** with healthchecks and idempotent private-bucket creation. Keep four RustFS data volumes; remove no existing product-image volume in this task.
 
-- [ ] **Step 4: Set test-only storage variables** in `tests/integration/setup-env.ts`; document `docker compose up -d mysql-test minio-test` and local MinIO startup without real credentials.
+- [ ] **Step 4: Set test-only storage variables** in `tests/integration/setup-env.ts`; document `docker compose --profile test up -d mysql-test rustfs-test rustfs-test-init` and local RustFS startup with non-production credentials.
 
 - [ ] **Step 5: Run the integration test.**
 
 Run: `npm run test:int -- tests/integration/review-image-storage.int.test.ts`
 
-Expected: PASS with real MinIO.
+Expected: PASS with real RustFS.
 
 - [ ] **Step 6: Commit.**
 
 ```bash
 git add docker-compose.yml README.md tests/integration/setup-env.ts tests/integration/review-image-storage.int.test.ts
-git commit -m "test: add minio review image runtime"
+git commit -m "test: add rustfs review image runtime"
 ```
 
 ### Task 3: Image normalization pipeline
@@ -350,7 +350,7 @@ git commit -m "feat: include images in review lifecycle"
 
 - [ ] **Step 3: Document manual and scheduled execution** for Docker deployment; do not invent a queue or require Redis.
 
-- [ ] **Step 4: Run tests and a dry local invocation against MinIO.**
+- [ ] **Step 4: Run tests and a dry local invocation against RustFS.**
 
 Run: `npm test -- tests/scripts/reconcile-review-images.test.ts --runInBand`
 
@@ -485,15 +485,15 @@ git commit -m "feat: display review image galleries"
 - Modify: `README.md`
 
 **Interfaces:**
-- Produces a releasable Phase 4A with documented MinIO/S3 setup and no known unverified core path.
+- Produces a releasable Phase 4A with documented RustFS/S3 setup and no known unverified core path.
 
-- [ ] **Step 1: Run API gates** with MySQL and MinIO test services running.
+- [ ] **Step 1: Run API gates** with MySQL and RustFS test services running.
 
 Run: `npm run lint && npm run typecheck && npm test && npm run test:int`
 
 Expected: PASS; record pre-existing warnings separately.
 
-- [ ] **Step 2: Run web gates** with API docs and real API/MinIO available.
+- [ ] **Step 2: Run web gates** with API docs and real API/RustFS available.
 
 Run from `../laptopshop-web`: `npm run lint && npm run lint:css && npm run typecheck && npm test && npm run build && npm run e2e`
 

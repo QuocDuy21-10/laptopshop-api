@@ -8,16 +8,16 @@ REST API JSON (`/api/v1`) cho Laptop Shop. Giao diện storefront và admin nằ
 cp .env.example .env          # điền DATABASE_URL, JWT_SECRET
 npm install
 npx prisma generate
-docker compose up -d mysql redis minio minio-init
+docker compose up -d mysql redis rustfs rustfs-init
 npx prisma migrate dev
 npm run seed
 npm run dev
 ```
 
-Scripts: `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:int` (cần `docker compose --profile test up -d mysql-test minio-test minio-test-init`), `npm run build`, `npm start`.
+Scripts: `npm run lint`, `npm run typecheck`, `npm test`, `npm run test:int` (cần `docker compose --profile test up -d mysql-test rustfs-test rustfs-test-init`), `npm run build`, `npm start`.
 Mở Swagger tại `/api-docs` khi đặt `ENABLE_DOCS=true`.
 
-Review images dùng MinIO local (`http://localhost:9000`, bucket private `laptopshop-review-images`); API không mount upload volume cho review images. Production dùng S3-compatible storage với cùng adapter và credentials/policy riêng.
+Review images dùng RustFS local (`http://localhost:9000`, bucket private `laptopshop-review-images`); API không mount upload volume cho review images. Production dùng AWS S3/R2 hoặc S3-compatible storage với cùng adapter và credentials/policy riêng.
 
 ## Production
 

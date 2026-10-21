@@ -23,7 +23,7 @@ Thiết kế ưu tiên tính đúng và khả năng vận hành production. Hệ
 
 ## 2. Tiêu chí thành công
 
-- Local và CI dùng MinIO qua cùng S3-compatible adapter với production.
+- Local và CI dùng RustFS qua cùng S3-compatible adapter với production.
 - API không ghi ảnh review vào `public/` hoặc phụ thuộc upload volume của container Express.
 - File do khách tải lên được xác minh nội dung thực, loại metadata và chuẩn hoá trước khi lưu.
 - Khách có thể thêm, xoá và sắp xếp lại ảnh khi sửa review.
@@ -40,7 +40,7 @@ Phase 4 được chia thành bốn sub-project có thể release độc lập:
 ### 3.1. Phase 4A — Review images
 
 - storage abstraction tương thích S3;
-- MinIO cho local và integration tests;
+- RustFS cho local và integration tests;
 - upload, chuẩn hoá, đọc, xoá và reconciliation;
 - UI preview, retry, xoá, reorder và gallery/lightbox;
 - admin xem ảnh của review công khai hoặc bị ẩn.
@@ -87,7 +87,7 @@ Thứ tự mặc định là `4A → 4B → 4C → 4D`. Mỗi sub-project có mi
 
 `modules/reviews` tiếp tục sở hữu review lifecycle, ownership, moderation, images, helpful votes và official reply. Controller chỉ xử lý HTTP; service giữ nghiệp vụ; schema parse input; mapper/presenter tạo DTO tường minh.
 
-Storage nằm sau interface riêng trong `lib/storage/`. Review service không import trực tiếp MinIO hoặc AWS SDK implementation.
+Storage nằm sau interface riêng trong `lib/storage/`. Review service không import trực tiếp RustFS hoặc AWS SDK implementation.
 
 ```text
 Storefront/Admin
@@ -97,7 +97,7 @@ Express review routes
        │
        ├── Review service ── Prisma/MySQL
        │
-       └── ReviewImageStorage ── S3 API ── MinIO local / object storage production
+       └── ReviewImageStorage ── S3 API ── RustFS local / object storage production
 ```
 
 Interface storage tối thiểu hỗ trợ:
@@ -134,7 +134,7 @@ Bucket ảnh review luôn private. Service chỉ ký read URL cho:
 
 Presigned URL mặc định có TTL 900 giây. Review bị ẩn hoặc xoá không nhận URL mới; URL đã phát hành có thể còn hiệu lực đến hết TTL. Đây là giới hạn nhất quán được chấp nhận thay vì đưa toàn bộ media traffic qua Express.
 
-## 6. Cấu hình storage và MinIO local
+## 6. Cấu hình storage và RustFS local
 
 Mọi biến môi trường được parse duy nhất trong `src/config/env.ts`:
 
@@ -153,12 +153,12 @@ Quy tắc validation:
 
 - khi `REVIEW_IMAGES_ENABLED=true`, region và bucket là bắt buộc;
 - access key và secret phải cùng có hoặc cùng vắng;
-- local MinIO yêu cầu endpoint, credentials và `FORCE_PATH_STYLE=true`;
+- local RustFS yêu cầu endpoint, credentials và `FORCE_PATH_STYLE=true`;
 - production có thể bỏ credentials tĩnh để AWS SDK dùng workload/IAM credentials;
 - TTL có giới hạn an toàn, mặc định 900 giây;
 - secret không được log hoặc trả qua health endpoints.
 
-Docker Compose thêm MinIO API, console và healthcheck. Có thể dùng volume `minio-data` để dữ liệu MinIO tồn tại qua restart; đây là storage nội bộ của MinIO, không phải upload volume được mount vào container Express. Một init container hoặc script idempotent tạo private bucket và policy cần thiết.
+Docker Compose thêm RustFS S3 API, console, healthcheck và bốn volume local; một init container dùng AWS CLI tạo private bucket idempotently. Đây là storage nội bộ của RustFS, không phải upload volume được mount vào container Express.
 
 `.env.example` chỉ chứa placeholder, không chứa credential thật.
 
@@ -547,7 +547,7 @@ Admin routes nằm sau admin router hiện có với `authenticate` và `require
 
 ### 16.2. API integration tests
 
-Chạy với MySQL thật và MinIO test service:
+Chạy với MySQL thật và RustFS test service:
 
 - upload object, đọc bằng signed URL và xoá object;
 - `PENDING → READY → DELETING` lifecycle;
@@ -591,7 +591,7 @@ npm run build
 npm run e2e
 ```
 
-Integration và E2E phải dùng MySQL + MinIO thật. Nếu runtime không khả dụng, báo `NOT VERIFIED`; unit/static checks không thay thế bằng chứng runtime.
+Integration và E2E phải dùng MySQL + RustFS thật. Nếu runtime không khả dụng, báo `NOT VERIFIED`; unit/static checks không thay thế bằng chứng runtime.
 
 ## 17. Rollout và rollback
 

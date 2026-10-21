@@ -71,35 +71,46 @@ services:
       retries: 10
     restart: unless-stopped
 
-  minio:
-    image: minio/minio:latest
-    command: server /data --console-address ":9001"
+  rustfs:
+    image: rustfs/rustfs:latest
+    command: ["/data"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      RUSTFS_VOLUMES: /data/rustfs{0..3}
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfs-local}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfs-local-secret}
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio-data:/data
+      - rustfs-data-0:/data/rustfs0
+      - rustfs-data-1:/data/rustfs1
+      - rustfs-data-2:/data/rustfs2
+      - rustfs-data-3:/data/rustfs3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
     restart: unless-stopped
 
-  minio-init:
+  rustfs-init:
     image: amazon/aws-cli:latest
     depends_on:
-      minio:
-        condition: service_started
+      rustfs:
+        condition: service_healthy
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
-      AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
-      AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfs-local}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfs-local-secret}
       AWS_DEFAULT_REGION: us-east-1
-    entrypoint: ["/bin/sh", "-c"]
-    command: >-
-      until aws --endpoint-url http://minio:9000 s3api list-buckets >/dev/null 2>&1; do sleep 1; done;
-      aws --endpoint-url http://minio:9000 s3api head-bucket --bucket laptopshop-review-images ||
-      aws --endpoint-url http://minio:9000 s3api create-bucket --bucket laptopshop-review-images
+      STORAGE_ENDPOINT: http://rustfs:9000
+      STORAGE_BUCKET: laptopshop-review-images
+    entrypoint: ["/bin/sh", "/init/rustfs-init.sh"]
+    volumes:
+      - ./docker/rustfs-init.sh:/init/rustfs-init.sh:ro
     restart: "no"
 
   mysql-test:
@@ -113,38 +124,54 @@ services:
     tmpfs:
       - /var/lib/mysql
 
-  minio-test:
-    image: minio/minio:latest
+  rustfs-test:
+    image: rustfs/rustfs:latest
     profiles: ["test"]
-    command: server /data --console-address ":9001"
+    command: ["/data"]
     environment:
-      MINIO_ROOT_USER: minio-test
-      MINIO_ROOT_PASSWORD: minio-test-secret
+      RUSTFS_VOLUMES: /data/rustfs{0..3}
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_ACCESS_KEY: rustfs-test
+      RUSTFS_SECRET_KEY: rustfs-test-secret
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
     ports:
       - "9002:9000"
       - "9003:9001"
     tmpfs:
-      - /data
+      - /data/rustfs0
+      - /data/rustfs1
+      - /data/rustfs2
+      - /data/rustfs3
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
 
-  minio-test-init:
+  rustfs-test-init:
     image: amazon/aws-cli:latest
     profiles: ["test"]
     depends_on:
-      minio-test:
-        condition: service_started
+      rustfs-test:
+        condition: service_healthy
     environment:
-      AWS_ACCESS_KEY_ID: minio-test
-      AWS_SECRET_ACCESS_KEY: minio-test-secret
+      AWS_ACCESS_KEY_ID: rustfs-test
+      AWS_SECRET_ACCESS_KEY: rustfs-test-secret
       AWS_DEFAULT_REGION: us-east-1
-    entrypoint: ["/bin/sh", "-c"]
-    command: >-
-      until aws --endpoint-url http://minio-test:9000 s3api list-buckets >/dev/null 2>&1; do sleep 1; done;
-      aws --endpoint-url http://minio-test:9000 s3api head-bucket --bucket laptopshop-review-images-test ||
-      aws --endpoint-url http://minio-test:9000 s3api create-bucket --bucket laptopshop-review-images-test
+      STORAGE_ENDPOINT: http://rustfs-test:9000
+      STORAGE_BUCKET: laptopshop-review-images-test
+    entrypoint: ["/bin/sh", "/init/rustfs-init.sh"]
+    volumes:
+      - ./docker/rustfs-init.sh:/init/rustfs-init.sh:ro
     restart: "no"
 
 volumes:
   mysql-data:
   redis-data:
   uploads:
-  minio-data:
+  rustfs-data-0:
+  rustfs-data-1:
+  rustfs-data-2:
+  rustfs-data-3:
