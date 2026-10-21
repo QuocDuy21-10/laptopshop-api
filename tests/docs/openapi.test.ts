@@ -15,6 +15,9 @@ const V1_PATHS = [
   "/api/v1/products/{id}/reviews/summary",
   "/api/v1/products/{id}/reviews/eligibility",
   "/api/v1/reviews/{id}",
+  "/api/v1/reviews/{id}/images",
+  "/api/v1/reviews/{id}/images/order",
+  "/api/v1/reviews/{id}/images/{imageId}",
   "/api/v1/advisor/recommend",
   "/api/v1/cart",
   "/api/v1/cart/items",
@@ -106,6 +109,12 @@ describe("openapi document", () => {
     expect(op("/api/v1/products/{id}/reviews/eligibility", "get").security).toEqual(secured);
     expect(op("/api/v1/admin/reviews", "get").security).toEqual(secured);
     expect(op("/api/v1/admin/reviews/{id}/moderation", "patch").responses[403]).toBeDefined();
+    expect(op("/api/v1/reviews/{id}/images", "post").security).toEqual(secured);
+    expect(
+      op("/api/v1/reviews/{id}/images", "post").requestBody.content["multipart/form-data"],
+    ).toBeDefined();
+    expect(op("/api/v1/reviews/{id}/images/order", "patch").security).toEqual(secured);
+    expect(op("/api/v1/reviews/{id}/images/{imageId}", "delete").responses[204]).toBeDefined();
   });
 
   it("keeps the public review schema free of private and moderation fields", () => {

@@ -4,6 +4,7 @@ export const resetDb = async () => {
   await prisma.paymentWebhookEvent.deleteMany();
   await prisma.paymentProviderCheckpoint.deleteMany();
   await prisma.payment.deleteMany();
+  await prisma.reviewImage.deleteMany();
   await prisma.review.deleteMany();
   await prisma.stockReceiptItem.deleteMany();
   await prisma.stockMovement.deleteMany();

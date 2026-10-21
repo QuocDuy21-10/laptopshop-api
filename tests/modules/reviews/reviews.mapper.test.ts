@@ -35,4 +35,24 @@ describe("toPublicReviewDto", () => {
       anonymous: false,
     });
   });
+
+  it("maps signed images in position order without exposing object keys", () => {
+    const dto = toPublicReviewDto({ ...baseRow, images: [] }, [
+      {
+        id: 22,
+        url: "https://signed.example/22.webp",
+        mimeType: "image/webp",
+        width: 100,
+        height: 50,
+        position: 0,
+      },
+    ]);
+
+    expect(dto.images[0]).toMatchObject({
+      id: 22,
+      url: "https://signed.example/22.webp",
+      position: 0,
+    });
+    expect(dto.images[0]).not.toHaveProperty("objectKey");
+  });
 });

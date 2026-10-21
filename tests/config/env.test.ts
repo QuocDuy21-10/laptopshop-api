@@ -29,6 +29,12 @@ describe("parseEnv", () => {
     expect(e.ADVISOR_GUEST_DAILY_LIMIT).toBe(5);
     expect(e.ADVISOR_USER_DAILY_LIMIT).toBe(10);
     expect(e.ADVISOR_GLOBAL_DAILY_LIMIT).toBe(30);
+    expect(e.REVIEW_IMAGES_ENABLED).toBe(false);
+    expect(e.REVIEW_IMAGE_S3_ENDPOINT).toBeUndefined();
+    expect(e.REVIEW_IMAGE_S3_REGION).toBeUndefined();
+    expect(e.REVIEW_IMAGE_S3_BUCKET).toBeUndefined();
+    expect(e.REVIEW_IMAGE_S3_FORCE_PATH_STYLE).toBe(false);
+    expect(e.REVIEW_IMAGE_URL_TTL_SECONDS).toBe(900);
   });
 
   it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {
@@ -120,6 +126,50 @@ describe("parseEnv", () => {
     expect(e.ADVISOR_AI_ENABLED).toBe(true);
     expect(e.GROQ_MODEL).toBe("openai/gpt-oss-20b");
     expect(e.ADVISOR_AI_TIMEOUT_MS).toBe(12_000);
+  });
+
+  it("requires review image bucket and region when image storage is enabled", () => {
+    expect(() => parseEnv({ ...base, REVIEW_IMAGES_ENABLED: "true" })).toThrow(
+      /REVIEW_IMAGE_S3_REGION|REVIEW_IMAGE_S3_BUCKET/,
+    );
+  });
+
+  it("parses MinIO review image configuration and paired credentials", () => {
+    const e = parseEnv({
+      ...base,
+      REVIEW_IMAGES_ENABLED: "true",
+      REVIEW_IMAGE_S3_ENDPOINT: "http://localhost:9000",
+      REVIEW_IMAGE_S3_REGION: "us-east-1",
+      REVIEW_IMAGE_S3_BUCKET: "laptopshop-review-images",
+      REVIEW_IMAGE_S3_ACCESS_KEY_ID: "minio",
+      REVIEW_IMAGE_S3_SECRET_ACCESS_KEY: "minio-secret",
+      REVIEW_IMAGE_S3_FORCE_PATH_STYLE: "true",
+      REVIEW_IMAGE_URL_TTL_SECONDS: "1200",
+    });
+    expect(e.REVIEW_IMAGES_ENABLED).toBe(true);
+    expect(e.REVIEW_IMAGE_S3_ENDPOINT).toBe("http://localhost:9000");
+    expect(e.REVIEW_IMAGE_S3_REGION).toBe("us-east-1");
+    expect(e.REVIEW_IMAGE_S3_BUCKET).toBe("laptopshop-review-images");
+    expect(e.REVIEW_IMAGE_S3_ACCESS_KEY_ID).toBe("minio");
+    expect(e.REVIEW_IMAGE_S3_FORCE_PATH_STYLE).toBe(true);
+    expect(e.REVIEW_IMAGE_URL_TTL_SECONDS).toBe(1200);
+  });
+
+  it.each([
+    ["only access key", { REVIEW_IMAGE_S3_ACCESS_KEY_ID: "minio" }],
+    ["only secret", { REVIEW_IMAGE_S3_SECRET_ACCESS_KEY: "minio-secret" }],
+    ["short ttl", { REVIEW_IMAGE_URL_TTL_SECONDS: "59" }],
+    ["long ttl", { REVIEW_IMAGE_URL_TTL_SECONDS: "3601" }],
+  ])("rejects invalid review image configuration: %s", (_label, values) => {
+    expect(() =>
+      parseEnv({
+        ...base,
+        REVIEW_IMAGES_ENABLED: "true",
+        REVIEW_IMAGE_S3_REGION: "us-east-1",
+        REVIEW_IMAGE_S3_BUCKET: "laptopshop-review-images",
+        ...values,
+      }),
+    ).toThrow();
   });
 
   it.each([
