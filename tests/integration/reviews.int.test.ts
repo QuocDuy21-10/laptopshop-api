@@ -1,4 +1,5 @@
 import { prisma } from "config/client";
+import { createReview } from "modules/reviews/reviews.service";
 import { createCompletedOrderItem, createProduct, createUser, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
@@ -24,6 +25,36 @@ describe("review database invariants", () => {
     await expect(
       prisma.review.create({ data: reviewData(user.id, product.id, item.id, 0) }),
     ).rejects.toThrow();
+  });
+
+  it("lets exactly one of two concurrent createReview calls win", async () => {
+    const user = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(user.id, product.id);
+
+    const results = await Promise.allSettled([
+      createReview(user.id, product.id, {
+        rating: 5,
+        content: "Nội dung đủ dài cho đánh giá đầu tiên.",
+        isAnonymous: true,
+      }),
+      createReview(user.id, product.id, {
+        rating: 4,
+        content: "Nội dung đủ dài cho đánh giá thứ hai.",
+        isAnonymous: true,
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(
+      results
+        .filter((result) => result.status === "rejected")
+        .map((result) => (result as PromiseRejectedResult).reason.code),
+    ).toEqual(["REVIEW_ALREADY_EXISTS"]);
+    expect(await prisma.review.count({ where: { userId: user.id, productId: product.id } })).toBe(
+      1,
+    );
+    expect(item.id).toBeGreaterThan(0);
   });
 
   it("allows only one review per user and product", async () => {

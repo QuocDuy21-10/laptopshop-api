@@ -7,3 +7,17 @@ export const listProductReviewsQuery = pageQuery.extend({
 });
 
 export type ListProductReviewsQuery = z.infer<typeof listProductReviewsQuery>;
+
+export const createReviewBody = z
+  .object({
+    rating: z.number().int().min(1).max(5),
+    title: z.string().trim().max(150).optional(),
+    content: z.string().trim().min(10).max(1500),
+    isAnonymous: z.boolean(),
+  })
+  .strict();
+
+export const updateReviewBody = createReviewBody.partial();
+
+export type CreateReviewBody = z.infer<typeof createReviewBody>;
+export type UpdateReviewBody = z.infer<typeof updateReviewBody>;
