@@ -58,6 +58,31 @@ describe("review database invariants", () => {
     ).toBe(1);
   });
 
+  it("enforces one helpful membership per user, supports multiple users, and preserves votes across hide/restore", async () => {
+    const firstUser = await createUser();
+    const secondUser = await createUser();
+    const admin = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(firstUser.id, product.id);
+    const review = await prisma.review.create({
+      data: reviewData(firstUser.id, product.id, item.id),
+    });
+
+    await prisma.reviewHelpful.create({ data: { reviewId: review.id, userId: secondUser.id } });
+    await expect(
+      prisma.reviewHelpful.create({ data: { reviewId: review.id, userId: secondUser.id } }),
+    ).rejects.toThrow();
+
+    const thirdUser = await createUser();
+    await prisma.reviewHelpful.create({ data: { reviewId: review.id, userId: thirdUser.id } });
+    expect(await prisma.reviewHelpful.count({ where: { reviewId: review.id } })).toBe(2);
+
+    await moderateReview(admin.id, review.id, { status: "HIDDEN", reason: "Cần xem lại" });
+    expect(await prisma.reviewHelpful.count({ where: { reviewId: review.id } })).toBe(2);
+    await moderateReview(admin.id, review.id, { status: "PUBLISHED" });
+    expect(await prisma.reviewHelpful.count({ where: { reviewId: review.id } })).toBe(2);
+  });
+
   it("allows only the declared image lifecycle states and unique object keys", async () => {
     const user = await createUser();
     const product = await createProduct(2);
@@ -127,6 +152,26 @@ describe("review database invariants", () => {
     });
     expect(rewritten.images).toEqual([]);
     expect(item.id).toBeGreaterThan(0);
+  });
+
+  it("deletes helpful memberships before customer rewrite", async () => {
+    const user = await createUser();
+    const voter = await createUser();
+    const product = await createProduct(2);
+    const item = await createCompletedOrderItem(user.id, product.id);
+    const review = await prisma.review.create({ data: reviewData(user.id, product.id, item.id) });
+    await prisma.reviewHelpful.create({ data: { reviewId: review.id, userId: voter.id } });
+
+    await deleteMyReview(user.id, review.id);
+    expect(await prisma.reviewHelpful.count({ where: { reviewId: review.id } })).toBe(0);
+
+    const rewritten = await createReview(user.id, product.id, {
+      rating: 4,
+      content: "Nội dung viết lại không kế thừa helpful cũ.",
+      isAnonymous: true,
+    });
+    expect(rewritten).not.toHaveProperty("helpfulVotes");
+    expect(await prisma.reviewHelpful.count({ where: { reviewId: rewritten.id } })).toBe(0);
   });
 
   it("rejects rating outside 1..5 at the database boundary", async () => {

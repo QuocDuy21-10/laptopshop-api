@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type RequestHandler } from "express";
 import { idParams } from "lib/http";
 import { authenticate } from "middlewares/authenticate";
 import { validate } from "middlewares/validate";
@@ -13,6 +13,7 @@ import {
   moderateReviewHandler,
   updateMyReviewHandler,
   deleteMyReviewHandler,
+  createReviewHelpfulHandlers,
 } from "modules/reviews/reviews.controller";
 import {
   adminListReviewsQuery,
@@ -20,7 +21,23 @@ import {
   listProductReviewsQuery,
   moderateReviewBody,
   updateReviewBody,
+  helpfulReviewIdsQuery,
 } from "modules/reviews/reviews.schema";
+
+export const createReviewHelpfulRoutes = (limiter?: RequestHandler) => {
+  const router = Router();
+  const handlers = createReviewHelpfulHandlers();
+  router.get("/helpful", authenticate, validate({ query: helpfulReviewIdsQuery }), handlers.list);
+  const mutationMiddleware = [authenticate, ...(limiter ? [limiter] : [])];
+  router.put("/:id/helpful", ...mutationMiddleware, validate({ params: idParams }), handlers.mark);
+  router.delete(
+    "/:id/helpful",
+    ...mutationMiddleware,
+    validate({ params: idParams }),
+    handlers.unmark,
+  );
+  return router;
+};
 
 export const productReviewRoutes = Router();
 

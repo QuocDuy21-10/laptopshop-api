@@ -10,6 +10,7 @@ const baseRow = {
   createdAt: new Date("2026-10-21T03:00:00.000Z"),
   contentUpdatedAt: new Date("2026-10-21T04:00:00.000Z"),
   user: { fullName: "Nguyễn Văn A" },
+  _count: { helpfulVotes: 7 },
 };
 
 describe("toPublicReviewDto", () => {
@@ -21,6 +22,9 @@ describe("toPublicReviewDto", () => {
     expect(dto).not.toHaveProperty("userId");
     expect(dto).not.toHaveProperty("orderDetailId");
     expect(dto.updatedAt).toEqual(baseRow.contentUpdatedAt);
+    expect(dto.helpfulCount).toBe(7);
+    expect(dto).not.toHaveProperty("helpfulVotes");
+    expect(dto).not.toHaveProperty("userId");
   });
 
   it("uses the full name for public reviews and a safe fallback for legacy rows", () => {

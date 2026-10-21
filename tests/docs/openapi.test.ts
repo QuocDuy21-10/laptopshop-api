@@ -15,6 +15,8 @@ const V1_PATHS = [
   "/api/v1/products/{id}/reviews/summary",
   "/api/v1/products/{id}/reviews/eligibility",
   "/api/v1/reviews/{id}",
+  "/api/v1/reviews/helpful",
+  "/api/v1/reviews/{id}/helpful",
   "/api/v1/reviews/{id}/images",
   "/api/v1/reviews/{id}/images/order",
   "/api/v1/reviews/{id}/images/{imageId}",
@@ -110,6 +112,9 @@ describe("openapi document", () => {
     expect(op("/api/v1/admin/reviews", "get").security).toEqual(secured);
     expect(op("/api/v1/admin/reviews/{id}/moderation", "patch").responses[403]).toBeDefined();
     expect(op("/api/v1/reviews/{id}/images", "post").security).toEqual(secured);
+    expect(op("/api/v1/reviews/helpful", "get").security).toEqual(secured);
+    expect(op("/api/v1/reviews/{id}/helpful", "put").security).toEqual(secured);
+    expect(op("/api/v1/reviews/{id}/helpful", "delete").responses[200]).toBeDefined();
     expect(
       op("/api/v1/reviews/{id}/images", "post").requestBody.content["multipart/form-data"],
     ).toBeDefined();
@@ -136,6 +141,13 @@ describe("openapi document", () => {
         AdminReviewListItem: expect.anything(),
         AdminReviewDetail: expect.anything(),
         AdminReviewSummary: expect.anything(),
+      }),
+    );
+    expect((publicReview.properties as any).helpfulCount).toBeDefined();
+    expect(doc.components?.schemas).toEqual(
+      expect.objectContaining({
+        HelpfulReviewState: expect.anything(),
+        HelpfulMutation: expect.anything(),
       }),
     );
   });

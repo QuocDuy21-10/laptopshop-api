@@ -44,6 +44,7 @@ const main = async () => {
       auth: createRedisLimitStore(redis, "rl:auth:"),
       advisor: createRedisLimitStore(redis, "rl:advisor:"),
       reviewImages: createRedisLimitStore(redis, "rl:review-images:"),
+      reviewHelpful: createRedisLimitStore(redis, "rl:review-helpful:"),
     },
     advisor,
     registerExtras: registerDocs,

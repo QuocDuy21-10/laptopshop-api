@@ -17,7 +17,13 @@ import type {
   ListProductReviewsQuery,
   ModerateReviewBody,
   UpdateReviewBody,
+  HelpfulReviewIdsQuery,
 } from "modules/reviews/reviews.schema";
+import {
+  listMyHelpfulReviewIds,
+  markReviewHelpful,
+  unmarkReviewHelpful,
+} from "modules/reviews/review-helpful.service";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
 import {
   addReviewImages,
@@ -96,3 +102,18 @@ export const moderateReviewHandler: RequestHandler = async (req, res) => {
   const { id } = res.locals.params as IdParams;
   res.json({ data: await moderateReview(req.auth!.id, id, req.body as ModerateReviewBody) });
 };
+
+export const createReviewHelpfulHandlers = () => ({
+  list: async (req: Request, res: Response) => {
+    const { reviewIds } = res.locals.query as HelpfulReviewIdsQuery;
+    res.json({ data: { reviewIds: await listMyHelpfulReviewIds(req.auth!.id, reviewIds) } });
+  },
+  mark: async (req: Request, res: Response) => {
+    const { id } = res.locals.params as IdParams;
+    res.json({ data: await markReviewHelpful(req.auth!.id, id) });
+  },
+  unmark: async (req: Request, res: Response) => {
+    const { id } = res.locals.params as IdParams;
+    res.json({ data: await unmarkReviewHelpful(req.auth!.id, id) });
+  },
+});

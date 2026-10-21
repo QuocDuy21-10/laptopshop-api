@@ -1,4 +1,8 @@
-import { createReviewBody, listProductReviewsQuery } from "modules/reviews/reviews.schema";
+import {
+  createReviewBody,
+  listProductReviewsQuery,
+  helpfulReviewIdsQuery,
+} from "modules/reviews/reviews.schema";
 
 describe("review schemas", () => {
   it("coerces list filters and applies defaults", () => {
@@ -35,6 +39,16 @@ describe("review schemas", () => {
         userId: 7,
         orderDetailId: 9,
         status: "PUBLISHED",
+      }),
+    ).toThrow();
+  });
+
+  it("normalizes helpful IDs and caps the batch at 50 unique positive values", () => {
+    expect(helpfulReviewIdsQuery.parse({ reviewIds: "2,2,5" })).toEqual({ reviewIds: [2, 5] });
+    expect(() => helpfulReviewIdsQuery.parse({ reviewIds: "0,1" })).toThrow();
+    expect(() =>
+      helpfulReviewIdsQuery.parse({
+        reviewIds: Array.from({ length: 51 }, (_, i) => i + 1).join(","),
       }),
     ).toThrow();
   });

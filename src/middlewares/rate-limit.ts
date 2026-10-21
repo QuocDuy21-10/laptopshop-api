@@ -19,6 +19,7 @@ export const createLimiters = (stores?: {
   auth?: Store;
   advisor?: Store;
   reviewImages?: Store;
+  reviewHelpful?: Store;
 }) => ({
   globalLimiter: rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -53,5 +54,14 @@ export const createLimiters = (stores?: {
     legacyHeaders: false,
     message: tooMany,
     store: stores?.reviewImages,
+  }),
+  reviewHelpfulLimiter: rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 60,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: tooMany,
+    keyGenerator: (req) => req.auth?.id?.toString() ?? req.ip,
+    store: stores?.reviewHelpful,
   }),
 });

@@ -331,12 +331,16 @@ export const deleteMyReview = async (userId: number, reviewId: number): Promise<
       select: { id: true, deletedAt: true },
     });
     if (!existing) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
-    if (existing.deletedAt !== null) return [];
+    if (existing.deletedAt !== null) {
+      await tx.reviewHelpful.deleteMany({ where: { reviewId } });
+      return [];
+    }
     const now = new Date();
     await tx.review.update({
       where: { id: reviewId, userId },
       data: { deletedAt: now },
     });
+    await tx.reviewHelpful.deleteMany({ where: { reviewId } });
     const images =
       (await tx.reviewImage.findMany({
         where: { reviewId, status: { in: ["PENDING", "READY"] }, deletedAt: null },
