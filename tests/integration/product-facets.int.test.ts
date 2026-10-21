@@ -1,6 +1,7 @@
 import { prisma } from "config/client";
 import { getProductFacets } from "modules/products/products.facets.service";
-import { resetDb } from "./fixtures";
+import { createCompletedOrderItem, createProduct, createUser, resetDb } from "./fixtures";
+import { queryRatedProductPage } from "modules/products/products.rating.repository";
 
 beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
@@ -203,6 +204,53 @@ describe("product facets on MySQL", () => {
     const result = await getProductFacets(allQuery());
     expect(result.groups.inStock).toEqual(expect.arrayContaining([{ value: "true", count: 1 }]));
   });
+
+  it("keeps rating totals and self-excluding thresholds aligned", async () => {
+    const firstUser = await createUser();
+    const secondUser = await createUser();
+    const fourStars = await createProduct(2, 15_000_000);
+    const threeStars = await createProduct(2, 18_000_000);
+    await prisma.product.update({
+      where: { id: fourStars.id },
+      data: { name: "Rating ASUS four", factory: "ASUS" },
+    });
+    await prisma.product.update({
+      where: { id: threeStars.id },
+      data: { name: "Rating ASUS three", factory: "ASUS" },
+    });
+    for (const [userId, productId, rating] of [
+      [firstUser.id, fourStars.id, 4],
+      [secondUser.id, threeStars.id, 3],
+    ] as const) {
+      const item = await createCompletedOrderItem(userId, productId);
+      await prisma.review.create({
+        data: {
+          userId,
+          productId,
+          orderDetailId: item.id,
+          rating,
+          content: "Đánh giá",
+          isAnonymous: true,
+          status: "PUBLISHED",
+        },
+      });
+    }
+
+    const base = { ...allQuery("Rating"), price: ["10-15m", "15-20m"], factory: ["ASUS"] };
+    const four = await getProductFacets({ ...base, minRating: 4 });
+    const three = await getProductFacets({ ...base, minRating: 3 });
+    expect(four.total).toBe(1);
+    expect(three.total).toBe(2);
+    expect(four.groups.minRating).toEqual(
+      expect.arrayContaining([
+        { value: "4", count: 1 },
+        { value: "3", count: 2 },
+      ]),
+    );
+    expect(
+      (await queryRatedProductPage({ ...base, minRating: 4, page: 1, pageSize: 10 })).total,
+    ).toBe(four.total);
+  });
 });
 
 const allQuery = (q?: string) => ({
@@ -221,6 +269,7 @@ const allQuery = (q?: string) => ({
   minBatteryWh: undefined,
   maxWeightGrams: undefined,
   minWarrantyMonths: undefined,
+  minRating: undefined,
   inStock: undefined,
   q,
 });
