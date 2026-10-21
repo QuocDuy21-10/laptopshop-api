@@ -8,6 +8,7 @@ import { toProductDto } from "modules/products/products.mapper";
 import {
   AdminExportProductsQuery,
   AdminListProductsQuery,
+  ListProductsQuery,
   ProductBody,
   ProductPatchBody,
 } from "modules/products/products.schema";
@@ -23,7 +24,10 @@ const nonNullEntries = (data: Record<string, unknown>) =>
     Object.entries(data).filter(([, value]) => value !== null && value !== undefined),
   );
 
-export const listProducts = async (q: AdminListProductsQuery, admin = false) => {
+export const listProducts = async (
+  q: ListProductsQuery | AdminListProductsQuery,
+  admin = false,
+) => {
   const where = productWhere(q, { admin });
   const orderBy: Prisma.ProductOrderByWithRelationInput | Prisma.ProductOrderByWithRelationInput[] =
     q.sort ? [{ price: q.sort === "price_asc" ? "asc" : "desc" }, { id: "asc" }] : [{ id: "asc" }];
