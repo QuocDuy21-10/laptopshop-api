@@ -739,7 +739,10 @@ op({
   auth: "user",
   request: { ...id, body: json(updateReviewBody) },
   ok: [200, "Updated", data(OwnerReview)],
-  errors: { 404: "Review not found", 409: "Review deleted or public name unavailable" },
+  errors: {
+    404: "Review not found",
+    409: "Review deleted, state changed, or public name unavailable",
+  },
 });
 op({
   method: "delete",
@@ -1193,7 +1196,11 @@ op({
   auth: "admin",
   request: { ...id, body: json(moderateReviewBody) },
   ok: [200, "Updated", data(AdminReviewDetail)],
-  errors: { 400: "Invalid moderation input", 404: "Review not found", 409: "Review deleted" },
+  errors: {
+    400: "Invalid moderation input",
+    404: "Review not found",
+    409: "Review deleted or state changed",
+  },
 });
 op({
   method: "post",

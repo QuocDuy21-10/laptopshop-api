@@ -37,7 +37,10 @@ const deletedOwnerReviewRow = {
   deletedAt: new Date("2026-10-20T03:00:00.000Z"),
 };
 
-beforeEach(resetPrisma);
+beforeEach(() => {
+  resetPrisma();
+  prismaMock.$queryRaw.mockResolvedValue([{ id: 18, deletedAt: null }]);
+});
 
 describe("GET /api/v1/products/:id/reviews", () => {
   it("lists only public reviews with a stable newest sort", async () => {
@@ -148,27 +151,28 @@ describe("review eligibility and creation", () => {
   });
 
   it.each([
-    ["NOT_PURCHASED", []],
-    [
-      "PAYMENT_NOT_CONFIRMED",
-      [{ id: 1, order: { status: "COMPLETED", paymentStatus: "PAYMENT_UNPAID" } }],
-    ],
-    [
-      "ORDER_NOT_COMPLETED",
-      [{ id: 1, order: { status: "SHIPPING", paymentStatus: "PAYMENT_UNPAID" } }],
-    ],
-  ] as const)("returns %s for an ineligible purchase state", async (reason, items) => {
-    prismaMock.product.findUnique.mockResolvedValue({ id: 12 });
-    prismaMock.review.findUnique.mockResolvedValue(null);
-    prismaMock.orderDetail.findMany.mockResolvedValue(items);
+    ["NOT_PURCHASED", null, null, null],
+    ["PAYMENT_NOT_CONFIRMED", null, { id: 1 }, null],
+    ["ORDER_NOT_COMPLETED", null, null, { id: 1 }],
+  ] as const)(
+    "returns %s for an ineligible purchase state",
+    async (reason, eligible, completed, any) => {
+      prismaMock.product.findUnique.mockResolvedValue({ id: 12 });
+      prismaMock.review.findUnique.mockResolvedValue(null);
+      prismaMock.orderDetail.findFirst
+        .mockResolvedValueOnce(eligible)
+        .mockResolvedValueOnce(completed)
+        .mockResolvedValueOnce(any);
 
-    const res = await request(buildApp())
-      .get("/api/v1/products/12/reviews/eligibility")
-      .set("Cookie", cookieFor(USER));
+      const res = await request(buildApp())
+        .get("/api/v1/products/12/reviews/eligibility")
+        .set("Cookie", cookieFor(USER));
 
-    expect(res.status).toBe(200);
-    expect(res.body.data).toMatchObject({ eligible: false, reason });
-  });
+      expect(res.status).toBe(200);
+      expect(res.body.data).toMatchObject({ eligible: false, reason });
+      expect(prismaMock.orderDetail.findMany).not.toHaveBeenCalled();
+    },
+  );
 
   it("allows a qualifying purchase even when the product is inactive", async () => {
     prismaMock.product.findUnique.mockResolvedValue({ id: 12, isActive: false });
@@ -201,6 +205,34 @@ describe("review eligibility and creation", () => {
     expect(res.body.error.code).toBe("REVIEW_FULL_NAME_REQUIRED");
   });
 
+  it.each([
+    ["NOT_PURCHASED", null, null, null],
+    ["ORDER_NOT_COMPLETED", null, null, { id: 91 }],
+    ["PAYMENT_NOT_CONFIRMED", null, { id: 91 }, null],
+  ] as const)(
+    "returns the exact %s reason when POST is not eligible",
+    async (reason, eligible, completed, any) => {
+      prismaMock.product.findUnique.mockResolvedValue({ id: 12 });
+      prismaMock.review.findUnique.mockResolvedValue(null);
+      prismaMock.orderDetail.findFirst
+        .mockResolvedValueOnce(eligible)
+        .mockResolvedValueOnce(completed)
+        .mockResolvedValueOnce(any);
+
+      const res = await request(buildApp())
+        .post("/api/v1/products/12/reviews")
+        .set("Cookie", cookieFor(USER))
+        .send({ rating: 5, content: "Nội dung đủ dài", isAnonymous: true });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toMatchObject({
+        code: "REVIEW_NOT_ELIGIBLE",
+        details: { reason },
+      });
+      expect(prismaMock.review.create).not.toHaveBeenCalled();
+    },
+  );
+
   it("returns 400 when the create body contains client-owned fields", async () => {
     const res = await request(buildApp())
       .post("/api/v1/products/12/reviews")
@@ -222,7 +254,8 @@ describe("review eligibility and creation", () => {
 describe("customer review lifecycle", () => {
   it("lets the owner edit a review and keeps hidden status", async () => {
     prismaMock.review.findFirst.mockResolvedValue(hiddenOwnerReviewRow);
-    prismaMock.review.update.mockResolvedValue({
+    prismaMock.review.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.review.findUnique.mockResolvedValue({
       ...hiddenOwnerReviewRow,
       content: "Nội dung mới đủ dài hơn.",
       contentUpdatedAt: new Date("2026-10-21T05:00:00.000Z"),
@@ -235,9 +268,15 @@ describe("customer review lifecycle", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.status).toBe("HIDDEN");
-    expect(prismaMock.review.update).toHaveBeenCalledWith(
+    expect(prismaMock.review.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 18, userId: USER.id },
+        where: expect.objectContaining({ id: 18, userId: USER.id }),
+        data: expect.any(Object),
+      }),
+    );
+    expect(prismaMock.review.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ deletedAt: null }),
         data: expect.objectContaining({ content: "Nội dung mới đủ dài hơn." }),
       }),
     );
@@ -256,9 +295,24 @@ describe("customer review lifecycle", () => {
     expect(res.body.error.code).toBe("REVIEW_FULL_NAME_REQUIRED");
   });
 
+  it("requires fullName when editing an already-public legacy review", async () => {
+    prismaMock.review.findFirst.mockResolvedValue({ ...ownerReviewRow, isAnonymous: false });
+    prismaMock.user.findUnique.mockResolvedValue({ fullName: "   " });
+
+    const res = await request(buildApp())
+      .patch("/api/v1/reviews/18")
+      .set("Cookie", cookieFor(USER))
+      .send({ rating: 4 });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("REVIEW_FULL_NAME_REQUIRED");
+    expect(prismaMock.review.updateMany).not.toHaveBeenCalled();
+  });
+
   it("allows editing a review for an inactive product", async () => {
     prismaMock.review.findFirst.mockResolvedValue(ownerReviewRow);
-    prismaMock.review.update.mockResolvedValue(ownerReviewRow);
+    prismaMock.review.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.review.findUnique.mockResolvedValue(ownerReviewRow);
 
     const res = await request(buildApp())
       .patch("/api/v1/reviews/18")
@@ -266,6 +320,20 @@ describe("customer review lifecycle", () => {
       .send({ rating: 4 });
 
     expect(res.status).toBe(200);
+  });
+
+  it("rejects a PATCH when the active review changed before the conditional write", async () => {
+    prismaMock.review.findFirst.mockResolvedValue(ownerReviewRow);
+    prismaMock.review.updateMany.mockResolvedValue({ count: 0 });
+
+    const res = await request(buildApp())
+      .patch("/api/v1/reviews/18")
+      .set("Cookie", cookieFor(USER))
+      .send({ rating: 4 });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("REVIEW_STATE_CHANGED");
+    expect(prismaMock.review.findUnique).not.toHaveBeenCalled();
   });
 
   it("returns not found for another owner or a missing review", async () => {
@@ -293,9 +361,9 @@ describe("customer review lifecycle", () => {
   });
 
   it("soft-deletes a review and makes repeated DELETE idempotent", async () => {
-    prismaMock.review.findFirst
-      .mockResolvedValueOnce(ownerReviewRow)
-      .mockResolvedValueOnce(deletedOwnerReviewRow);
+    prismaMock.$queryRaw
+      .mockResolvedValueOnce([{ id: 18, deletedAt: null }])
+      .mockResolvedValueOnce([{ id: 18, deletedAt: deletedOwnerReviewRow.deletedAt }]);
 
     const first = await request(buildApp())
       .delete("/api/v1/reviews/18")

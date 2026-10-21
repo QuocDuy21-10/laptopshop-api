@@ -3,6 +3,7 @@ import { prisma } from "config/client";
 import { env } from "config/env";
 import { AppError, isUniqueViolation, notFound } from "lib/errors";
 import { pageArgs, pageMeta } from "lib/http";
+import { assertDayRange, createdAtRange } from "lib/shop-time";
 import {
   publicReviewSelect,
   ownerReviewSelect,
@@ -106,16 +107,44 @@ const requirePublicName = async (userId: number, isAnonymous: boolean) => {
     );
 };
 
-const purchaseRows = (userId: number, productId: number) =>
-  prisma.orderDetail.findMany({
-    where: { productId, order: { userId } },
-    select: {
-      id: true,
-      orderId: true,
-      order: { select: { status: true, paymentStatus: true, completedAt: true } },
+type ReviewEligibilityState =
+  | { purchase: { id: number }; reason: null }
+  | {
+      purchase: null;
+      reason: Exclude<ReviewEligibilityReason, "ALREADY_REVIEWED">;
+    };
+
+const resolveReviewEligibility = async (
+  userId: number,
+  productId: number,
+): Promise<ReviewEligibilityState> => {
+  const eligiblePurchase = await prisma.orderDetail.findFirst({
+    where: {
+      productId,
+      order: { userId, status: "COMPLETED", paymentStatus: "PAYMENT_SUCCESS" },
     },
+    select: { id: true },
     orderBy: { id: "desc" },
   });
+  if (eligiblePurchase) return { purchase: eligiblePurchase, reason: null };
+
+  const completedPurchase = await prisma.orderDetail.findFirst({
+    where: { productId, order: { userId, status: "COMPLETED" } },
+    select: { id: true },
+    orderBy: { id: "desc" },
+  });
+  if (completedPurchase) return { purchase: null, reason: "PAYMENT_NOT_CONFIRMED" };
+
+  const anyPurchase = await prisma.orderDetail.findFirst({
+    where: { productId, order: { userId } },
+    select: { id: true },
+    orderBy: { id: "desc" },
+  });
+  return {
+    purchase: null,
+    reason: anyPurchase ? "ORDER_NOT_COMPLETED" : "NOT_PURCHASED",
+  };
+};
 
 const reviewOrderBy = (
   sort: ListProductReviewsQuery["sort"],
@@ -125,29 +154,25 @@ const reviewOrderBy = (
   return [{ createdAt: "desc" }, { id: "desc" }];
 };
 
-const adminReviewWhere = (query: AdminListReviewsQuery): Prisma.ReviewWhereInput => ({
-  ...(query.productId === undefined ? {} : { productId: query.productId }),
-  ...(query.rating === undefined ? {} : { rating: query.rating }),
-  ...(query.status === undefined ? {} : { status: query.status }),
-  ...(query.deleted === undefined ? {} : { deletedAt: query.deleted ? { not: null } : null }),
-  ...(query.q
-    ? {
-        OR: [
-          { product: { name: { contains: query.q } } },
-          { user: { fullName: { contains: query.q } } },
-          { user: { username: { contains: query.q } } },
-        ],
-      }
-    : {}),
-  ...(query.from || query.to
-    ? {
-        createdAt: {
-          ...(query.from ? { gte: new Date(`${query.from}T00:00:00.000Z`) } : {}),
-          ...(query.to ? { lt: new Date(`${query.to}T23:59:59.999Z`) } : {}),
-        },
-      }
-    : {}),
-});
+const adminReviewWhere = (query: AdminListReviewsQuery): Prisma.ReviewWhereInput => {
+  assertDayRange(query.from, query.to);
+  return {
+    ...(query.productId === undefined ? {} : { productId: query.productId }),
+    ...(query.rating === undefined ? {} : { rating: query.rating }),
+    ...(query.status === undefined ? {} : { status: query.status }),
+    ...(query.deleted === undefined ? {} : { deletedAt: query.deleted ? { not: null } : null }),
+    ...(query.q
+      ? {
+          OR: [
+            { product: { name: { contains: query.q } } },
+            { user: { fullName: { contains: query.q } } },
+            { user: { username: { contains: query.q } } },
+          ],
+        }
+      : {}),
+    ...createdAtRange(query.from, query.to),
+  };
+};
 
 export const listPublishedReviews = async (
   productId: number,
@@ -208,11 +233,8 @@ export const getReviewEligibility = async (
     };
   }
 
-  const purchases = await purchaseRows(userId, productId);
-  const eligiblePurchase = purchases.find(
-    (item) => item.order.status === "COMPLETED" && item.order.paymentStatus === "PAYMENT_SUCCESS",
-  );
-  if (eligiblePurchase) {
+  const eligibility = await resolveReviewEligibility(userId, productId);
+  if (eligibility.purchase) {
     return {
       eligible: true,
       reason: null,
@@ -221,13 +243,12 @@ export const getReviewEligibility = async (
     };
   }
 
-  const reason: Exclude<ReviewEligibilityReason, "ALREADY_REVIEWED"> =
-    purchases.length === 0
-      ? "NOT_PURCHASED"
-      : purchases.some((item) => item.order.status === "COMPLETED")
-        ? "PAYMENT_NOT_CONFIRMED"
-        : "ORDER_NOT_COMPLETED";
-  return { eligible: false, reason, existingReview: null, willRequireModeration: false };
+  return {
+    eligible: false,
+    reason: eligibility.reason,
+    existingReview: null,
+    willRequireModeration: false,
+  };
 };
 
 export const createReview = async (
@@ -240,15 +261,9 @@ export const createReview = async (
   if (existing && existing.deletedAt === null)
     throw new AppError("You already reviewed this product", 409, "REVIEW_ALREADY_EXISTS");
 
-  const purchase = await prisma.orderDetail.findFirst({
-    where: {
-      productId,
-      order: { userId, status: "COMPLETED", paymentStatus: "PAYMENT_SUCCESS" },
-    },
-    select: { id: true },
-    orderBy: { id: "desc" },
-  });
-  if (!purchase) throw reviewNotEligible("ORDER_NOT_COMPLETED");
+  const eligibility = await resolveReviewEligibility(userId, productId);
+  if (!eligibility.purchase) throw reviewNotEligible(eligibility.reason);
+  const purchase = eligibility.purchase;
 
   await requirePublicName(userId, input.isAnonymous);
 
@@ -308,28 +323,51 @@ export const updateMyReview = async (
   if (!existing) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
   if (existing.deletedAt !== null)
     throw new AppError("Review has been deleted", 409, "REVIEW_DELETED");
-  if (input.isAnonymous === false) await requirePublicName(userId, false);
+  const nextIsAnonymous = input.isAnonymous ?? existing.isAnonymous;
+  await requirePublicName(userId, nextIsAnonymous);
 
-  const review = await prisma.review.update({
-    where: { id: reviewId, userId },
-    data: {
-      ...(input.rating === undefined ? {} : { rating: input.rating }),
-      ...(input.title === undefined ? {} : { title: input.title.trim() || null }),
-      ...(input.content === undefined ? {} : { content: input.content.trim() }),
-      ...(input.isAnonymous === undefined ? {} : { isAnonymous: input.isAnonymous }),
-      contentUpdatedAt: new Date(),
-    },
-    select: ownerReviewSelect,
+  const review = await prisma.$transaction(async (tx) => {
+    const lockedRows = await tx.$queryRaw<Array<{ id: number; deletedAt: Date | null }>>`
+      SELECT id, deletedAt
+      FROM reviews
+      WHERE id = ${reviewId} AND userId = ${userId}
+      FOR UPDATE
+    `;
+    const locked = lockedRows[0];
+    if (!locked) throw new AppError("Review state has changed", 409, "REVIEW_STATE_CHANGED");
+    if (locked.deletedAt !== null)
+      throw new AppError("Review has been deleted", 409, "REVIEW_DELETED");
+
+    const { count } = await tx.review.updateMany({
+      where: { id: reviewId, userId, deletedAt: null },
+      data: {
+        ...(input.rating === undefined ? {} : { rating: input.rating }),
+        ...(input.title === undefined ? {} : { title: input.title.trim() || null }),
+        ...(input.content === undefined ? {} : { content: input.content.trim() }),
+        ...(input.isAnonymous === undefined ? {} : { isAnonymous: input.isAnonymous }),
+        contentUpdatedAt: new Date(),
+      },
+    });
+    if (count === 0) throw new AppError("Review state has changed", 409, "REVIEW_STATE_CHANGED");
+
+    return (await tx.review.findUnique({
+      where: { id: reviewId },
+      select: ownerReviewSelect,
+    })) as OwnerReviewRow | null;
   });
-  return toOwnerReviewWithImages(review as OwnerReviewRow);
+  if (!review) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
+  return toOwnerReviewWithImages(review);
 };
 
 export const deleteMyReview = async (userId: number, reviewId: number): Promise<void> => {
   const deletedImages = await prisma.$transaction(async (tx) => {
-    const existing = await tx.review.findFirst({
-      where: { id: reviewId, userId },
-      select: { id: true, deletedAt: true },
-    });
+    const lockedRows = await tx.$queryRaw<Array<{ id: number; deletedAt: Date | null }>>`
+      SELECT id, deletedAt
+      FROM reviews
+      WHERE id = ${reviewId} AND userId = ${userId}
+      FOR UPDATE
+    `;
+    const existing = lockedRows[0];
     if (!existing) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
     if (existing.deletedAt !== null) {
       await tx.reviewHelpful.deleteMany({ where: { reviewId } });
@@ -441,16 +479,33 @@ export const moderateReview = async (
   if (!current) throw new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
   if (current.deletedAt !== null)
     throw new AppError("Review has been deleted", 409, "REVIEW_DELETED");
-  if (current.status === "PUBLISHED" && input.status === "PUBLISHED")
-    return getAdminReview(reviewId);
-  await prisma.review.update({
-    where: { id: reviewId },
-    data: {
-      status: input.status,
-      hiddenReason: input.status === "HIDDEN" ? input.reason! : null,
-      moderatedById: adminId,
-      moderatedAt: new Date(),
-    },
+  await prisma.$transaction(async (tx) => {
+    const lockedRows = await tx.$queryRaw<
+      Array<{ id: number; status: "PUBLISHED" | "HIDDEN"; deletedAt: Date | null }>
+    >`
+      SELECT id, status, deletedAt
+      FROM reviews
+      WHERE id = ${reviewId}
+      FOR UPDATE
+    `;
+    const locked = lockedRows[0];
+    if (!locked) throw new AppError("Review state has changed", 409, "REVIEW_STATE_CHANGED");
+    if (locked.deletedAt !== null)
+      throw new AppError("Review has been deleted", 409, "REVIEW_DELETED");
+    if (locked.status !== current.status)
+      throw new AppError("Review state has changed", 409, "REVIEW_STATE_CHANGED");
+    if (current.status === "PUBLISHED" && input.status === "PUBLISHED") return;
+
+    const { count } = await tx.review.updateMany({
+      where: { id: reviewId, deletedAt: null, status: current.status },
+      data: {
+        status: input.status,
+        hiddenReason: input.status === "HIDDEN" ? input.reason! : null,
+        moderatedById: adminId,
+        moderatedAt: new Date(),
+      },
+    });
+    if (count === 0) throw new AppError("Review state has changed", 409, "REVIEW_STATE_CHANGED");
   });
   return getAdminReview(reviewId);
 };

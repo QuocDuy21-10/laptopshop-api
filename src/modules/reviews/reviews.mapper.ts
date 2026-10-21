@@ -40,7 +40,7 @@ export const toPublicReviewDto = (
   title: review.title,
   content: review.content,
   author: {
-    name: review.isAnonymous ? "****" : (review.user.fullName ?? "Khách hàng LaptopShop"),
+    name: review.isAnonymous ? "****" : review.user.fullName?.trim() || "Khách hàng LaptopShop",
     anonymous: review.isAnonymous,
   },
   verifiedPurchase: true,

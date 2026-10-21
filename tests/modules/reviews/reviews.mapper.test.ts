@@ -38,6 +38,19 @@ describe("toPublicReviewDto", () => {
       name: "Khách hàng LaptopShop",
       anonymous: false,
     });
+    expect(
+      toPublicReviewDto({ ...baseRow, isAnonymous: false, user: { fullName: "  " } }).author,
+    ).toEqual({
+      name: "Khách hàng LaptopShop",
+      anonymous: false,
+    });
+    expect(
+      toPublicReviewDto({ ...baseRow, isAnonymous: false, user: { fullName: "  Nguyễn Văn A  " } })
+        .author,
+    ).toEqual({
+      name: "Nguyễn Văn A",
+      anonymous: false,
+    });
   });
 
   it("maps signed images in position order without exposing object keys", () => {
