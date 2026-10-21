@@ -6,7 +6,7 @@ import { prisma } from "config/client";
 import { andSql, catalogFilterConditions } from "modules/products/products.catalog-sql";
 
 type RatingRow = {
-  id: number;
+  id: number | null;
   averageRating: number | string | null;
   totalReviews: bigint | number;
   total: bigint | number;
@@ -20,10 +20,10 @@ export type RatedProductPage = {
 
 const orderBy = (sort: ListProductsQuery["sort"]) => {
   if (sort === "rating_desc")
-    return Prisma.sql`averageRating IS NULL ASC, averageRating DESC, totalReviews DESC, p.id ASC`;
-  if (sort === "price_desc") return Prisma.sql`p.price DESC, p.id ASC`;
-  if (sort === "price_asc") return Prisma.sql`p.price ASC, p.id ASC`;
-  return Prisma.sql`p.id ASC`;
+    return Prisma.sql`averageRating IS NULL ASC, averageRating DESC, totalReviews DESC, id ASC`;
+  if (sort === "price_desc") return Prisma.sql`price DESC, id ASC`;
+  if (sort === "price_asc") return Prisma.sql`price ASC, id ASC`;
+  return Prisma.sql`id ASC`;
 };
 
 export const queryRatedProductPage = async (
@@ -39,28 +39,38 @@ export const queryRatedProductPage = async (
       WHERE status = 'PUBLISHED' AND deletedAt IS NULL
       GROUP BY productId
     )
-    SELECT p.id, rs.averageRating, COALESCE(rs.totalReviews, 0) AS totalReviews,
-      COUNT(*) OVER() AS total
-    FROM products p
-    LEFT JOIN review_stats rs ON rs.productId = p.id
-    ${andSql(conditions)}
-    ORDER BY ${orderBy(query.sort)}
-    LIMIT ${take} OFFSET ${skip}
+    , filtered AS (
+      SELECT p.id, p.price, rs.averageRating, COALESCE(rs.totalReviews, 0) AS totalReviews
+      FROM products p
+      LEFT JOIN review_stats rs ON rs.productId = p.id
+      ${andSql(conditions)}
+    ), page AS (
+      SELECT * FROM filtered
+      ORDER BY ${orderBy(query.sort)}
+      LIMIT ${take} OFFSET ${skip}
+    ), total_count AS (
+      SELECT COUNT(*) AS total FROM filtered
+    )
+    SELECT page.id, page.averageRating, page.totalReviews, total_count.total
+    FROM total_count
+    LEFT JOIN page ON TRUE
   `);
   const summaries = new Map(
-    rows.map(
-      (row) =>
-        [
-          row.id,
-          {
-            averageRating: row.averageRating === null ? null : Number(row.averageRating),
-            totalReviews: Number(row.totalReviews),
-          },
-        ] as const,
-    ),
+    rows
+      .filter((row) => row.id !== null)
+      .map(
+        (row) =>
+          [
+            row.id,
+            {
+              averageRating: row.averageRating === null ? null : Number(row.averageRating),
+              totalReviews: Number(row.totalReviews),
+            },
+          ] as const,
+      ),
   );
   return {
-    productIds: rows.map((row) => row.id),
+    productIds: rows.flatMap((row) => (row.id === null ? [] : [row.id])),
     summaries,
     total: rows.length ? Number(rows[0].total) : 0,
   };

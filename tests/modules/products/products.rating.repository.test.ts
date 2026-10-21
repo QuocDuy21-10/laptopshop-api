@@ -25,7 +25,7 @@ describe("rated catalog repository", () => {
     expect(statement.strings.join(" ")).toContain("averageRating IS NULL ASC");
     expect(statement.strings.join(" ")).toContain("averageRating DESC");
     expect(statement.strings.join(" ")).toContain("totalReviews DESC");
-    expect(statement.strings.join(" ")).toContain("p.id ASC");
+    expect(statement.strings.join(" ")).toContain("id ASC");
     expect(result).toEqual({
       productIds: [2, 4],
       summaries: new Map([
@@ -41,7 +41,20 @@ describe("rated catalog repository", () => {
     await queryRatedProductPage(query({ page: 3, pageSize: 4, sort: "price_desc" }));
     const [statement] = prismaMock.$queryRaw.mock.calls[0];
     expect(statement.values).toEqual(expect.arrayContaining([8, 4]));
-    expect(statement.strings.join(" ")).toContain("p.price DESC");
+    expect(statement.strings.join(" ")).toContain("price DESC");
     expect(statement.strings.join(" ")).not.toContain("name_asc");
+  });
+
+  it("preserves the total when the requested page is beyond the last page", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([
+      { id: null, averageRating: null, totalReviews: BigInt(0), total: BigInt(3) },
+    ]);
+
+    await expect(
+      queryRatedProductPage(query({ page: 99, pageSize: 10, sort: "rating_desc" })),
+    ).resolves.toMatchObject({
+      productIds: [],
+      total: 3,
+    });
   });
 });
