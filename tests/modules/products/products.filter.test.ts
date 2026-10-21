@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { productFacetsQuery } from "modules/products/products.schema";
 import { productWhere } from "modules/products/products.filter";
+import { facetDefinitions } from "modules/products/products.facets";
 
 describe("productWhere", () => {
   it("combines OR-equivalent values within groups and ANDs groups together", () => {
@@ -55,6 +56,19 @@ describe("productWhere", () => {
     expect(productWhere(query, { admin: false })).toEqual({
       isActive: true,
       AND: [{ gpuType: { in: ["DEDICATED"] } }],
+    });
+  });
+
+  it("defines one Vietnamese single-select minimum-rating facet", () => {
+    const ratingFacets = facetDefinitions.filter((facet) => facet.key === "minRating");
+    expect(ratingFacets).toHaveLength(1);
+    expect(ratingFacets[0]).toMatchObject({
+      name: "Đánh giá tối thiểu",
+      mode: "SINGLE_MIN",
+      options: [
+        { value: "4", name: "Từ 4 sao" },
+        { value: "3", name: "Từ 3 sao" },
+      ],
     });
   });
 });

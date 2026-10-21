@@ -103,36 +103,42 @@ const userShape = {
 };
 const User = registry.register("User", z.object(userShape));
 const Me = registry.register("Me", z.object({ ...userShape, cartItemCount: z.number() }));
-const Product = registry.register(
-  "Product",
-  z.object({
-    id: z.number(),
-    name: z.string(),
-    price: z.number(),
-    image: z.string().nullable(),
-    detailDesc: z.string().nullable(),
-    shortDesc: z.string().nullable(),
-    quantity: z.number(),
-    sold: z.number().nullable(),
-    factory: z.string().nullable(),
-    target: z.string().nullable(),
-    isActive: z.boolean(),
-    cpu: z.string().nullable(),
-    cpuBrand: z.string().nullable(),
-    gpu: z.string().nullable(),
-    gpuBrand: z.string().nullable(),
-    gpuType: z.string().nullable(),
-    ramGb: z.number().int().nullable(),
-    storageGb: z.number().int().nullable(),
-    screenSizeInch: z.number().nullable(),
-    screenResolution: z.string().nullable(),
-    resolutionTier: z.string().nullable(),
-    panelType: z.string().nullable(),
-    refreshRateHz: z.number().int().nullable(),
-    batteryWh: z.number().int().nullable(),
-    weightGrams: z.number().int().nullable(),
-    warrantyMonths: z.number().int().nullable(),
-  }),
+const productShape = {
+  id: z.number(),
+  name: z.string(),
+  price: z.number(),
+  image: z.string().nullable(),
+  detailDesc: z.string().nullable(),
+  shortDesc: z.string().nullable(),
+  quantity: z.number(),
+  sold: z.number().nullable(),
+  factory: z.string().nullable(),
+  target: z.string().nullable(),
+  isActive: z.boolean(),
+  cpu: z.string().nullable(),
+  cpuBrand: z.string().nullable(),
+  gpu: z.string().nullable(),
+  gpuBrand: z.string().nullable(),
+  gpuType: z.string().nullable(),
+  ramGb: z.number().int().nullable(),
+  storageGb: z.number().int().nullable(),
+  screenSizeInch: z.number().nullable(),
+  screenResolution: z.string().nullable(),
+  resolutionTier: z.string().nullable(),
+  panelType: z.string().nullable(),
+  refreshRateHz: z.number().int().nullable(),
+  batteryWh: z.number().int().nullable(),
+  weightGrams: z.number().int().nullable(),
+  warrantyMonths: z.number().int().nullable(),
+};
+const Product = registry.register("Product", z.object(productShape));
+const ProductReviewSummary = registry.register(
+  "ProductReviewSummary",
+  z.object({ averageRating: z.number().nullable(), totalReviews: z.number().int() }),
+);
+const CatalogProduct = registry.register(
+  "CatalogProduct",
+  z.object({ ...productShape, reviewSummary: ProductReviewSummary }),
 );
 const AdvisorRequest = registry.register(
   "AdvisorRequest",
@@ -691,7 +697,7 @@ op({
   summary: "List products",
   tag: "products",
   request: { query: listProductsQuery },
-  ok: [200, "OK", page(Product)],
+  ok: [200, "OK", page(CatalogProduct)],
   errors: { 400: "Invalid filter" },
 });
 op({
@@ -725,7 +731,7 @@ op({
   summary: "Product detail",
   tag: "products",
   request: id,
-  ok: [200, "OK", data(Product)],
+  ok: [200, "OK", data(CatalogProduct)],
   errors: { 404: "Not found" },
 });
 op({

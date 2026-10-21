@@ -4,10 +4,11 @@ import { AppError, isNotFound, notFound } from "lib/errors";
 import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
 import { pageArgs, pageMeta } from "lib/http";
 import { moveStock } from "modules/inventory/inventory.service";
-import { toProductDto } from "modules/products/products.mapper";
+import { toCatalogProductDto, toProductDto } from "modules/products/products.mapper";
 import {
   AdminExportProductsQuery,
   AdminListProductsQuery,
+  ListProductsQuery,
   ProductBody,
   ProductPatchBody,
 } from "modules/products/products.schema";
@@ -17,13 +18,32 @@ import {
   type ProductSpecState,
 } from "modules/products/products.normalization";
 import { productWhere } from "modules/products/products.filter";
+import { getReviewStatsForProductIds } from "modules/products/products.review-stats.repository";
+import { queryRatedProductPage } from "modules/products/products.rating.repository";
 
 const nonNullEntries = (data: Record<string, unknown>) =>
   Object.fromEntries(
     Object.entries(data).filter(([, value]) => value !== null && value !== undefined),
   );
 
-export const listProducts = async (q: AdminListProductsQuery, admin = false) => {
+export const listProducts = async (
+  q: ListProductsQuery | AdminListProductsQuery,
+  admin = false,
+) => {
+  if (!admin && (q.minRating !== undefined || q.sort === "rating_desc")) {
+    const ratedPage = await queryRatedProductPage(q);
+    const rows = await prisma.product.findMany({
+      where: { id: { in: ratedPage.productIds }, isActive: true },
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    return {
+      items: ratedPage.productIds
+        .map((id) => byId.get(id))
+        .filter((row): row is Product => Boolean(row))
+        .map((row) => toCatalogProductDto(row, ratedPage.summaries.get(row.id))),
+      meta: pageMeta(q, ratedPage.total),
+    };
+  }
   const where = productWhere(q, { admin });
   const orderBy: Prisma.ProductOrderByWithRelationInput | Prisma.ProductOrderByWithRelationInput[] =
     q.sort ? [{ price: q.sort === "price_asc" ? "asc" : "desc" }, { id: "asc" }] : [{ id: "asc" }];
@@ -31,13 +51,20 @@ export const listProducts = async (q: AdminListProductsQuery, admin = false) => 
     prisma.product.count({ where }),
     prisma.product.findMany({ where, orderBy, ...pageArgs(q) }),
   ]);
-  return { items: rows.map(toProductDto), meta: pageMeta(q, total) };
+  if (admin) return { items: rows.map(toProductDto), meta: pageMeta(q, total) };
+  const summaries = await getReviewStatsForProductIds(rows.map((row) => row.id));
+  return {
+    items: rows.map((row) => toCatalogProductDto(row, summaries.get(row.id))),
+    meta: pageMeta(q, total),
+  };
 };
 
 export const getProduct = async (id: number, admin = false) => {
   const product = await prisma.product.findUnique({ where: { id } });
   if (!product || (!admin && !product.isActive)) throw notFound("Product");
-  return toProductDto(product);
+  if (admin) return toProductDto(product);
+  const summaries = await getReviewStatsForProductIds([product.id]);
+  return toCatalogProductDto(product, summaries.get(product.id));
 };
 
 export const compareProducts = async (ids: number[]) => {

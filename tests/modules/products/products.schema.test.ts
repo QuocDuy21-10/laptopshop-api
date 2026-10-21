@@ -1,5 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
-import { productFacetsQuery } from "modules/products/products.schema";
+import {
+  adminListProductsQuery,
+  listProductsQuery,
+  productFacetsQuery,
+} from "modules/products/products.schema";
 
 describe("product facet query", () => {
   it("deduplicates CSV filters and parses exact numeric values", () => {
@@ -25,5 +29,24 @@ describe("product facet query", () => {
       factory: [],
       inStock: false,
     });
+  });
+
+  it("accepts only the supported minimum rating thresholds", () => {
+    expect(productFacetsQuery.parse({ minRating: "3" }).minRating).toBe(3);
+    expect(productFacetsQuery.parse({ minRating: "4" }).minRating).toBe(4);
+    for (const value of ["1", "2", "5", "3.5"]) {
+      expect(() => productFacetsQuery.parse({ minRating: value })).toThrow();
+    }
+    expect(() => productFacetsQuery.parse({ minRating: ["3", "4"] })).toThrow();
+  });
+
+  it("allows rating_desc only for public product listing", () => {
+    expect(listProductsQuery.parse({ sort: "rating_desc" }).sort).toBe("rating_desc");
+    expect(() => listProductsQuery.parse({ sort: "name_asc" })).toThrow();
+  });
+
+  it("keeps admin sort allow-list explicit", () => {
+    expect(adminListProductsQuery.parse({ sort: "price_desc" }).sort).toBe("price_desc");
+    expect(() => adminListProductsQuery.parse({ sort: "rating_desc" })).toThrow();
   });
 });

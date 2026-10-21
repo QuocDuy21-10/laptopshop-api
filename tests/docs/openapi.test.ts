@@ -198,6 +198,22 @@ describe("openapi document", () => {
     expect(names).toEqual(expect.arrayContaining(["isActive", "stock"]));
   });
 
+  it("documents rating controls and separates catalog products from base products", () => {
+    const list = op("/api/v1/products", "get");
+    const detail = op("/api/v1/products/{id}", "get");
+    const queryNames = (list.parameters as any[]).map((parameter) => parameter.name);
+    expect(queryNames).toEqual(expect.arrayContaining(["minRating", "sort"]));
+    expect((doc.components?.schemas?.CatalogProduct as any).properties.reviewSummary).toBeDefined();
+    expect(doc.components?.schemas).toHaveProperty("ProductReviewSummary");
+    expect(list.responses[200].content["application/json"].schema.properties.data.items).toEqual(
+      expect.objectContaining({ $ref: expect.stringContaining("CatalogProduct") }),
+    );
+    expect(detail.responses[200].content["application/json"].schema.properties.data).toEqual(
+      expect.objectContaining({ $ref: expect.stringContaining("CatalogProduct") }),
+    );
+    expect((doc.components?.schemas?.Product as any).properties.reviewSummary).toBeUndefined();
+  });
+
   it("documents the product hardware specs", () => {
     const props = (doc.components?.schemas?.Product as any).properties;
     for (const key of [

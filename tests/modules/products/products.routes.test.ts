@@ -85,6 +85,20 @@ describe("GET /api/v1/products", () => {
   it("caps pageSize at 50", async () => {
     expect((await request(buildApp()).get("/api/v1/products?pageSize=51")).status).toBe(400);
   });
+
+  it("uses the rated repository for rating sort and rejects unsupported sort values", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([
+      { id: 1, averageRating: 4.6, totalReviews: BigInt(3), total: BigInt(1) },
+    ]);
+    prismaMock.product.findMany.mockResolvedValue([product]);
+    const res = await request(buildApp()).get("/api/v1/products?sort=rating_desc");
+    expect(res.status).toBe(200);
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(1);
+    expect(res.body.data[0].reviewSummary).toEqual({ averageRating: 4.6, totalReviews: 3 });
+
+    const invalid = await request(buildApp()).get("/api/v1/products?sort=name_asc");
+    expect(invalid.status).toBe(400);
+  });
 });
 
 describe("GET /api/v1/products/:id", () => {
@@ -93,6 +107,7 @@ describe("GET /api/v1/products/:id", () => {
     const res = await request(buildApp()).get("/api/v1/products/1");
     expect(res.status).toBe(200);
     expect(res.body.data.name).toBe("Asus");
+    expect(res.body.data.reviewSummary).toEqual({ averageRating: null, totalReviews: 0 });
   });
 
   it("returns 404 for a hidden product", async () => {
