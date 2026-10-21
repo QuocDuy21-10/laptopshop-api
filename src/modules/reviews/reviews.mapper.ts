@@ -25,6 +25,7 @@ export const publicReviewSelect = {
     orderBy: { position: "asc" },
     select: reviewImageSelect,
   },
+  _count: { select: { helpfulVotes: true } },
 } satisfies Prisma.ReviewSelect;
 
 export type PublicReviewRow = Prisma.ReviewGetPayload<{ select: typeof publicReviewSelect }>;
@@ -44,6 +45,7 @@ export const toPublicReviewDto = (
   },
   verifiedPurchase: true,
   images,
+  helpfulCount: review._count?.helpfulVotes ?? 0,
   createdAt: review.createdAt,
   updatedAt: review.contentUpdatedAt,
 });

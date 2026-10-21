@@ -15,6 +15,7 @@ const reviewRow = {
   createdAt: new Date("2026-10-21T03:00:00.000Z"),
   contentUpdatedAt: new Date("2026-10-21T04:00:00.000Z"),
   user: { fullName: "Nguyễn Văn A" },
+  _count: { helpfulVotes: 2 },
 };
 
 const ownerReviewRow = {
