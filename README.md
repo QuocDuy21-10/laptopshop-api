@@ -19,6 +19,14 @@ Mở Swagger tại `/api-docs` khi đặt `ENABLE_DOCS=true`.
 
 Review images dùng RustFS local (`http://localhost:9000`, bucket private `laptopshop-review-images`); API không mount upload volume cho review images. Production dùng AWS S3/R2 hoặc S3-compatible storage với cùng adapter và credentials/policy riêng.
 
+Reconciliation ảnh review có thể chạy thủ công hoặc đặt trong scheduler của môi trường deploy:
+
+```bash
+npm run review-images:reconcile
+```
+
+Command chỉ xoá object của row `PENDING/DELETING` đã đủ điều kiện; row `READY` mất object được báo cáo để vận hành xử lý, không tự xoá dữ liệu database.
+
 ## Production
 
 ```bash
