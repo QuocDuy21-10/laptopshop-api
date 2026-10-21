@@ -29,6 +29,11 @@ describe("rate limiters", () => {
     expect((await request(app).get("/")).status).toBe(200);
   });
 
+  it("exposes a dedicated review image limiter", () => {
+    const { reviewImagesLimiter } = createLimiters();
+    expect(reviewImagesLimiter).toBeDefined();
+  });
+
   it("limits advisor requests to 20 per requester and returns the standard error envelope", async () => {
     const app = express();
     const { advisorLimiter } = createLimiters();

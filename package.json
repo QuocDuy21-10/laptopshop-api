@@ -17,6 +17,7 @@
     "test:int": "jest -c jest.int.config.ts --runInBand",
     "products:audit-facets": "ts-node -r tsconfig-paths/register src/scripts/audit-product-facets.ts",
     "inventory:verify-ledger": "ts-node -r tsconfig-paths/register src/scripts/verify-stock-ledger.ts",
+    "review-images:reconcile": "ts-node -r tsconfig-paths/register src/scripts/reconcile-review-images.ts",
     "prisma:deploy": "prisma migrate deploy",
     "prepare": "husky"
   },
@@ -47,6 +48,8 @@
   "homepage": "https://github.com/QuocDuy21-10/laptopshop-api#readme",
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "7.3.4",
+    "@aws-sdk/client-s3": "3.1154.0",
+    "@aws-sdk/s3-request-presigner": "3.1154.0",
     "@prisma/client": "6.3.0",
     "@sentry/node": "11.8.0",
     "bcrypt": "5.1.1",
@@ -65,6 +68,7 @@
     "prisma": "6.3.0",
     "rate-limit-redis": "6.0.1",
     "redis": "5.12.1",
+    "sharp": "0.35.5",
     "swagger-ui-express": "5.0.1",
     "uuid": "11.0.5",
     "zod": "3.24.2"

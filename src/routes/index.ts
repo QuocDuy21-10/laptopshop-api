@@ -1,4 +1,4 @@
-import express from "express";
+import express, { type RequestHandler } from "express";
 import { env } from "config/env";
 import { originCheck } from "middlewares/origin-check";
 import { authenticate } from "middlewares/authenticate";
@@ -18,14 +18,22 @@ import {
   reviewRoutes,
   adminReviewRoutes,
 } from "modules/reviews/reviews.routes";
+import { createReviewImageRoutes } from "modules/reviews/review-images.routes";
+import type { ReviewImageDeps } from "modules/reviews/review-images.service";
 
-export const createApiV1Router = (advisor: AdvisorRouteDeps) => {
+export const createApiV1Router = (
+  advisor: AdvisorRouteDeps,
+  reviewImages: ReviewImageDeps | null = null,
+  reviewImagesLimiter?: RequestHandler,
+) => {
   const router = express.Router();
   router.use(originCheck(env.CORS_ORIGINS));
 
   router.use("/auth", authRoutes);
   router.use("/products", productReviewRoutes);
   router.use("/products", productRoutes);
+  if (reviewImages)
+    router.use("/reviews", createReviewImageRoutes(reviewImages, reviewImagesLimiter));
   router.use("/reviews", reviewRoutes);
   router.use("/users", usersRoutes);
   router.use("/cart", cartRoutes);

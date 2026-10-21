@@ -16,10 +16,13 @@ import { errorHandler, notFoundHandler } from "middlewares/error.middleware";
 import { paymentWebhookRoutes } from "modules/payments/payments.routes";
 import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
 import { createAdvisorService, type AdvisorService } from "modules/advisor/advisor.service";
+import { createReviewImageStorage } from "lib/storage/s3-review-image-storage";
+import type { ReviewImageDeps } from "modules/reviews/review-images.service";
 
 export interface AppDeps {
-  limitStores?: { global?: Store; auth?: Store; advisor?: Store };
+  limitStores?: { global?: Store; auth?: Store; advisor?: Store; reviewImages?: Store };
   advisor?: { service: AdvisorService; identitySecret: string };
+  reviewImages?: ReviewImageDeps | null;
   readyChecks?: Array<() => Promise<unknown>>;
   // hook for optional features that must register before the final 404/error handlers
   registerExtras?: (app: Express) => void;
@@ -44,7 +47,9 @@ export const createApp = (deps: AppDeps = {}): Express => {
   app.use(express.urlencoded({ extended: true, limit: "100kb" }));
   app.use(hpp());
 
-  const { globalLimiter, authLimiter, advisorLimiter } = createLimiters(deps.limitStores);
+  const { globalLimiter, authLimiter, advisorLimiter, reviewImagesLimiter } = createLimiters(
+    deps.limitStores,
+  );
   app.use(globalLimiter);
   app.post(["/api/v1/auth/login", "/api/v1/auth/register"], authLimiter);
 
@@ -54,7 +59,21 @@ export const createApp = (deps: AppDeps = {}): Express => {
       service: createAdvisorService({ repository: new PrismaAdvisorRepository() }),
       identitySecret: env.JWT_SECRET,
     } as const);
-  app.use("/api/v1", createApiV1Router({ ...advisor, requestLimiter: advisorLimiter }));
+  const reviewImages =
+    deps.reviewImages !== undefined
+      ? deps.reviewImages
+      : (() => {
+          const storage = createReviewImageStorage(env);
+          return storage ? { storage } : null;
+        })();
+  app.use(
+    "/api/v1",
+    createApiV1Router(
+      { ...advisor, requestLimiter: advisorLimiter },
+      reviewImages,
+      reviewImagesLimiter,
+    ),
+  );
   deps.registerExtras?.(app);
 
   app.use(notFoundHandler);

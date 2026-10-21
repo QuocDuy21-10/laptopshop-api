@@ -1,4 +1,14 @@
 import { Prisma } from "@prisma/client";
+import { reviewImageSelect, type ReviewImageRow } from "modules/reviews/review-images.mapper";
+
+export type ReviewImageDto = {
+  id: number;
+  url: string;
+  mimeType: "image/webp";
+  width: number;
+  height: number;
+  position: number;
+};
 
 export const publicReviewSelect = {
   id: true,
@@ -10,11 +20,19 @@ export const publicReviewSelect = {
   createdAt: true,
   contentUpdatedAt: true,
   user: { select: { fullName: true } },
+  images: {
+    where: { status: "READY", deletedAt: null },
+    orderBy: { position: "asc" },
+    select: reviewImageSelect,
+  },
 } satisfies Prisma.ReviewSelect;
 
 export type PublicReviewRow = Prisma.ReviewGetPayload<{ select: typeof publicReviewSelect }>;
 
-export const toPublicReviewDto = (review: PublicReviewRow) => ({
+export const toPublicReviewDto = (
+  review: PublicReviewRow | (Omit<PublicReviewRow, "images"> & { images?: ReviewImageRow[] }),
+  images: ReviewImageDto[] = [],
+) => ({
   id: review.id,
   productId: review.productId,
   rating: review.rating,
@@ -25,6 +43,7 @@ export const toPublicReviewDto = (review: PublicReviewRow) => ({
     anonymous: review.isAnonymous,
   },
   verifiedPurchase: true,
+  images,
   createdAt: review.createdAt,
   updatedAt: review.contentUpdatedAt,
 });
@@ -42,11 +61,19 @@ export const ownerReviewSelect = {
   deletedAt: true,
   createdAt: true,
   contentUpdatedAt: true,
+  images: {
+    where: { status: "READY", deletedAt: null },
+    orderBy: { position: "asc" },
+    select: reviewImageSelect,
+  },
 } satisfies Prisma.ReviewSelect;
 
 export type OwnerReviewRow = Prisma.ReviewGetPayload<{ select: typeof ownerReviewSelect }>;
 
-export const toOwnerReviewDto = (review: OwnerReviewRow) => ({
+export const toOwnerReviewDto = (
+  review: OwnerReviewRow | (Omit<OwnerReviewRow, "images"> & { images?: ReviewImageRow[] }),
+  images: ReviewImageDto[] = [],
+) => ({
   id: review.id,
   productId: review.productId,
   rating: review.rating,
@@ -56,6 +83,7 @@ export const toOwnerReviewDto = (review: OwnerReviewRow) => ({
   status: review.status,
   deletedAt: review.deletedAt,
   verifiedPurchase: true,
+  images,
   createdAt: review.createdAt,
   updatedAt: review.contentUpdatedAt,
 });
@@ -96,11 +124,19 @@ export const adminReviewSelect = {
     },
   },
   moderatedBy: { select: { id: true, username: true, fullName: true } },
+  images: {
+    where: { status: "READY", deletedAt: null },
+    orderBy: { position: "asc" },
+    select: reviewImageSelect,
+  },
 } satisfies Prisma.ReviewSelect;
 
 export type AdminReviewRow = Prisma.ReviewGetPayload<{ select: typeof adminReviewSelect }>;
 
-export const toAdminReviewDto = (review: AdminReviewRow) => ({
+export const toAdminReviewDto = (
+  review: AdminReviewRow | (Omit<AdminReviewRow, "images"> & { images?: ReviewImageRow[] }),
+  images: ReviewImageDto[] = [],
+) => ({
   id: review.id,
   rating: review.rating,
   title: review.title,
@@ -122,6 +158,7 @@ export const toAdminReviewDto = (review: AdminReviewRow) => ({
     completedAt: review.orderDetail.order.completedAt,
   },
   moderatedBy: review.moderatedBy,
+  images,
 });
 
 export type AdminReviewListItemDto = ReturnType<typeof toAdminReviewDto>;

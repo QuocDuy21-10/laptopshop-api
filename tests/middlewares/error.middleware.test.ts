@@ -1,4 +1,5 @@
 import express from "express";
+import multer from "multer";
 import request from "supertest";
 import { z } from "zod";
 import { AppError } from "lib/errors";
@@ -21,6 +22,12 @@ const build = () => {
   });
   app.post("/api/json", (_req, res) => {
     res.sendStatus(204);
+  });
+  app.post("/api/v1/reviews/18/images/too-large", () => {
+    throw new multer.MulterError("LIMIT_FILE_SIZE");
+  });
+  app.post("/api/v1/reviews/18/images/too-many", () => {
+    throw new multer.MulterError("LIMIT_UNEXPECTED_FILE");
   });
   app.get("/web/boom", () => {
     throw new Error("secret detail");
@@ -67,6 +74,16 @@ describe("error handling", () => {
     const res = await request(build()).get("/api/nope");
     expect(res.status).toBe(404);
     expect(res.body.error.code).toBe("NOT_FOUND");
+  });
+
+  it("maps review image Multer limits to stable review codes", async () => {
+    const tooLarge = await request(build()).post("/api/v1/reviews/18/images/too-large");
+    expect(tooLarge.status).toBe(413);
+    expect(tooLarge.body.error.code).toBe("REVIEW_IMAGE_TOO_LARGE");
+
+    const tooMany = await request(build()).post("/api/v1/reviews/18/images/too-many");
+    expect(tooMany.status).toBe(409);
+    expect(tooMany.body.error.code).toBe("REVIEW_IMAGE_LIMIT_REACHED");
   });
 
   it("returns 500 INTERNAL_ERROR for unknown errors under /api", async () => {

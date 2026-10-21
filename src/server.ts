@@ -43,6 +43,7 @@ const main = async () => {
       global: createRedisLimitStore(redis, "rl:global:"),
       auth: createRedisLimitStore(redis, "rl:auth:"),
       advisor: createRedisLimitStore(redis, "rl:advisor:"),
+      reviewImages: createRedisLimitStore(redis, "rl:review-images:"),
     },
     advisor,
     registerExtras: registerDocs,

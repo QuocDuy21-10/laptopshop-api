@@ -56,6 +56,20 @@ const schema = z
     ADVISOR_GUEST_DAILY_LIMIT: z.coerce.number().int().positive().default(5),
     ADVISOR_USER_DAILY_LIMIT: z.coerce.number().int().positive().default(10),
     ADVISOR_GLOBAL_DAILY_LIMIT: z.coerce.number().int().positive().default(30),
+    REVIEW_IMAGES_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    REVIEW_IMAGE_S3_ENDPOINT: z.preprocess(emptyToUndefined, z.string().url().optional()),
+    REVIEW_IMAGE_S3_REGION: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    REVIEW_IMAGE_S3_BUCKET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    REVIEW_IMAGE_S3_ACCESS_KEY_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    REVIEW_IMAGE_S3_SECRET_ACCESS_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    REVIEW_IMAGE_S3_FORCE_PATH_STYLE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    REVIEW_IMAGE_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
     GIT_SHA: z.preprocess(emptyToUndefined, z.string().optional()),
   })
   .superRefine((e, ctx) => {
@@ -110,6 +124,27 @@ const schema = z
           path: ["GROQ_MODEL"],
           message: "GROQ_MODEL is required when ADVISOR_AI_ENABLED=true",
         });
+    }
+    if (e.REVIEW_IMAGES_ENABLED) {
+      if (!e.REVIEW_IMAGE_S3_REGION)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["REVIEW_IMAGE_S3_REGION"],
+          message: "REVIEW_IMAGE_S3_REGION is required when REVIEW_IMAGES_ENABLED=true",
+        });
+      if (!e.REVIEW_IMAGE_S3_BUCKET)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["REVIEW_IMAGE_S3_BUCKET"],
+          message: "REVIEW_IMAGE_S3_BUCKET is required when REVIEW_IMAGES_ENABLED=true",
+        });
+    }
+    if (Boolean(e.REVIEW_IMAGE_S3_ACCESS_KEY_ID) !== Boolean(e.REVIEW_IMAGE_S3_SECRET_ACCESS_KEY)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["REVIEW_IMAGE_S3_ACCESS_KEY_ID"],
+        message: "Review image S3 access key and secret must be configured together",
+      });
     }
   })
   .transform((e) => ({ ...e, ADMIN_PASSWORD: e.ADMIN_PASSWORD ?? "123456" }));

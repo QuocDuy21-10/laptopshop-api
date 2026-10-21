@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { pageQuery } from "lib/http";
+import { idParams } from "lib/http";
 
 export const listProductReviewsQuery = pageQuery.extend({
   rating: z.coerce.number().int().min(1).max(5).optional(),
@@ -64,3 +65,14 @@ export const moderateReviewBody = z
 
 export type AdminListReviewsQuery = z.infer<typeof adminListReviewsQuery>;
 export type ModerateReviewBody = z.infer<typeof moderateReviewBody>;
+
+export const reviewImageParams = idParams.extend({});
+export const reviewImageDeleteParams = idParams.extend({
+  imageId: z.coerce.number().int().positive(),
+});
+export const reviewImageOrderBody = z
+  .object({
+    imageIds: z.array(z.number().int().positive()).max(3),
+  })
+  .strict();
+export type ReviewImageOrderBody = z.infer<typeof reviewImageOrderBody>;
