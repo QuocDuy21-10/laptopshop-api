@@ -13,6 +13,17 @@ export type AutomaticPromotionInput = {
 
 export type PromotionCandidateKind = "AUTOMATIC" | "FLASH_SALE";
 
+export type PromotionPricingCandidate = AutomaticPromotionInput & {
+  kind?: PromotionCandidateKind;
+  totalQuota?: number;
+  claimedUnits?: number;
+  remainingQuota?: number;
+  maxUnitsPerUser?: number;
+  showRemainingQuota?: boolean;
+  userClaimedUnits?: number;
+  userRemainingQuota?: number;
+};
+
 export type CouponInput = {
   id: number;
   code: string;
@@ -44,7 +55,7 @@ export type PricingLineInput = {
   productId: number;
   quantity: number;
   listPrice: number;
-  automaticCandidates?: AutomaticPromotionInput[];
+  automaticCandidates?: PromotionPricingCandidate[];
 };
 
 export type PromotionPricingInput = {
@@ -57,7 +68,15 @@ export type PromotionPricingLineResult = {
   quantity: number;
   listPrice: number;
   lineSubtotal: number;
-  automaticPromotion: AutomaticPromotionInput | null;
+  automaticPromotion: PromotionPricingCandidate | null;
+  promotionKind: PromotionCandidateKind | null;
+  flashSale: {
+    remainingQuota: number | null;
+    maxUnitsPerUser: number;
+    userRemainingQuota?: number;
+    startsAt?: Date;
+    endsAt?: Date;
+  } | null;
   productDiscountAmount: number;
   postProductLineTotal: number;
   couponEligible: boolean;

@@ -11,6 +11,7 @@ export type PrismaClientLike = {
 };
 
 export type ResolvedAutomaticPromotion = AutomaticPromotionInput & {
+  startsAt: Date;
   endsAt: Date;
   unitDiscount: number;
 };
@@ -134,6 +135,7 @@ export const resolveProductPromotions = async (
           {
             ...candidate,
             kind: "AUTOMATIC",
+            startsAt: row.startsAt,
             endsAt: row.endsAt,
             unitDiscount: automaticDiscountPerUnit(
               candidate,
@@ -155,10 +157,12 @@ export const resolveProductPromotions = async (
           pricingVersion: row.pricingVersion,
         };
         const listPrice = quota.product?.price ?? Number.MAX_SAFE_INTEGER;
-        const userClaimedUnits = quota.usages?.[0]?.claimedUnits;
+        const userClaimedUnits =
+          userId === undefined ? undefined : (quota.usages?.[0]?.claimedUnits ?? 0);
         addCandidate(quota.productId, candidate, listPrice, {
           ...candidate,
           kind: "FLASH_SALE",
+          startsAt: row.startsAt,
           endsAt: row.endsAt,
           unitDiscount: automaticDiscountPerUnit(candidate, listPrice),
           totalQuota: quota.totalQuota,
@@ -250,6 +254,7 @@ export const resolveAutomaticPromotions = async (
       Number.MAX_SAFE_INTEGER;
     result.set(productId, {
       ...winner,
+      startsAt: row.startsAt,
       endsAt: row.endsAt,
       unitDiscount: automaticDiscountPerUnit(winner, listPrice),
     });

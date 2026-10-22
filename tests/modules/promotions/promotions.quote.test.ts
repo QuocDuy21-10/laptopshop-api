@@ -72,4 +72,80 @@ describe("quoteOrder", () => {
     expect(result.couponDiscount).toBe(100);
     expect(result.total).toBe(2_900);
   });
+
+  it("returns the winning Flash Sale quota snapshot and authenticated user remaining quota", async () => {
+    prismaMock.promotion.findMany.mockResolvedValue([
+      {
+        id: 42,
+        name: "Flash",
+        discountKind: "PERCENT",
+        discountValue: 20,
+        pricingVersion: 3,
+        startsAt: new Date("2026-10-01T00:00:00Z"),
+        endsAt: new Date("2026-11-01T00:00:00Z"),
+        automaticPolicy: null,
+        products: [],
+        flashSalePolicy: {
+          priority: 10,
+          stackableWithCoupon: true,
+          showRemainingQuota: true,
+          quotas: [
+            {
+              productId: 1,
+              totalQuota: 10,
+              claimedUnits: 3,
+              maxUnitsPerUser: 2,
+              product: { price: 1_000 },
+              usages: [{ userId: 7, claimedUnits: 1 }],
+            },
+          ],
+        },
+      },
+    ]);
+
+    const result = await quoteOrder(7);
+
+    expect(result.lines[0]).toMatchObject({
+      promotionKind: "FLASH_SALE",
+      flashSale: { remainingQuota: 7, maxUnitsPerUser: 2, userRemainingQuota: 1 },
+    });
+    expect(result.total).toBe(2_800);
+  });
+
+  it("rejects a Flash Sale quote when the snapshot cannot cover the cart without fallback", async () => {
+    prismaMock.cartDetail.findMany.mockResolvedValue([cartLines[0]]);
+    prismaMock.promotion.findMany.mockResolvedValue([
+      {
+        id: 42,
+        name: "Flash",
+        discountKind: "PERCENT",
+        discountValue: 20,
+        pricingVersion: 3,
+        startsAt: new Date("2026-10-01T00:00:00Z"),
+        endsAt: new Date("2026-11-01T00:00:00Z"),
+        automaticPolicy: null,
+        products: [],
+        flashSalePolicy: {
+          priority: 10,
+          stackableWithCoupon: true,
+          showRemainingQuota: true,
+          quotas: [
+            {
+              productId: 1,
+              totalQuota: 1,
+              claimedUnits: 1,
+              maxUnitsPerUser: 1,
+              product: { price: 1_000 },
+              usages: [],
+            },
+          ],
+        },
+      },
+    ]);
+
+    await expect(quoteOrder(7)).rejects.toMatchObject({
+      code: "FLASH_SALE_QUOTA_EXCEEDED",
+      details: { promotionId: 42, productId: 1, requestedQuantity: 1 },
+    });
+  });
 });

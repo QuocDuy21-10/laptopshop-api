@@ -318,6 +318,15 @@ const orderShape = {
       netLineTotal: z.number(),
       automaticPromotionId: z.number().nullable(),
       automaticPromotionName: z.string().nullable(),
+      promotionKind: z.enum(["AUTOMATIC", "FLASH_SALE"]).nullable(),
+      flashSaleAllocation: z
+        .object({
+          promotionId: z.number(),
+          quantity: z.number(),
+          discountAmount: z.number(),
+          status: z.enum(["CLAIMED", "RELEASED"]),
+        })
+        .nullable(),
     }),
   ),
 };

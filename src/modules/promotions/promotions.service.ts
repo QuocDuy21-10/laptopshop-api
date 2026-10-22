@@ -17,7 +17,7 @@ import {
 import { calculatePromotionPricing } from "modules/promotions/promotion-pricing";
 import { createPricingFingerprint } from "modules/promotions/promotion-fingerprint";
 import {
-  resolveAutomaticPromotions,
+  resolveProductPromotions,
   type PrismaClientLike,
 } from "modules/promotions/promotion-resolver";
 import type {
@@ -447,7 +447,7 @@ export const resolveCoupon = async (
 
 const quoteLineInput = (
   line: any,
-  promotions: Awaited<ReturnType<typeof resolveAutomaticPromotions>>,
+  promotions: Awaited<ReturnType<typeof resolveProductPromotions>>,
 ): PricingLineInput => ({
   productId: line.productId,
   quantity: line.quantity,
@@ -466,11 +466,35 @@ export const quoteOrder = async (
     orderBy: { productId: "asc" },
   });
   if (lines.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
-  const promotions = await resolveAutomaticPromotions(
+  const promotions = await resolveProductPromotions(
     prisma,
     lines.map((line) => line.productId),
     now,
+    userId,
   );
+  for (const line of lines) {
+    const promotion = promotions.get(line.productId);
+    if (promotion?.kind !== "FLASH_SALE") continue;
+    if (promotion.remainingQuota < line.quantity) {
+      throw new AppError("Flash Sale quota exceeded", 409, "FLASH_SALE_QUOTA_EXCEEDED", {
+        promotionId: promotion.id,
+        productId: line.productId,
+        requestedQuantity: line.quantity,
+        remainingQuota: promotion.remainingQuota,
+      });
+    }
+    if (
+      promotion.userRemainingQuota !== undefined &&
+      promotion.userRemainingQuota < line.quantity
+    ) {
+      throw new AppError("Flash Sale user limit exceeded", 409, "FLASH_SALE_USER_LIMIT", {
+        promotionId: promotion.id,
+        productId: line.productId,
+        requestedQuantity: line.quantity,
+        userRemainingQuota: promotion.userRemainingQuota,
+      });
+    }
+  }
   const inputs = lines.map((line) => quoteLineInput(line, promotions));
   const coupon = couponCode ? await resolveCoupon(prisma, couponCode, userId, inputs, now) : null;
   const pricing = calculatePromotionPricing({ lines: inputs, coupon });
@@ -488,6 +512,13 @@ export const quoteOrder = async (
       listPrice: line.listPrice,
       automaticPromotionId: line.automaticCandidates?.[0]?.id ?? null,
       pricingVersion: line.automaticCandidates?.[0]?.pricingVersion ?? null,
+      promotionId: line.automaticCandidates?.[0]?.id ?? null,
+      promotionKind: line.automaticCandidates?.[0]?.kind ?? null,
+      discountKind: line.automaticCandidates?.[0]?.discountKind ?? null,
+      discountValue: line.automaticCandidates?.[0]?.discountValue ?? null,
+      priority: line.automaticCandidates?.[0]?.priority ?? null,
+      stackableWithCoupon: line.automaticCandidates?.[0]?.stackableWithCoupon ?? null,
+      maxUnitsPerUser: line.automaticCandidates?.[0]?.maxUnitsPerUser ?? null,
     })),
     coupon: coupon
       ? {

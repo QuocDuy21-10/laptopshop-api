@@ -4,6 +4,7 @@ import type {
   PromotionPricingInput,
   PromotionPricingLineResult,
   PromotionPricingResult,
+  PromotionPricingCandidate,
 } from "modules/promotions/promotions.types";
 
 export const automaticDiscountPerUnit = (promotion: AutomaticPromotionInput, listPrice: number) =>
@@ -12,9 +13,9 @@ export const automaticDiscountPerUnit = (promotion: AutomaticPromotionInput, lis
     : Math.min(listPrice, promotion.discountValue);
 
 export const selectAutomaticPromotion = (
-  candidates: AutomaticPromotionInput[],
+  candidates: PromotionPricingCandidate[],
   listPrice: number,
-): AutomaticPromotionInput | null =>
+): PromotionPricingCandidate | null =>
   [...candidates]
     .sort((a, b) => {
       const priority = b.priority - a.priority;
@@ -80,6 +81,19 @@ export const calculatePromotionPricing = (input: PromotionPricingInput): Promoti
         listPrice: line.listPrice,
         lineSubtotal,
         automaticPromotion,
+        promotionKind: automaticPromotion?.kind ?? (automaticPromotion ? "AUTOMATIC" : null),
+        flashSale:
+          automaticPromotion?.kind === "FLASH_SALE"
+            ? {
+                remainingQuota: automaticPromotion.showRemainingQuota
+                  ? (automaticPromotion.remainingQuota ?? null)
+                  : null,
+                maxUnitsPerUser: automaticPromotion.maxUnitsPerUser ?? 0,
+                ...(automaticPromotion.userRemainingQuota === undefined
+                  ? {}
+                  : { userRemainingQuota: automaticPromotion.userRemainingQuota }),
+              }
+            : null,
         productDiscountAmount,
         postProductLineTotal,
         couponEligible,

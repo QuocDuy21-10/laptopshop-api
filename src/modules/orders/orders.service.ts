@@ -33,10 +33,15 @@ import {
   createCheckoutRequestHash,
   createPricingFingerprint,
 } from "modules/promotions/promotion-fingerprint";
-import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
+import { resolveProductPromotions } from "modules/promotions/promotion-resolver";
 import { resolveCoupon } from "modules/promotions/promotions.service";
 import { claimCouponUsage, recordCouponRedemption } from "modules/promotions/promotion-usage";
+import {
+  claimFlashSaleQuotas,
+  recordFlashSaleAllocations,
+} from "modules/promotions/flash-sale-quota";
 import { cancelOrder } from "modules/orders/order-cancellation.service";
+import type { PricingLineInput } from "modules/promotions/promotions.types";
 
 const findByKey = (userId: number, idempotencyKey: string) =>
   prisma.order.findUnique({
@@ -70,6 +75,7 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
   }
   try {
     const order = await prisma.$transaction(async (tx) => {
+      const now = new Date();
       // productId order gives every checkout the same lock order, so concurrent checkouts cannot deadlock
       const lines = await tx.cartDetail.findMany({
         where: { cart: { userId } },
@@ -80,21 +86,22 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
       for (const line of lines) {
         if (!line.product.isActive) throw productUnavailable(line.productId);
       }
-      const automaticPromotions = await resolveAutomaticPromotions(
+      const promotions = await resolveProductPromotions(
         tx,
         lines.map((line) => line.productId),
-        new Date(),
+        now,
+        userId,
       );
-      const pricingLines = lines.map((line) => ({
+      const pricingLines: PricingLineInput[] = lines.map((line) => ({
         productId: line.productId,
         quantity: line.quantity,
         listPrice: line.product.price,
-        automaticCandidates: automaticPromotions.has(line.productId)
-          ? [automaticPromotions.get(line.productId)!]
+        automaticCandidates: promotions.has(line.productId)
+          ? [promotions.get(line.productId)!]
           : [],
       }));
       const coupon = receiver.couponCode
-        ? await resolveCoupon(tx, receiver.couponCode, userId, pricingLines, new Date())
+        ? await resolveCoupon(tx, receiver.couponCode, userId, pricingLines, now)
         : null;
       const pricing = calculatePromotionPricing({ lines: pricingLines, coupon });
       const minimumBase =
@@ -111,6 +118,13 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
           listPrice: line.listPrice,
           automaticPromotionId: line.automaticCandidates?.[0]?.id ?? null,
           pricingVersion: line.automaticCandidates?.[0]?.pricingVersion ?? null,
+          promotionId: line.automaticCandidates?.[0]?.id ?? null,
+          promotionKind: line.automaticCandidates?.[0]?.kind ?? null,
+          discountKind: line.automaticCandidates?.[0]?.discountKind ?? null,
+          discountValue: line.automaticCandidates?.[0]?.discountValue ?? null,
+          priority: line.automaticCandidates?.[0]?.priority ?? null,
+          stackableWithCoupon: line.automaticCandidates?.[0]?.stackableWithCoupon ?? null,
+          maxUnitsPerUser: line.automaticCandidates?.[0]?.maxUnitsPerUser ?? null,
         })),
         coupon: coupon
           ? {
@@ -122,10 +136,25 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
           : null,
         totals: pricing,
       });
-      if ((coupon || automaticPromotions.size > 0) && fingerprint !== receiver.pricingFingerprint) {
+      if ((coupon || promotions.size > 0) && fingerprint !== receiver.pricingFingerprint) {
         throw new AppError("Promotion pricing changed", 409, "PROMOTION_CHANGED");
       }
-      if (coupon) await claimCouponUsage(tx, { promotionId: coupon.id, userId, now: new Date() });
+      const flashClaims = pricingLines.flatMap((line) => {
+        const promotion = line.automaticCandidates?.[0];
+        return promotion?.kind === "FLASH_SALE"
+          ? [
+              {
+                promotionId: promotion.id,
+                productId: line.productId,
+                quantity: line.quantity,
+                pricingVersion: promotion.pricingVersion,
+              },
+            ]
+          : [];
+      });
+      if (flashClaims.length > 0)
+        await claimFlashSaleQuotas(tx, { userId, now, claims: flashClaims });
+      if (coupon) await claimCouponUsage(tx, { promotionId: coupon.id, userId, now });
       // stock is taken before the order rows exist: order_detail's foreign key share-locks the product,
       // and upgrading that to the update lock in two concurrent checkouts would deadlock
       const movements = [];
@@ -141,6 +170,7 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
         );
       }
       const totalPrice = pricing.totalPrice;
+      const pricedByProduct = new Map(pricing.lines.map((line) => [line.productId, line]));
       const payment =
         paymentMethod === "BANK_TRANSFER" && totalPrice > 0
           ? (() => {
@@ -184,15 +214,10 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
             productId: l.productId,
             quantity: l.quantity,
             price: l.product.price,
-            productDiscountAmount: pricing.lines.find((priced) => priced.productId === l.productId)!
-              .productDiscountAmount,
-            couponDiscountAmount: pricing.lines.find((priced) => priced.productId === l.productId)!
-              .couponDiscountAmount,
-            automaticPromotionId: pricing.lines.find((priced) => priced.productId === l.productId)!
-              .automaticPromotion?.id,
-            automaticPromotionName: pricing.lines.find(
-              (priced) => priced.productId === l.productId,
-            )!.automaticPromotion?.name,
+            productDiscountAmount: pricedByProduct.get(l.productId)!.productDiscountAmount,
+            couponDiscountAmount: pricedByProduct.get(l.productId)!.couponDiscountAmount,
+            automaticPromotionId: pricedByProduct.get(l.productId)!.automaticPromotion?.id,
+            automaticPromotionName: pricedByProduct.get(l.productId)!.automaticPromotion?.name,
           })),
         },
       };
@@ -206,6 +231,26 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
           userId,
           orderId: created.id,
           discountAmount: pricing.couponDiscountAmount,
+        });
+      }
+      if (flashClaims.length > 0) {
+        await recordFlashSaleAllocations(tx, {
+          userId,
+          orderId: created.id,
+          lines: created.orderDetails.flatMap((detail) => {
+            const priced = pricedByProduct.get(detail.productId)!;
+            return priced.promotionKind === "FLASH_SALE" && priced.automaticPromotion
+              ? [
+                  {
+                    orderDetailId: detail.id,
+                    promotionId: priced.automaticPromotion.id,
+                    productId: detail.productId,
+                    quantity: detail.quantity,
+                    discountAmount: priced.productDiscountAmount,
+                  },
+                ]
+              : [];
+          }),
         });
       }
       await tx.orderStatusHistory.create({
