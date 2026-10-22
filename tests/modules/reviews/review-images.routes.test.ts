@@ -31,11 +31,11 @@ beforeEach(() => {
 
 describe("review image routes", () => {
   it("rejects unauthenticated upload before processing the multipart body", async () => {
-    const res = await request(buildApp())
+    const res = await request(buildApp({ reviewImages: { storage } } as never))
       .post("/api/v1/reviews/18/images")
       .attach("images", Buffer.from("x"), "x.png");
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(401);
     expect(addReviewImages).not.toHaveBeenCalled();
   });
 

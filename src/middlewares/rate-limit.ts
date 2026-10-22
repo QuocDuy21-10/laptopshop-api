@@ -1,4 +1,4 @@
-import rateLimit, { Store } from "express-rate-limit";
+import rateLimit, { ipKeyGenerator, type Store } from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
 import { RedisClientType } from "redis";
 
@@ -6,7 +6,6 @@ const tooMany = { data: null, message: "Too many requests, please try again late
 const advisorTooMany = {
   error: { code: "RATE_LIMITED", message: "Too many advisor requests, please try again later" },
 };
-
 export const createRedisLimitStore = (client: RedisClientType, prefix: string): Store =>
   new RedisStore({
     prefix,
@@ -43,7 +42,7 @@ export const createLimiters = (stores?: {
     standardHeaders: "draft-7",
     legacyHeaders: false,
     message: advisorTooMany,
-    keyGenerator: (req) => req.advisorRequester?.key ?? req.ip,
+    keyGenerator: (req) => req.advisorRequester?.key ?? ipKeyGenerator(req.ip ?? "0.0.0.0"),
     passOnStoreError: true,
     store: stores?.advisor,
   }),
@@ -61,7 +60,7 @@ export const createLimiters = (stores?: {
     standardHeaders: "draft-7",
     legacyHeaders: false,
     message: tooMany,
-    keyGenerator: (req) => req.auth?.id?.toString() ?? req.ip,
+    keyGenerator: (req) => req.auth?.id?.toString() ?? ipKeyGenerator(req.ip ?? "0.0.0.0"),
     store: stores?.reviewHelpful,
   }),
 });
