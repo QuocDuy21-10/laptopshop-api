@@ -35,6 +35,9 @@ describe("parseEnv", () => {
     expect(e.REVIEW_IMAGE_S3_BUCKET).toBeUndefined();
     expect(e.REVIEW_IMAGE_S3_FORCE_PATH_STYLE).toBe(false);
     expect(e.REVIEW_IMAGE_URL_TTL_SECONDS).toBe(900);
+    expect(e.PRICE_ALERT_INTERVAL_MS).toBe(300_000);
+    expect(e.PRICE_ALERT_PRODUCT_BATCH_SIZE).toBe(100);
+    expect(e.PRICE_ALERT_LOCK_TTL_MS).toBe(240_000);
   });
 
   it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {
@@ -179,6 +182,17 @@ describe("parseEnv", () => {
     ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "2001"],
     ["ADVISOR_GLOBAL_DAILY_LIMIT", "0"],
   ])("rejects invalid advisor configuration %s=%s", (key, value) => {
+    expect(() => parseEnv({ ...base, [key]: value })).toThrow();
+  });
+
+  it.each([
+    ["PRICE_ALERT_INTERVAL_MS", "999"],
+    ["PRICE_ALERT_INTERVAL_MS", "3600001"],
+    ["PRICE_ALERT_PRODUCT_BATCH_SIZE", "0"],
+    ["PRICE_ALERT_PRODUCT_BATCH_SIZE", "501"],
+    ["PRICE_ALERT_LOCK_TTL_MS", "9999"],
+    ["PRICE_ALERT_LOCK_TTL_MS", "900001"],
+  ])("rejects invalid price alert configuration %s=%s", (key, value) => {
     expect(() => parseEnv({ ...base, [key]: value })).toThrow();
   });
 });
