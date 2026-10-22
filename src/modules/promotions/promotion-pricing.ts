@@ -6,7 +6,7 @@ import type {
   PromotionPricingResult,
 } from "modules/promotions/promotions.types";
 
-const automaticDiscountPerUnit = (promotion: AutomaticPromotionInput, listPrice: number) =>
+export const automaticDiscountPerUnit = (promotion: AutomaticPromotionInput, listPrice: number) =>
   promotion.discountKind === "PERCENT"
     ? Math.min(listPrice, Math.floor((listPrice * promotion.discountValue) / 100))
     : Math.min(listPrice, promotion.discountValue);

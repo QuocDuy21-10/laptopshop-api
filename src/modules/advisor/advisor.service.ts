@@ -1,3 +1,4 @@
+import { prisma } from "config/client";
 import { buildRuleBasedResult } from "modules/advisor/advisor.explanation";
 import type { AdvisorRepository } from "modules/advisor/advisor.repository";
 import { rankCandidates } from "modules/advisor/advisor.ranking";
@@ -13,6 +14,8 @@ import {
   type AdvisorProvider,
   type ProviderExplanation,
 } from "modules/advisor/providers/advisor-provider";
+import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
+import { withProductPricingDto } from "modules/products/products.mapper";
 
 export type AdvisorRequester = { kind: "guest" | "user"; key: string };
 
@@ -29,6 +32,25 @@ export type AdvisorServiceDeps = {
     info?: (object: unknown, message?: string) => void;
   };
   model?: string;
+  priceProducts?: (result: AdvisorResult, now: Date) => Promise<AdvisorResult>;
+};
+
+export const decorateAdvisorProducts = async (result: AdvisorResult, now: Date) => {
+  const promotions = await resolveAutomaticPromotions(
+    prisma,
+    result.recommendations.map(({ product }) => product.id),
+    now,
+  );
+  return {
+    ...result,
+    recommendations: result.recommendations.map((recommendation) => ({
+      ...recommendation,
+      product: withProductPricingDto(
+        recommendation.product,
+        promotions.get(recommendation.product.id) ?? null,
+      ),
+    })),
+  };
 };
 
 export type AdvisorService = {
@@ -64,10 +86,11 @@ export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService =
     const startedAt = Date.now();
     const candidates = await deps.repository.findCandidates(input);
     const ranked = rankCandidates(candidates, input);
-    const finish = (result: AdvisorResult, usage?: ProviderExplanation["usage"]) => {
+    const finish = async (result: AdvisorResult, usage?: ProviderExplanation["usage"]) => {
+      const priced = deps.priceProducts ? await deps.priceProducts(result, new Date()) : result;
       deps.logger?.info?.(
         {
-          mode: result.mode,
+          mode: priced.mode,
           model: deps.model,
           latencyMs: Date.now() - startedAt,
           candidateCount: ranked.length,
@@ -75,7 +98,7 @@ export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService =
         },
         "advisor completed",
       );
-      return result;
+      return priced;
     };
     const fallback = () => finish(buildRuleBasedResult(ranked, input));
     if (!deps.provider || !deps.quota || ranked.length === 0) return fallback();

@@ -140,13 +140,24 @@ const productShape = {
   warrantyMonths: z.number().int().nullable(),
 };
 const Product = registry.register("Product", z.object(productShape));
+const PricedProduct = registry.register(
+  "PricedProduct",
+  z.object({
+    ...productShape,
+    salePrice: z.number().int(),
+    productDiscountAmount: z.number().int(),
+    promotion: z
+      .object({ id: z.number(), name: z.string(), endsAt: z.string().datetime() })
+      .nullable(),
+  }),
+);
 const ProductReviewSummary = registry.register(
   "ProductReviewSummary",
   z.object({ averageRating: z.number().nullable(), totalReviews: z.number().int() }),
 );
 const CatalogProduct = registry.register(
   "CatalogProduct",
-  z.object({ ...productShape, reviewSummary: ProductReviewSummary }),
+  z.object({ ...PricedProduct.shape, reviewSummary: ProductReviewSummary }),
 );
 const AdvisorRequest = registry.register(
   "AdvisorRequest",
@@ -169,7 +180,7 @@ const AdvisorRequest = registry.register(
 const AdvisorRecommendation = registry.register(
   "AdvisorRecommendation",
   z.object({
-    product: Product,
+    product: PricedProduct,
     matchScore: z.number().int().min(0).max(100),
     highlights: z.array(z.string()),
     reason: z.string(),
@@ -214,10 +225,19 @@ const Cart = registry.register(
   "Cart",
   z.object({
     items: z.array(
-      z.object({ id: z.number(), quantity: z.number(), lineTotal: z.number(), product: Product }),
+      z.object({
+        id: z.number(),
+        quantity: z.number(),
+        listLineTotal: z.number(),
+        productDiscountAmount: z.number(),
+        lineTotal: z.number(),
+        product: PricedProduct,
+      }),
     ),
     itemCount: z.number(),
     subtotal: z.number(),
+    productDiscount: z.number(),
+    totalAfterProductDiscount: z.number(),
   }),
 );
 const orderShape = {
@@ -810,7 +830,7 @@ op({
   summary: "Compare 2 to 4 products",
   tag: "products",
   request: { query: compareQuery },
-  ok: [200, "Products in the requested order", data(z.array(Product))],
+  ok: [200, "Products in the requested order", data(z.array(PricedProduct))],
   errors: { 400: "Invalid ids", 404: "Some products missing or hidden (details.missingIds)" },
 });
 op({
