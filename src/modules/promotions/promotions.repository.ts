@@ -7,6 +7,13 @@ export const promotionInclude = {
   updatedBy: actorSelect,
   couponPolicy: true,
   automaticPolicy: true,
+  flashSalePolicy: {
+    include: {
+      quotas: {
+        include: { product: { select: { id: true, name: true, image: true } } },
+      },
+    },
+  },
   products: { include: { product: { select: { id: true, name: true, image: true } } } },
   _count: { select: { redemptions: true } },
 } satisfies Prisma.PromotionInclude;

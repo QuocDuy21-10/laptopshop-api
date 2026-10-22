@@ -51,6 +51,27 @@ const toPolicyData = (body: CreatePromotionBody) => {
       targetProductIds: body.coupon!.targetProductIds,
     };
   }
+  if (body.kind === "FLASH_SALE") {
+    return {
+      couponPolicy: undefined,
+      automaticPolicy: undefined,
+      flashSalePolicy: {
+        create: {
+          priority: body.flashSale!.priority,
+          stackableWithCoupon: body.flashSale!.stackableWithCoupon,
+          showRemainingQuota: body.flashSale!.showRemainingQuota,
+        },
+      },
+      flashSaleQuotas: {
+        create: body.flashSale!.items.map((item) => ({
+          productId: item.productId,
+          totalQuota: item.totalQuota,
+          maxUnitsPerUser: item.maxUnitsPerUser,
+        })),
+      },
+      targetProductIds: [],
+    };
+  }
   return {
     couponPolicy: undefined,
     automaticPolicy: { create: { ...body.automatic!, targetProductIds: undefined } },
@@ -81,6 +102,8 @@ export const createPromotion = async (actorId: number, body: CreatePromotionBody
         updatedById: actorId,
         ...(policies.couponPolicy ? { couponPolicy: policies.couponPolicy } : {}),
         ...(policies.automaticPolicy ? { automaticPolicy: policies.automaticPolicy } : {}),
+        ...(policies.flashSalePolicy ? { flashSalePolicy: policies.flashSalePolicy } : {}),
+        ...(policies.flashSaleQuotas ? { flashSaleQuotas: policies.flashSaleQuotas } : {}),
         products: {
           create: policies.targetProductIds.map((productId) => ({ productId })),
         },
@@ -130,7 +153,10 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
           ["priority", "stackableWithCoupon", "targetProductIds"].includes(key),
         )
       : false;
-    if (attemptedLockedField || couponCore || automaticCore) {
+    const flashSaleCore = body.flashSale
+      ? Object.keys(body.flashSale).some((key) => ["priority", "stackableWithCoupon"].includes(key))
+      : false;
+    if (attemptedLockedField || couponCore || automaticCore || flashSaleCore) {
       throw new AppError("Promotion commercial fields are locked", 409, "PROMOTION_FIELD_LOCKED");
     }
     if (body.endsAt && body.endsAt <= current.endsAt) {
@@ -148,6 +174,28 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
         "PROMOTION_FIELD_LOCKED",
       );
     }
+    if (body.flashSale?.items) {
+      const currentQuotas = new Map(
+        (current.flashSalePolicy?.quotas ?? []).map((quota) => [quota.productId, quota]),
+      );
+      for (const item of body.flashSale.items) {
+        const existing = currentQuotas.get(item.productId);
+        if (
+          !existing ||
+          item.maxUnitsPerUser !== existing.maxUnitsPerUser ||
+          item.totalQuota < existing.claimedUnits
+        ) {
+          throw new AppError(
+            "Active Flash Sale quota fields are locked",
+            409,
+            "PROMOTION_FIELD_LOCKED",
+          );
+        }
+      }
+      if (body.flashSale.items.length !== currentQuotas.size) {
+        throw new AppError("Active Flash Sale targets are locked", 409, "PROMOTION_FIELD_LOCKED");
+      }
+    }
   }
   const updated = await prisma.$transaction(async (tx) => {
     if (body.coupon) {
@@ -159,7 +207,59 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
         },
       });
     }
-    const pricingChanged = Object.keys(body).some((key) => pricingFields.has(key));
+    if (body.flashSale) {
+      if (current.activatedAt) {
+        if (body.flashSale.showRemainingQuota !== undefined) {
+          await tx.flashSalePolicy.update({
+            where: { promotionId: id },
+            data: { showRemainingQuota: body.flashSale.showRemainingQuota },
+          });
+        }
+        for (const item of body.flashSale.items ?? []) {
+          await tx.flashSaleProductQuota.update({
+            where: { promotionId_productId: { promotionId: id, productId: item.productId } },
+            data: { totalQuota: item.totalQuota },
+          });
+        }
+      } else {
+        await tx.flashSalePolicy.update({
+          where: { promotionId: id },
+          data: {
+            ...(body.flashSale.priority !== undefined ? { priority: body.flashSale.priority } : {}),
+            ...(body.flashSale.stackableWithCoupon !== undefined
+              ? { stackableWithCoupon: body.flashSale.stackableWithCoupon }
+              : {}),
+            ...(body.flashSale.showRemainingQuota !== undefined
+              ? { showRemainingQuota: body.flashSale.showRemainingQuota }
+              : {}),
+          },
+        });
+        if (body.flashSale.items) {
+          if (
+            body.flashSale.items.some(
+              (item) =>
+                item.productId === undefined ||
+                item.totalQuota === undefined ||
+                item.maxUnitsPerUser === undefined,
+            )
+          ) {
+            throw new AppError("Flash Sale quota items are incomplete", 400, "VALIDATION_ERROR");
+          }
+          await tx.flashSaleProductQuota.deleteMany({ where: { promotionId: id } });
+          await tx.flashSaleProductQuota.createMany({
+            data: body.flashSale.items.map((item) => ({
+              promotionId: id,
+              productId: item.productId!,
+              totalQuota: item.totalQuota!,
+              maxUnitsPerUser: item.maxUnitsPerUser!,
+            })),
+          });
+        }
+      }
+    }
+    const pricingChanged =
+      Object.keys(body).some((key) => pricingFields.has(key)) ||
+      (Boolean(body.flashSale) && !current.activatedAt);
     return tx.promotion.update({
       where: { id },
       data: {
@@ -194,6 +294,12 @@ export const transitionPromotion = async (
     throw new AppError("Promotion cannot be resumed", 409, "PROMOTION_INVALID_TRANSITION");
   if (action === "END" && !["ACTIVE", "PAUSED"].includes(state))
     throw new AppError("Promotion cannot be ended", 409, "PROMOTION_INVALID_TRANSITION");
+  if (
+    action === "ACTIVATE" &&
+    current.kind === "FLASH_SALE" &&
+    (!current.flashSalePolicy || current.flashSalePolicy.quotas.length === 0)
+  )
+    throw new AppError("Flash Sale needs quota items", 409, "PROMOTION_INVALID_TRANSITION");
   const nextState =
     action === "ACTIVATE" || action === "RESUME"
       ? "ACTIVE"
@@ -237,15 +343,38 @@ export const clonePromotion = async (id: number, actorId: number) => {
                 create: { ...current.couponPolicy, promotionId: undefined, code: code! },
               },
             }
-          : {
-              automaticPolicy: {
-                create: {
-                  priority: current.automaticPolicy!.priority,
-                  stackableWithCoupon: current.automaticPolicy!.stackableWithCoupon,
+          : current.flashSalePolicy
+            ? {
+                flashSalePolicy: {
+                  create: {
+                    priority: current.flashSalePolicy.priority,
+                    stackableWithCoupon: current.flashSalePolicy.stackableWithCoupon,
+                    showRemainingQuota: current.flashSalePolicy.showRemainingQuota,
+                  },
                 },
+                flashSaleQuotas: {
+                  create: current.flashSalePolicy.quotas.map((quota) => ({
+                    productId: quota.productId,
+                    totalQuota: quota.totalQuota,
+                    maxUnitsPerUser: quota.maxUnitsPerUser,
+                  })),
+                },
+              }
+            : {
+                automaticPolicy: {
+                  create: {
+                    priority: current.automaticPolicy!.priority,
+                    stackableWithCoupon: current.automaticPolicy!.stackableWithCoupon,
+                  },
+                },
+              }),
+        ...(current.flashSalePolicy
+          ? {}
+          : {
+              products: {
+                create: current.products.map((target) => ({ productId: target.productId })),
               },
             }),
-        products: { create: current.products.map((target) => ({ productId: target.productId })) },
       },
       include: promotionInclude,
     }),

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { idParams, pageQuery } from "lib/http";
 
-export const PROMOTION_KINDS = ["COUPON", "AUTOMATIC"] as const;
+export const PROMOTION_KINDS = ["COUPON", "AUTOMATIC", "FLASH_SALE"] as const;
 export const PROMOTION_STATES = ["DRAFT", "ACTIVE", "PAUSED", "ENDED"] as const;
 export const DISCOUNT_KINDS = ["PERCENT", "FIXED"] as const;
 export const COUPON_SCOPES = ["ORDER", "PRODUCT"] as const;
@@ -43,6 +43,44 @@ const automaticPolicy = z
   })
   .strict();
 
+const flashSaleItem = z
+  .object({
+    productId: z.coerce.number().int().positive(),
+    totalQuota: z.coerce.number().int().positive(),
+    maxUnitsPerUser: z.coerce.number().int().positive(),
+  })
+  .strict();
+
+const flashSalePolicyBase = z
+  .object({
+    priority: z.coerce.number().int().min(-1_000_000).max(1_000_000).default(0),
+    stackableWithCoupon: z.boolean().default(false),
+    showRemainingQuota: z.boolean().default(true),
+    items: z.array(flashSaleItem).min(1).max(500),
+  })
+  .strict();
+
+const flashSalePolicy = flashSalePolicyBase.superRefine((value, ctx) => {
+  const seen = new Set<number>();
+  value.items.forEach((item, index) => {
+    if (seen.has(item.productId)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items", index, "productId"],
+        message: "Flash Sale products must be unique",
+      });
+    }
+    seen.add(item.productId);
+    if (item.maxUnitsPerUser > item.totalQuota) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["items", index, "maxUnitsPerUser"],
+        message: "maxUnitsPerUser cannot exceed totalQuota",
+      });
+    }
+  });
+});
+
 const promotionBase = z
   .object({
     kind: z.enum(PROMOTION_KINDS),
@@ -54,6 +92,7 @@ const promotionBase = z
     endsAt: z.coerce.date(),
     coupon: couponPolicy.optional(),
     automatic: automaticPolicy.optional(),
+    flashSale: flashSalePolicy.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -120,6 +159,21 @@ const promotionBase = z
         });
       }
     }
+    if (value.kind === "FLASH_SALE") {
+      if (!value.flashSale || value.coupon || value.automatic) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["flashSale"],
+          message: "Flash Sale policy is required and cannot mix coupon or automatic policy",
+        });
+      }
+    } else if (value.flashSale) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["flashSale"],
+        message: "Flash Sale policy is only valid for FLASH_SALE promotions",
+      });
+    }
   });
 
 export const createPromotionBody = promotionBase;
@@ -135,6 +189,10 @@ export const updatePromotionBody = z
     endsAt: z.coerce.date().optional(),
     coupon: couponPolicy.partial().optional(),
     automatic: automaticPolicy.partial().optional(),
+    flashSale: flashSalePolicyBase
+      .partial()
+      .extend({ items: z.array(flashSaleItem).max(500).optional() })
+      .optional(),
   })
   .strict()
   .refine((value) => Object.keys(value).length > 0, "At least one field is required");

@@ -61,6 +61,58 @@ describe("promotion schemas", () => {
     expect(updatePromotionBody.safeParse({}).success).toBe(false);
   });
 
+  it("validates Flash Sale policy, unique quota products and per-user bounds", () => {
+    const flashSale = {
+      ...base,
+      kind: "FLASH_SALE" as const,
+      coupon: undefined,
+      automatic: undefined,
+      flashSale: {
+        priority: 10,
+        stackableWithCoupon: false,
+        showRemainingQuota: true,
+        items: [{ productId: "1", totalQuota: "10", maxUnitsPerUser: "2" }],
+      },
+    };
+    const parsed = createPromotionBody.parse(flashSale);
+    expect(parsed.flashSale?.items[0]).toMatchObject({
+      productId: 1,
+      totalQuota: 10,
+      maxUnitsPerUser: 2,
+    });
+    expect(
+      createPromotionBody.safeParse({
+        ...flashSale,
+        flashSale: {
+          ...flashSale.flashSale,
+          items: [
+            { productId: "1", totalQuota: "10", maxUnitsPerUser: "2" },
+            { productId: 1, totalQuota: 10, maxUnitsPerUser: 2 },
+          ],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      createPromotionBody.safeParse({
+        ...flashSale,
+        flashSale: {
+          ...flashSale.flashSale,
+          items: [{ productId: 1, totalQuota: 0, maxUnitsPerUser: 1 }],
+        },
+      }).success,
+    ).toBe(false);
+    expect(
+      createPromotionBody.safeParse({
+        ...flashSale,
+        flashSale: {
+          ...flashSale.flashSale,
+          items: [{ productId: 1, totalQuota: 2, maxUnitsPerUser: 3 }],
+        },
+        automatic: { priority: 1, stackableWithCoupon: false, targetProductIds: [1] },
+      }).success,
+    ).toBe(false);
+  });
+
   it("only accepts known lifecycle actions", () => {
     expect(transitionPromotionBody.safeParse({ action: "ACTIVATE" }).success).toBe(true);
     expect(transitionPromotionBody.safeParse({ action: "DELETE" }).success).toBe(false);

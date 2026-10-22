@@ -224,6 +224,9 @@ describe("openapi document", () => {
         PromotionStats: expect.anything(),
       }),
     );
+    expect(
+      (doc.components?.schemas?.PromotionDetail as any).allOf[1].properties.flashSale,
+    ).toBeDefined();
   });
 
   it("documents product visibility and the admin product filters", () => {

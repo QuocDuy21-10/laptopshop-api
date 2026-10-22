@@ -613,7 +613,7 @@ const PromotionSummary = registry.register(
   "PromotionSummary",
   z.object({
     id: z.number(),
-    kind: z.enum(["COUPON", "AUTOMATIC"]),
+    kind: z.enum(["COUPON", "AUTOMATIC", "FLASH_SALE"]),
     state: z.enum(["DRAFT", "ACTIVE", "PAUSED", "ENDED"]),
     effectiveState: z.enum([
       "DRAFT",
@@ -661,6 +661,22 @@ const PromotionDetail = registry.register(
         targetProductIds: z.array(z.number()),
       })
       .nullable(),
+    flashSale: z
+      .object({
+        priority: z.number(),
+        stackableWithCoupon: z.boolean(),
+        showRemainingQuota: z.boolean(),
+        quotas: z.array(
+          z.object({
+            productId: z.number(),
+            totalQuota: z.number(),
+            claimedUnits: z.number(),
+            remainingQuota: z.number(),
+            maxUnitsPerUser: z.number(),
+          }),
+        ),
+      })
+      .nullable(),
   }),
 );
 const PromotionRedemption = registry.register(
@@ -683,7 +699,7 @@ const PromotionStats = registry.register(
   "PromotionStats",
   z.object({
     promotionId: z.number(),
-    kind: z.enum(["COUPON", "AUTOMATIC"]),
+    kind: z.enum(["COUPON", "AUTOMATIC", "FLASH_SALE"]),
     redemptionCount: z.number(),
     activeUsageCount: z.number(),
     totalDiscountAmount: z.number(),
