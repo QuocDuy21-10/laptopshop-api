@@ -110,7 +110,9 @@ export const getPromotion = async (id: number) => toPromotionDetailDto(await get
 export const updatePromotion = async (id: number, actorId: number, body: UpdatePromotionBody) => {
   const current = await getRow(id);
   if (current.activatedAt) {
-    const attemptedLockedField = Object.keys(body).some((key) => pricingFields.has(key));
+    const attemptedLockedField = Object.keys(body).some(
+      (key) => pricingFields.has(key) && key !== "endsAt",
+    );
     const couponCore = body.coupon
       ? Object.keys(body.coupon).some((key) =>
           [
@@ -133,6 +135,18 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
     }
     if (body.endsAt && body.endsAt <= current.endsAt) {
       throw new AppError("Active promotion can only be extended", 409, "PROMOTION_FIELD_LOCKED");
+    }
+    if (
+      body.coupon?.maxUses !== undefined &&
+      current.couponPolicy?.maxUses !== null &&
+      body.coupon.maxUses !== null &&
+      body.coupon.maxUses < current.couponPolicy.maxUses
+    ) {
+      throw new AppError(
+        "Active promotion usage limit can only increase",
+        409,
+        "PROMOTION_FIELD_LOCKED",
+      );
     }
   }
   const updated = await prisma.$transaction(async (tx) => {
