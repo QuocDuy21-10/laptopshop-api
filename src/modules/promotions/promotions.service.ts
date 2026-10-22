@@ -6,13 +6,19 @@ import {
   AdminPromotionQuery,
   CreatePromotionBody,
   PromotionRedemptionQuery,
+  FlashSaleAllocationQuery,
   UpdatePromotionBody,
 } from "modules/promotions/promotions.schema";
-import { promotionInclude, redemptionInclude } from "modules/promotions/promotions.repository";
+import {
+  flashSaleAllocationInclude,
+  promotionInclude,
+  redemptionInclude,
+} from "modules/promotions/promotions.repository";
 import {
   toPromotionDetailDto,
   toPromotionSummaryDto,
   toRedemptionDto,
+  toFlashSaleAllocationDto,
 } from "modules/promotions/promotions.mapper";
 import { calculatePromotionPricing } from "modules/promotions/promotion-pricing";
 import { createPricingFingerprint } from "modules/promotions/promotion-fingerprint";
@@ -399,6 +405,46 @@ export const listPromotionRedemptions = async (id: number, query: PromotionRedem
 
 export const getPromotionSummary = async (id: number) => {
   const promotion = await getRow(id);
+  if (promotion.kind === "FLASH_SALE") {
+    const quotas = await prisma.flashSaleProductQuota.findMany({
+      where: { promotionId: id },
+      select: { productId: true, totalQuota: true, claimedUnits: true },
+    });
+    const [allocationAggregate, releasedAggregate, completedAggregate] = await Promise.all([
+      prisma.flashSaleAllocation.aggregate({
+        where: { promotionId: id },
+        _sum: { quantity: true, discountAmount: true },
+        _count: { _all: true },
+      }),
+      prisma.flashSaleAllocation.aggregate({
+        where: { promotionId: id, status: "RELEASED" },
+        _sum: { quantity: true },
+      }),
+      prisma.flashSaleAllocation.aggregate({
+        where: { promotionId: id, status: "CLAIMED", order: { status: "COMPLETED" } },
+        _sum: { quantity: true },
+      }),
+    ]);
+    const totalQuota = quotas.reduce((sum, quota) => sum + quota.totalQuota, 0);
+    const claimedUnits = quotas.reduce((sum, quota) => sum + quota.claimedUnits, 0);
+    return {
+      promotionId: id,
+      kind: promotion.kind,
+      totalQuota,
+      claimedUnits,
+      remainingUnits: Math.max(0, totalQuota - claimedUnits),
+      releasedUnits: releasedAggregate._sum.quantity ?? 0,
+      completedUnits: completedAggregate._sum.quantity ?? 0,
+      allocationCount: allocationAggregate._count._all,
+      totalDiscountAmount: allocationAggregate._sum.discountAmount ?? 0,
+      breakdown: quotas.map((quota) => ({
+        productId: quota.productId,
+        totalQuota: quota.totalQuota,
+        claimedUnits: quota.claimedUnits,
+        remainingUnits: Math.max(0, quota.totalQuota - quota.claimedUnits),
+      })),
+    };
+  }
   const aggregate = await prisma.promotionRedemption.aggregate({
     where: { promotionId: id },
     _sum: { discountAmount: true },
@@ -411,6 +457,29 @@ export const getPromotionSummary = async (id: number) => {
     activeUsageCount: promotion.couponPolicy?.usedCount ?? 0,
     totalDiscountAmount: aggregate._sum.discountAmount ?? 0,
   };
+};
+
+export const listFlashSaleAllocations = async (id: number, query: FlashSaleAllocationQuery) => {
+  const promotion = await getRow(id);
+  if (promotion.kind !== "FLASH_SALE") {
+    throw new AppError("Promotion is not a Flash Sale", 409, "PROMOTION_KIND_MISMATCH");
+  }
+  const where = {
+    promotionId: id,
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.productId ? { productId: query.productId } : {}),
+    ...(query.userId ? { userId: query.userId } : {}),
+  };
+  const [total, rows] = await Promise.all([
+    prisma.flashSaleAllocation.count({ where }),
+    prisma.flashSaleAllocation.findMany({
+      where,
+      include: flashSaleAllocationInclude,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...pageArgs(query),
+    }),
+  ]);
+  return { items: rows.map(toFlashSaleAllocationDto), meta: pageMeta(query, total) };
 };
 
 const couponFromRow = (row: any): ResolvedCoupon => ({

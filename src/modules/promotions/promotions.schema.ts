@@ -232,3 +232,10 @@ export const flashSaleAvailabilityQuery = z
     }
   });
 export type FlashSaleAvailabilityQuery = z.infer<typeof flashSaleAvailabilityQuery>;
+
+export const flashSaleAllocationQuery = pageQuery.extend({
+  status: z.enum(["CLAIMED", "RELEASED"]).optional(),
+  productId: z.coerce.number().int().positive().optional(),
+  userId: z.coerce.number().int().positive().optional(),
+});
+export type FlashSaleAllocationQuery = z.infer<typeof flashSaleAllocationQuery>;

@@ -72,6 +72,7 @@ import {
   transitionPromotionBody,
   updatePromotionBody,
   flashSaleAvailabilityQuery,
+  flashSaleAllocationQuery,
 } from "modules/promotions/promotions.schema";
 
 extendZodWithOpenApi(z);
@@ -728,6 +729,32 @@ const PromotionStats = registry.register(
     redemptionCount: z.number(),
     activeUsageCount: z.number(),
     totalDiscountAmount: z.number(),
+    totalQuota: z.number().optional(),
+    claimedUnits: z.number().optional(),
+    remainingUnits: z.number().optional(),
+    releasedUnits: z.number().optional(),
+    completedUnits: z.number().optional(),
+    allocationCount: z.number().optional(),
+    breakdown: z.array(z.record(z.number())).optional(),
+  }),
+);
+const FlashSaleAllocation = registry.register(
+  "FlashSaleAllocation",
+  z.object({
+    id: z.number(),
+    promotionId: z.number(),
+    productId: z.number(),
+    product: z.object({ id: z.number(), name: z.string() }),
+    user: z.object({ id: z.number(), username: z.string(), fullName: z.string().nullable() }),
+    orderId: z.number(),
+    orderStatus: z.string(),
+    orderDetailId: z.number(),
+    quantity: z.number(),
+    discountAmount: z.number(),
+    status: z.enum(["CLAIMED", "RELEASED"]),
+    createdAt: z.string().datetime(),
+    releasedAt: z.string().datetime().nullable(),
+    releaseReason: z.string().nullable(),
   }),
 );
 
@@ -1301,6 +1328,16 @@ op({
   request: { params: promotionIdParams },
   ok: [200, "OK", data(PromotionStats)],
   errors: { 404: "Promotion not found" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/promotions/{id}/allocations`,
+  summary: "List Flash Sale allocation history",
+  tag: "admin",
+  auth: "admin",
+  request: { params: promotionIdParams, query: flashSaleAllocationQuery },
+  ok: [200, "OK", page(FlashSaleAllocation)],
+  errors: { 403: "Admin only", 404: "Promotion not found" },
 });
 op({
   method: "post",

@@ -1,5 +1,5 @@
 import { prisma } from "config/client";
-import { placeOrder } from "modules/orders/orders.service";
+import { changeStatus, placeOrder } from "modules/orders/orders.service";
 import { quoteOrder } from "modules/promotions/promotions.service";
 import { createProduct, createUser, putInCart, resetDb } from "./fixtures";
 
@@ -46,10 +46,19 @@ describe("Flash Sale checkout", () => {
       prisma.flashSaleAllocation.findMany({ where: { orderId: result.order.id } }),
     ).resolves.toHaveLength(1);
 
+    await changeStatus(result.order.id, "CANCELLED", { actorId: user.id });
+    await expect(
+      prisma.flashSaleProductQuota.findUniqueOrThrow({
+        where: { promotionId_productId: { promotionId: promotion.id, productId: product.id } },
+      }),
+    ).resolves.toMatchObject({ claimedUnits: 0 });
+    await expect(
+      prisma.flashSaleAllocation.findMany({ where: { orderId: result.order.id } }),
+    ).resolves.toMatchObject([expect.objectContaining({ status: "RELEASED", quantity: 1 })]);
+
     await putInCart(user.id, product.id, 1);
-    await expect(quoteOrder(user.id)).rejects.toMatchObject({
-      code: "FLASH_SALE_USER_LIMIT",
-      details: { promotionId: promotion.id, productId: product.id, userRemainingQuota: 0 },
+    await expect(quoteOrder(user.id)).resolves.toMatchObject({
+      lines: [expect.objectContaining({ promotionKind: "FLASH_SALE" })],
     });
   });
 });

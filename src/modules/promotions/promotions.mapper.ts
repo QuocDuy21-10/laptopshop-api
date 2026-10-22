@@ -1,6 +1,10 @@
 import type { PromotionState } from "@prisma/client";
 import { toActor } from "modules/orders/orders.mapper";
-import type { PromotionRow, RedemptionRow } from "modules/promotions/promotions.repository";
+import type {
+  FlashSaleAllocationRow,
+  PromotionRow,
+  RedemptionRow,
+} from "modules/promotions/promotions.repository";
 
 export const effectivePromotionState = (
   state: PromotionState,
@@ -128,3 +132,21 @@ export const toRedemptionDto = (redemption: RedemptionRow) => ({
   reverseReason: redemption.reverseReason,
 });
 export type PromotionRedemptionDto = ReturnType<typeof toRedemptionDto>;
+
+export const toFlashSaleAllocationDto = (allocation: FlashSaleAllocationRow) => ({
+  id: allocation.id,
+  promotionId: allocation.promotionId,
+  productId: allocation.productId,
+  product: allocation.quota.product,
+  user: allocation.user,
+  orderId: allocation.orderId,
+  orderStatus: allocation.order.status,
+  orderDetailId: allocation.orderDetailId,
+  quantity: allocation.quantity,
+  discountAmount: allocation.discountAmount,
+  status: allocation.status,
+  createdAt: allocation.createdAt,
+  releasedAt: allocation.releasedAt,
+  releaseReason: allocation.releaseReason,
+});
+export type FlashSaleAllocationDto = ReturnType<typeof toFlashSaleAllocationDto>;

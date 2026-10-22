@@ -9,6 +9,7 @@ import {
   transitionPromotionBody,
   updatePromotionBody,
   flashSaleAvailabilityQuery,
+  flashSaleAllocationQuery,
 } from "modules/promotions/promotions.schema";
 import {
   clonePromotionHandler,
@@ -18,6 +19,7 @@ import {
   listPromotionRedemptionsHandler,
   listAvailablePromotionsHandler,
   flashSaleAvailabilityHandler,
+  listFlashSaleAllocationsHandler,
   listPromotionsHandler,
   transitionPromotionHandler,
   updatePromotionHandler,
@@ -61,4 +63,9 @@ adminPromotionRoutes.get(
   "/:id/summary",
   validate({ params: promotionIdParams }),
   getPromotionSummaryHandler,
+);
+adminPromotionRoutes.get(
+  "/:id/allocations",
+  validate({ params: promotionIdParams, query: flashSaleAllocationQuery }),
+  listFlashSaleAllocationsHandler,
 );

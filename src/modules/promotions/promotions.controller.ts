@@ -7,6 +7,7 @@ import {
   PromotionRedemptionQuery,
   TransitionPromotionBody,
   UpdatePromotionBody,
+  FlashSaleAllocationQuery,
 } from "modules/promotions/promotions.schema";
 import {
   clonePromotion,
@@ -17,6 +18,7 @@ import {
   listPromotions,
   transitionPromotion,
   updatePromotion,
+  listFlashSaleAllocations,
 } from "modules/promotions/promotions.service";
 import { listAvailablePromotions, quoteOrder } from "modules/promotions/promotions.service";
 import { getFlashSaleAvailability } from "modules/promotions/flash-sale-availability";
@@ -92,4 +94,12 @@ export const listPromotionRedemptionsHandler: RequestHandler = async (_req, res)
 
 export const getPromotionSummaryHandler: RequestHandler = async (_req, res) => {
   res.json({ data: await getPromotionSummary((res.locals.params as PromotionIdParams).id) });
+};
+
+export const listFlashSaleAllocationsHandler: RequestHandler = async (_req, res) => {
+  const result = await listFlashSaleAllocations(
+    (res.locals.params as PromotionIdParams).id,
+    res.locals.query as FlashSaleAllocationQuery,
+  );
+  res.json(result);
 };

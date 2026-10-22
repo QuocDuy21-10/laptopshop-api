@@ -26,3 +26,12 @@ export const redemptionInclude = {
 export type RedemptionRow = Prisma.PromotionRedemptionGetPayload<{
   include: typeof redemptionInclude;
 }>;
+
+export const flashSaleAllocationInclude = {
+  user: { select: { id: true, username: true, fullName: true } },
+  quota: { include: { product: { select: { id: true, name: true } } } },
+  order: { select: { id: true, status: true } },
+} satisfies Prisma.FlashSaleAllocationInclude;
+export type FlashSaleAllocationRow = Prisma.FlashSaleAllocationGetPayload<{
+  include: typeof flashSaleAllocationInclude;
+}>;

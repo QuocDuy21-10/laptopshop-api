@@ -186,10 +186,11 @@ export const releaseFlashSaleAllocations = async (
   tx: Tx,
   input: { orderId: number; reason: string; now: Date },
 ) => {
-  const allocations = await tx.flashSaleAllocation.findMany({
-    where: { orderId: input.orderId, status: "CLAIMED" },
-    orderBy: [{ promotionId: "asc" }, { productId: "asc" }, { id: "asc" }],
-  });
+  const allocations =
+    (await tx.flashSaleAllocation.findMany({
+      where: { orderId: input.orderId, status: "CLAIMED" },
+      orderBy: [{ promotionId: "asc" }, { productId: "asc" }, { id: "asc" }],
+    })) ?? [];
   let releasedUnits = 0;
   for (const allocation of allocations) {
     const transitioned = await tx.flashSaleAllocation.updateMany({
