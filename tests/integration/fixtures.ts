@@ -15,6 +15,10 @@ export const resetDb = async () => {
   await prisma.promotionRedemption.deleteMany();
   await prisma.orderDetail.deleteMany();
   await prisma.order.deleteMany();
+  await prisma.order.updateMany({
+    where: { couponPromotionId: { not: null } },
+    data: { couponPromotionId: null },
+  });
   await prisma.promotionUserUsage.deleteMany();
   await prisma.promotionProduct.deleteMany();
   await prisma.couponPolicy.deleteMany();
@@ -89,7 +93,9 @@ export const createCompletedOrderItem = async (userId: number, productId: number
     data: {
       totalPrice: 1000,
       subtotalPrice: 1000,
-      ...receiver,
+      receiverName: receiver.receiverName,
+      receiverAddress: receiver.receiverAddress,
+      receiverPhone: receiver.receiverPhone,
       status: "COMPLETED",
       paymentMethod: "COD",
       paymentStatus: "PAYMENT_SUCCESS",
