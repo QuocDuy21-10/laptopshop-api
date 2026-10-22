@@ -173,16 +173,18 @@ const PriceAlertMode = registry.register(
   "PriceAlertMode",
   z.enum(["PERCENT_DROP", "TARGET_PRICE"]),
 );
+void PriceAlertMode;
+const NullablePriceAlertMode = z.enum(["PERCENT_DROP", "TARGET_PRICE"]).nullable();
 const WishlistItem = registry.register(
   "WishlistItem",
   z.object({
     id: z.number(),
     productId: z.number(),
     product: PricedProduct,
-    alertMode: PriceAlertMode.nullable(),
+    alertMode: NullablePriceAlertMode,
     targetPrice: z.number().int().nullable(),
     referencePrice: z.number().int().nullable(),
-    lastAlertMode: PriceAlertMode.nullable(),
+    lastAlertMode: NullablePriceAlertMode,
     lastAlertedPrice: z.number().int().nullable(),
     lastAlertedAt: z.string().datetime().nullable(),
     createdAt: z.string().datetime(),

@@ -39,12 +39,17 @@ export const runLockedPriceAlertSweep = async (
   }
 
   try {
+    const startedAt = Date.now();
     const stats = await runPriceAlertSweep({
       client: deps.client,
       now: deps.now(),
       productBatchSize: deps.productBatchSize,
+      logger: deps.logger,
     });
-    deps.logger.info(stats, "price alert sweep completed");
+    deps.logger.info(
+      { ...stats, durationMs: Date.now() - startedAt },
+      "price alert sweep completed",
+    );
     return stats;
   } finally {
     try {

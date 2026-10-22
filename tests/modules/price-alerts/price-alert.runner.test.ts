@@ -48,11 +48,13 @@ describe("runLockedPriceAlertSweep", () => {
     runSweepMock.mockResolvedValue(stats);
 
     await expect(runLockedPriceAlertSweep(deps(redis))).resolves.toEqual(stats);
-    expect(runSweepMock).toHaveBeenCalledWith({
-      client: expect.anything(),
-      now: new Date("2026-10-22T04:00:00.000Z"),
-      productBatchSize: 100,
-    });
+    expect(runSweepMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        client: expect.anything(),
+        now: new Date("2026-10-22T04:00:00.000Z"),
+        productBatchSize: 100,
+      }),
+    );
     expect(redis.eval).toHaveBeenCalled();
   });
 
@@ -75,5 +77,23 @@ describe("runLockedPriceAlertSweep", () => {
 
     await expect(runLockedPriceAlertSweep(deps(redis))).rejects.toThrow("db down");
     expect(redis.eval).toHaveBeenCalled();
+  });
+
+  it("logs sweep duration with the aggregate stats", async () => {
+    const set = jest.fn<() => Promise<"OK" | null>>();
+    const evalMock = jest.fn<() => Promise<number>>();
+    set.mockResolvedValue("OK");
+    evalMock.mockResolvedValue(1);
+    const redis = { set, eval: evalMock };
+    runSweepMock.mockResolvedValue(stats);
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValueOnce(1_000).mockReturnValueOnce(2_500);
+
+    await runLockedPriceAlertSweep(deps(redis));
+
+    expect(logger.info).toHaveBeenCalledWith(
+      expect.objectContaining({ durationMs: 1_500, notificationsCreated: 1 }),
+      "price alert sweep completed",
+    );
+    nowSpy.mockRestore();
   });
 });

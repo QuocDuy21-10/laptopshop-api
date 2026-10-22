@@ -17,6 +17,10 @@ export type RunPriceAlertSweepInput = {
   client: typeof prisma;
   now: Date;
   productBatchSize: number;
+  logger?: {
+    warn: (fields: unknown, message: string) => void;
+    error: (fields: unknown, message: string) => void;
+  };
 };
 
 export type PriceAlertCandidate = {
@@ -92,6 +96,7 @@ export const commitPriceAlertCandidate = async (
           id: candidate.wishlistItemId,
           alertMode: candidate.mode,
           referencePrice: candidate.referencePrice,
+          targetPrice: candidate.targetPrice,
         },
         data,
       });
@@ -116,11 +121,8 @@ type WatchedItem = {
 
 type ScanProduct = Pick<Product, "id" | "name" | "price" | "quantity" | "isActive">;
 
-export const runPriceAlertSweep = async ({
-  client,
-  now,
-  productBatchSize,
-}: RunPriceAlertSweepInput) => {
+export const runPriceAlertSweep = async (input: RunPriceAlertSweepInput) => {
+  const { client, now, productBatchSize } = input;
   const stats: PriceAlertSweepStats = {
     productsScanned: 0,
     itemsEvaluated: 0,
@@ -202,12 +204,17 @@ export const runPriceAlertSweep = async ({
           );
           if (result === "created") stats.notificationsCreated += 1;
           if (result === "duplicate") stats.duplicatesSkipped += 1;
-        } catch {
+        } catch (error) {
           stats.errors += 1;
+          input.logger?.error(
+            { error, wishlistItemId: item.id, productId: item.productId },
+            "price alert candidate failed",
+          );
         }
       }
-    } catch {
+    } catch (error) {
       stats.errors += 1;
+      input.logger?.error({ error, productIds: ids }, "price alert batch failed");
     }
   }
   return stats;

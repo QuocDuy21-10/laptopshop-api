@@ -73,6 +73,37 @@ describe("price alert worker persistence", () => {
     await expect(prisma.notification.count({ where: { userId: user.id } })).resolves.toBe(0);
   });
 
+  it("rejects a stale target candidate when only the target is reconfigured", async () => {
+    const user = await createUser();
+    const product = await createProduct(3, 800);
+    const item = await prisma.wishlistItem.create({
+      data: {
+        userId: user.id,
+        productId: product.id,
+        alertMode: "TARGET_PRICE",
+        targetPrice: 850,
+        referencePrice: 1_000,
+      },
+    });
+    const candidate: PriceAlertCandidate = {
+      wishlistItemId: item.id,
+      userId: user.id,
+      productId: product.id,
+      productName: product.name,
+      mode: "TARGET_PRICE",
+      referencePrice: 1_000,
+      targetPrice: 850,
+      currentPrice: 800,
+    };
+    await prisma.wishlistItem.update({ where: { id: item.id }, data: { targetPrice: 750 } });
+
+    await expect(commitPriceAlertCandidate(prisma, candidate, new Date())).resolves.toBe("stale");
+    await expect(prisma.notification.count({ where: { userId: user.id } })).resolves.toBe(0);
+    await expect(prisma.wishlistItem.findUnique({ where: { id: item.id } })).resolves.toMatchObject(
+      { targetPrice: 750 },
+    );
+  });
+
   it("advances percent reference but clears a reached target alert", async () => {
     const user = await createUser();
     const percentProduct = await createProduct(3, 900);
