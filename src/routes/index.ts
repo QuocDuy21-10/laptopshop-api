@@ -21,6 +21,7 @@ import {
 } from "modules/reviews/reviews.routes";
 import { createReviewImageRoutes } from "modules/reviews/review-images.routes";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
+import { adminPromotionRoutes } from "modules/promotions/promotions.routes";
 
 export const createApiV1Router = (
   advisor: AdvisorRouteDeps,
@@ -54,6 +55,7 @@ export const createApiV1Router = (
   admin.use("/inventory", adminInventoryRoutes);
   admin.use("/payment-events", adminPaymentRoutes);
   admin.use("/reviews", adminReviewRoutes);
+  admin.use("/promotions", adminPromotionRoutes);
   router.use("/admin", admin);
 
   router.use(notFoundHandler);

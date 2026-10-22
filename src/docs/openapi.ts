@@ -63,6 +63,14 @@ import {
   helpfulReviewIdsQuery,
   putReviewReplyBody,
 } from "modules/reviews/reviews.schema";
+import {
+  adminPromotionQuery,
+  createPromotionBody,
+  promotionIdParams,
+  promotionRedemptionQuery,
+  transitionPromotionBody,
+  updatePromotionBody,
+} from "modules/promotions/promotions.schema";
 
 extendZodWithOpenApi(z);
 
@@ -536,6 +544,86 @@ const StockReceiptDetail = registry.register(
     movements: z.array(StockMovement),
   }),
 );
+const PromotionSummary = registry.register(
+  "PromotionSummary",
+  z.object({
+    id: z.number(),
+    kind: z.enum(["COUPON", "AUTOMATIC"]),
+    state: z.enum(["DRAFT", "ACTIVE", "PAUSED", "ENDED"]),
+    effectiveState: z.enum([
+      "DRAFT",
+      "ACTIVE",
+      "PAUSED",
+      "ENDED",
+      "SCHEDULED",
+      "RUNNING",
+      "EXPIRED",
+    ]),
+    name: z.string(),
+    discountKind: z.enum(["PERCENT", "FIXED"]),
+    discountValue: z.number().int(),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime(),
+    coupon: z
+      .object({
+        code: z.string(),
+        scope: z.enum(["ORDER", "PRODUCT"]),
+        maxUses: z.number().nullable(),
+        usedCount: z.number(),
+        isPublic: z.boolean(),
+      })
+      .nullable(),
+    priority: z.number().nullable(),
+    redemptionCount: z.number(),
+  }),
+);
+const PromotionDetail = registry.register(
+  "PromotionDetail",
+  PromotionSummary.extend({
+    description: z.string().nullable(),
+    activatedAt: z.string().datetime().nullable(),
+    pricingVersion: z.number(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    createdBy: Actor,
+    updatedBy: Actor,
+    lockedFields: z.array(z.string()),
+    products: z.array(z.object({ id: z.number(), name: z.string(), image: z.string().nullable() })),
+    automatic: z
+      .object({
+        priority: z.number(),
+        stackableWithCoupon: z.boolean(),
+        targetProductIds: z.array(z.number()),
+      })
+      .nullable(),
+  }),
+);
+const PromotionRedemption = registry.register(
+  "PromotionRedemption",
+  z.object({
+    id: z.number(),
+    promotionId: z.number(),
+    user: z.object({ id: z.number(), username: z.string(), fullName: z.string().nullable() }),
+    orderId: z.number(),
+    orderStatus: z.string(),
+    orderTotal: z.number(),
+    discountAmount: z.number(),
+    status: z.enum(["APPLIED", "REVERSED"]),
+    createdAt: z.string().datetime(),
+    reversedAt: z.string().datetime().nullable(),
+    reverseReason: z.string().nullable(),
+  }),
+);
+const PromotionStats = registry.register(
+  "PromotionStats",
+  z.object({
+    promotionId: z.number(),
+    kind: z.enum(["COUPON", "AUTOMATIC"]),
+    redemptionCount: z.number(),
+    activeUsageCount: z.number(),
+    totalDiscountAmount: z.number(),
+  }),
+);
 
 const binary = z.string().openapi({ type: "string", format: "binary" });
 const data = (schema: z.ZodTypeAny) => z.object({ data: schema });
@@ -998,6 +1086,85 @@ op({
   auth: "admin",
   request: { query: adminListProductsQuery },
   ok: [200, "OK", page(Product)],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/promotions`,
+  summary: "List promotions",
+  tag: "admin",
+  auth: "admin",
+  request: { query: adminPromotionQuery },
+  ok: [200, "OK", page(PromotionSummary)],
+});
+op({
+  method: "post",
+  path: `${v1}/admin/promotions`,
+  summary: "Create a promotion draft",
+  tag: "admin",
+  auth: "admin",
+  request: { body: json(createPromotionBody) },
+  ok: [201, "Created", data(PromotionDetail)],
+  errors: { 400: "Invalid promotion", 409: "Duplicate or invalid commercial configuration" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/promotions/{id}`,
+  summary: "Promotion detail",
+  tag: "admin",
+  auth: "admin",
+  request: { params: promotionIdParams },
+  ok: [200, "OK", data(PromotionDetail)],
+  errors: { 404: "Promotion not found" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/promotions/{id}`,
+  summary: "Update an editable promotion",
+  tag: "admin",
+  auth: "admin",
+  request: { params: promotionIdParams, body: json(updatePromotionBody) },
+  ok: [200, "Updated", data(PromotionDetail)],
+  errors: { 404: "Promotion not found", 409: "Commercial fields are locked" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/promotions/{id}/state`,
+  summary: "Transition promotion state",
+  tag: "admin",
+  auth: "admin",
+  request: { params: promotionIdParams, body: json(transitionPromotionBody) },
+  ok: [200, "Updated", data(PromotionDetail)],
+  errors: { 404: "Promotion not found", 409: "Invalid lifecycle transition" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/promotions/{id}/clone`,
+  summary: "Clone a promotion as a new draft",
+  tag: "admin",
+  auth: "admin",
+  request: { params: promotionIdParams },
+  ok: [201, "Created", data(PromotionDetail)],
+  errors: { 404: "Promotion not found" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/promotions/{id}/redemptions`,
+  summary: "List promotion redemptions",
+  tag: "admin",
+  auth: "admin",
+  request: { params: promotionIdParams, query: promotionRedemptionQuery },
+  ok: [200, "OK", page(PromotionRedemption)],
+  errors: { 404: "Promotion not found" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/promotions/{id}/summary`,
+  summary: "Promotion summary",
+  tag: "admin",
+  auth: "admin",
+  request: { params: promotionIdParams },
+  ok: [200, "OK", data(PromotionStats)],
+  errors: { 404: "Promotion not found" },
 });
 op({
   method: "post",

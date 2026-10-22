@@ -34,6 +34,12 @@ const V1_PATHS = [
   "/api/v1/webhooks/payments/{provider}",
   "/api/v1/admin/products",
   "/api/v1/admin/products/{id}",
+  "/api/v1/admin/promotions",
+  "/api/v1/admin/promotions/{id}",
+  "/api/v1/admin/promotions/{id}/state",
+  "/api/v1/admin/promotions/{id}/clone",
+  "/api/v1/admin/promotions/{id}/redemptions",
+  "/api/v1/admin/promotions/{id}/summary",
   "/api/v1/admin/users",
   "/api/v1/admin/users/{id}",
   "/api/v1/admin/inventory/adjustments",
@@ -190,6 +196,21 @@ describe("openapi document", () => {
     );
     expect(op("/api/v1/admin/inventory/receipts", "post").responses[409]).toBeDefined();
     expect(op("/api/v1/admin/inventory/receipts/{id}/post", "post").responses[409]).toBeDefined();
+  });
+
+  it("documents the protected promotion lifecycle contract", () => {
+    expect(op("/api/v1/admin/promotions", "get").security).toEqual(secured);
+    expect(op("/api/v1/admin/promotions", "post").responses[201]).toBeDefined();
+    expect(op("/api/v1/admin/promotions/{id}/state", "patch").responses[409]).toBeDefined();
+    expect(op("/api/v1/admin/promotions/{id}/redemptions", "get").responses[403]).toBeDefined();
+    expect(doc.components?.schemas).toEqual(
+      expect.objectContaining({
+        PromotionSummary: expect.anything(),
+        PromotionDetail: expect.anything(),
+        PromotionRedemption: expect.anything(),
+        PromotionStats: expect.anything(),
+      }),
+    );
   });
 
   it("documents product visibility and the admin product filters", () => {
