@@ -11,6 +11,12 @@ export const resetDb = async () => {
   await prisma.stockReceiptItem.deleteMany();
   await prisma.stockMovement.deleteMany();
   await prisma.stockReceipt.deleteMany();
+  await prisma.promotionRedemption.deleteMany();
+  await prisma.promotionUserUsage.deleteMany();
+  await prisma.promotionProduct.deleteMany();
+  await prisma.couponPolicy.deleteMany();
+  await prisma.automaticPromotionPolicy.deleteMany();
+  await prisma.promotion.deleteMany();
   await prisma.orderStatusHistory.deleteMany();
   await prisma.orderDetail.deleteMany();
   await prisma.order.deleteMany();
@@ -81,6 +87,7 @@ export const createCompletedOrderItem = async (userId: number, productId: number
   const order = await prisma.order.create({
     data: {
       totalPrice: 1000,
+      subtotalPrice: 1000,
       ...receiver,
       status: "COMPLETED",
       paymentMethod: "COD",

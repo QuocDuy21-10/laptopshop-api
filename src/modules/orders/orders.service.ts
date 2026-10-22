@@ -88,26 +88,28 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
               };
             })()
           : undefined;
-      const created = await tx.order.create({
-        data: {
-          userId,
-          idempotencyKey: key,
-          totalPrice,
-          receiverName: receiver.receiverName,
-          receiverAddress: receiver.receiverAddress,
-          receiverPhone: receiver.receiverPhone,
-          status: ORDER_STATUS.PENDING,
-          paymentMethod,
-          paymentStatus: PAYMENT_STATUS.UNPAID,
-          ...(payment ? { payment: { create: payment } } : {}),
-          orderDetails: {
-            create: lines.map((l) => ({
-              productId: l.productId,
-              quantity: l.quantity,
-              price: l.product.price,
-            })),
-          },
+      const orderData: Prisma.OrderUncheckedCreateInput = {
+        userId,
+        idempotencyKey: key,
+        totalPrice,
+        subtotalPrice: totalPrice,
+        receiverName: receiver.receiverName,
+        receiverAddress: receiver.receiverAddress,
+        receiverPhone: receiver.receiverPhone,
+        status: ORDER_STATUS.PENDING,
+        paymentMethod,
+        paymentStatus: PAYMENT_STATUS.UNPAID,
+        ...(payment ? { payment: { create: payment } } : {}),
+        orderDetails: {
+          create: lines.map((l) => ({
+            productId: l.productId,
+            quantity: l.quantity,
+            price: l.product.price,
+          })),
         },
+      };
+      const created = await tx.order.create({
+        data: orderData,
         include: orderInclude,
       });
       await tx.orderStatusHistory.create({
