@@ -18,6 +18,15 @@ import {
   transitionPromotion,
   updatePromotion,
 } from "modules/promotions/promotions.service";
+import { listAvailablePromotions, quoteOrder } from "modules/promotions/promotions.service";
+
+export const quoteOrderHandler: RequestHandler = async (req, res) => {
+  res.json({ data: await quoteOrder(req.auth!.id, req.body?.couponCode) });
+};
+
+export const listAvailablePromotionsHandler: RequestHandler = async (_req, res) => {
+  res.json({ data: await listAvailablePromotions() });
+};
 
 export const createPromotionHandler: RequestHandler = async (req, res) => {
   res

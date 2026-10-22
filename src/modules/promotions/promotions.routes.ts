@@ -14,12 +14,16 @@ import {
   getPromotionHandler,
   getPromotionSummaryHandler,
   listPromotionRedemptionsHandler,
+  listAvailablePromotionsHandler,
   listPromotionsHandler,
   transitionPromotionHandler,
   updatePromotionHandler,
 } from "modules/promotions/promotions.controller";
 
 export const adminPromotionRoutes = Router();
+export const promotionRoutes = Router();
+
+promotionRoutes.get("/available", listAvailablePromotionsHandler);
 
 adminPromotionRoutes.get("/", validate({ query: adminPromotionQuery }), listPromotionsHandler);
 adminPromotionRoutes.post("/", validate({ body: createPromotionBody }), createPromotionHandler);

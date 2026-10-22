@@ -21,7 +21,7 @@ import {
 } from "modules/reviews/reviews.routes";
 import { createReviewImageRoutes } from "modules/reviews/review-images.routes";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
-import { adminPromotionRoutes } from "modules/promotions/promotions.routes";
+import { adminPromotionRoutes, promotionRoutes } from "modules/promotions/promotions.routes";
 
 export const createApiV1Router = (
   advisor: AdvisorRouteDeps,
@@ -44,6 +44,7 @@ export const createApiV1Router = (
   router.use("/orders", orderRoutes);
   router.use("/payments", paymentRoutes);
   router.use("/advisor", createAdvisorRoutes(advisor));
+  router.use("/promotions", promotionRoutes);
 
   const admin = express.Router();
   admin.use(authenticate, requireRole("ADMIN"));

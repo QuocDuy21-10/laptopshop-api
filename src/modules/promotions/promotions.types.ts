@@ -24,6 +24,20 @@ export type CouponInput = {
   targetProductIds: number[];
 };
 
+export type ResolvedCoupon = CouponInput & { promotionName: string };
+
+export type PricingQuoteDto = {
+  subtotal: number;
+  productDiscount: number;
+  couponEligibleSubtotal: number;
+  couponDiscount: number;
+  total: number;
+  lines: Array<PromotionPricingLineResult>;
+  coupon: { id: number; code: string; name: string; valid: true } | null;
+  calculatedAt: Date;
+  pricingFingerprint: string;
+};
+
 export type PricingLineInput = {
   productId: number;
   quantity: number;

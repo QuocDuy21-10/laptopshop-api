@@ -31,6 +31,7 @@ import {
   adminExportOrdersQuery,
   adminListOrdersQuery,
   placeOrderBody,
+  quoteOrderBody,
   updateStatusBody,
 } from "modules/orders/orders.schema";
 import { salesQuery } from "modules/dashboard/dashboard.schema";
@@ -238,6 +239,38 @@ const Cart = registry.register(
     subtotal: z.number(),
     productDiscount: z.number(),
     totalAfterProductDiscount: z.number(),
+  }),
+);
+const PricingQuote = registry.register(
+  "PricingQuote",
+  z.object({
+    subtotal: z.number(),
+    productDiscount: z.number(),
+    couponEligibleSubtotal: z.number(),
+    couponDiscount: z.number(),
+    total: z.number(),
+    lines: z.array(z.record(z.unknown())),
+    coupon: z
+      .object({ id: z.number(), code: z.string(), name: z.string(), valid: z.literal(true) })
+      .nullable(),
+    calculatedAt: z.string().datetime(),
+    pricingFingerprint: z.string(),
+  }),
+);
+const PublicPromotion = registry.register(
+  "PublicPromotion",
+  z.object({
+    id: z.number(),
+    name: z.string(),
+    description: z.string().nullable(),
+    code: z.string(),
+    scope: z.enum(["ORDER", "PRODUCT"]),
+    discountKind: z.enum(["PERCENT", "FIXED"]),
+    discountValue: z.number(),
+    minOrderValue: z.number(),
+    maxDiscount: z.number().nullable(),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime(),
   }),
 );
 const orderShape = {
@@ -1031,6 +1064,16 @@ op({
   errors: { 400: "Invalid input", 409: "Cart empty, out of stock or product no longer sold" },
 });
 op({
+  method: "post",
+  path: `${v1}/orders/quote`,
+  summary: "Quote the authenticated cart",
+  tag: "orders",
+  auth: "user",
+  request: { body: json(quoteOrderBody) },
+  ok: [200, "OK", data(PricingQuote)],
+  errors: { 409: "Coupon invalid, minimum order not met or cart empty" },
+});
+op({
   method: "get",
   path: `${v1}/orders/me`,
   summary: "My orders",
@@ -1095,6 +1138,13 @@ op({
   request: { params: paymentProviderParam, body: json(z.record(z.unknown())) },
   ok: [200, "Accepted"],
   errors: { 400: "Invalid payload", 401: "Invalid signature", 404: "Provider not found" },
+});
+op({
+  method: "get",
+  path: `${v1}/promotions/available`,
+  summary: "List public promotions",
+  tag: "promotions",
+  ok: [200, "OK", data(z.array(PublicPromotion))],
 });
 
 // admin

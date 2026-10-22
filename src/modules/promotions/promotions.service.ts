@@ -14,6 +14,17 @@ import {
   toPromotionSummaryDto,
   toRedemptionDto,
 } from "modules/promotions/promotions.mapper";
+import { calculatePromotionPricing } from "modules/promotions/promotion-pricing";
+import { createPricingFingerprint } from "modules/promotions/promotion-fingerprint";
+import {
+  resolveAutomaticPromotions,
+  type PrismaClientLike,
+} from "modules/promotions/promotion-resolver";
+import type {
+  PricingLineInput,
+  PricingQuoteDto,
+  ResolvedCoupon,
+} from "modules/promotions/promotions.types";
 
 const pricingFields = new Set([
   "kind",
@@ -257,4 +268,126 @@ export const getPromotionSummary = async (id: number) => {
     activeUsageCount: promotion.couponPolicy?.usedCount ?? 0,
     totalDiscountAmount: aggregate._sum.discountAmount ?? 0,
   };
+};
+
+const couponFromRow = (row: any): ResolvedCoupon => ({
+  id: row.id,
+  code: row.couponPolicy.code,
+  name: row.name,
+  promotionName: row.name,
+  scope: row.couponPolicy.scope,
+  discountKind: row.discountKind,
+  discountValue: row.discountValue,
+  minOrderValue: row.couponPolicy.minOrderValue,
+  maxDiscount: row.couponPolicy.maxDiscount,
+  pricingVersion: row.pricingVersion,
+  targetProductIds: row.products.map((target: { productId: number }) => target.productId),
+});
+
+export const resolveCoupon = async (
+  client: PrismaClientLike,
+  code: string,
+  _userId: number,
+  _lines: PricingLineInput[],
+  now: Date,
+): Promise<ResolvedCoupon> => {
+  const row = await (client as any).promotion.findFirst({
+    where: { kind: "COUPON", couponPolicy: { code: code.trim().toUpperCase() } },
+    include: promotionInclude,
+  });
+  if (!row) throw new AppError("Promotion not found", 404, "PROMOTION_NOT_FOUND");
+  if (row.state !== "ACTIVE" || now < row.startsAt || now >= row.endsAt || !row.couponPolicy) {
+    throw new AppError("Promotion is not active", 409, "PROMOTION_NOT_ACTIVE");
+  }
+  return couponFromRow(row);
+};
+
+const quoteLineInput = (
+  line: any,
+  promotions: Awaited<ReturnType<typeof resolveAutomaticPromotions>>,
+): PricingLineInput => ({
+  productId: line.productId,
+  quantity: line.quantity,
+  listPrice: line.product.price,
+  automaticCandidates: promotions.has(line.productId) ? [promotions.get(line.productId)!] : [],
+});
+
+export const quoteOrder = async (
+  userId: number,
+  couponCode?: string,
+  now = new Date(),
+): Promise<PricingQuoteDto> => {
+  const lines = await prisma.cartDetail.findMany({
+    where: { cart: { userId } },
+    include: { product: { select: { id: true, price: true, isActive: true } } },
+    orderBy: { productId: "asc" },
+  });
+  if (lines.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
+  const promotions = await resolveAutomaticPromotions(
+    prisma,
+    lines.map((line) => line.productId),
+    now,
+  );
+  const inputs = lines.map((line) => quoteLineInput(line, promotions));
+  const coupon = couponCode ? await resolveCoupon(prisma, couponCode, userId, inputs, now) : null;
+  const pricing = calculatePromotionPricing({ lines: inputs, coupon });
+  const minimumBase =
+    coupon?.scope === "PRODUCT"
+      ? pricing.couponEligibleSubtotal
+      : pricing.subtotalPrice - pricing.productDiscountAmount;
+  if (coupon && minimumBase < coupon.minOrderValue) {
+    throw new AppError("Minimum order value is not met", 409, "MIN_ORDER_NOT_MET");
+  }
+  const fingerprint = createPricingFingerprint({
+    lines: inputs.map((line) => ({
+      productId: line.productId,
+      quantity: line.quantity,
+      listPrice: line.listPrice,
+      automaticPromotionId: line.automaticCandidates?.[0]?.id ?? null,
+      pricingVersion: line.automaticCandidates?.[0]?.pricingVersion ?? null,
+    })),
+    coupon: coupon
+      ? {
+          id: coupon.id,
+          pricingVersion: coupon.pricingVersion,
+          scope: coupon.scope,
+          targetProductIds: coupon.targetProductIds,
+        }
+      : null,
+    totals: pricing,
+  });
+  return {
+    subtotal: pricing.subtotalPrice,
+    productDiscount: pricing.productDiscountAmount,
+    couponEligibleSubtotal: pricing.couponEligibleSubtotal,
+    couponDiscount: pricing.couponDiscountAmount,
+    total: pricing.totalPrice,
+    lines: pricing.lines,
+    coupon: coupon ? { id: coupon.id, code: coupon.code, name: coupon.name, valid: true } : null,
+    calculatedAt: now,
+    pricingFingerprint: fingerprint,
+  };
+};
+
+export const listAvailablePromotions = async (now = new Date()) => {
+  const rows = await prisma.promotion.findMany({
+    where: { kind: "COUPON", state: "ACTIVE", startsAt: { lte: now }, endsAt: { gt: now } },
+    include: { couponPolicy: true, products: { select: { productId: true } } },
+    orderBy: [{ startsAt: "asc" }, { id: "asc" }],
+  });
+  return rows
+    .filter((row: any) => row.couponPolicy?.isPublic)
+    .map((row: any) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description ?? null,
+      code: row.couponPolicy.code,
+      scope: row.couponPolicy.scope,
+      discountKind: row.discountKind,
+      discountValue: row.discountValue,
+      minOrderValue: row.couponPolicy.minOrderValue,
+      maxDiscount: row.couponPolicy.maxDiscount,
+      startsAt: row.startsAt,
+      endsAt: row.endsAt,
+    }));
 };

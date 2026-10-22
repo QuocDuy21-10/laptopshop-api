@@ -6,6 +6,7 @@ import {
   adminExportOrdersQuery,
   adminListOrdersQuery,
   placeOrderBody,
+  quoteOrderBody,
   updateStatusBody,
 } from "modules/orders/orders.schema";
 import {
@@ -19,10 +20,12 @@ import {
   updateStatusHandler,
 } from "modules/orders/orders.controller";
 import { checkoutAttemptHandler, getMyPaymentHandler } from "modules/payments/payments.controller";
+import { quoteOrderHandler } from "modules/promotions/promotions.controller";
 
 export const orderRoutes = Router();
 
 orderRoutes.use(authenticate);
+orderRoutes.post("/quote", validate({ body: quoteOrderBody }), quoteOrderHandler);
 orderRoutes.post("/", validate({ body: placeOrderBody }), placeOrderHandler);
 orderRoutes.get("/checkout-attempt", checkoutAttemptHandler);
 orderRoutes.get("/me", validate({ query: pageQuery }), listMyOrdersHandler);

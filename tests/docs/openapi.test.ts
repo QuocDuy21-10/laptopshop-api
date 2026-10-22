@@ -25,12 +25,14 @@ const V1_PATHS = [
   "/api/v1/cart/items",
   "/api/v1/cart/items/{id}",
   "/api/v1/orders",
+  "/api/v1/orders/quote",
   "/api/v1/orders/checkout-attempt",
   "/api/v1/orders/me",
   "/api/v1/orders/me/{id}",
   "/api/v1/orders/me/{id}/payment",
   "/api/v1/orders/me/{id}/cancel",
   "/api/v1/payments/methods",
+  "/api/v1/promotions/available",
   "/api/v1/webhooks/payments/{provider}",
   "/api/v1/admin/products",
   "/api/v1/admin/products/{id}",
@@ -175,6 +177,17 @@ describe("openapi document", () => {
     const params = op("/api/v1/orders", "post").parameters as any[];
     expect(params).toContainEqual(
       expect.objectContaining({ in: "header", name: "Idempotency-Key", required: true }),
+    );
+  });
+
+  it("documents the quote and public promotion boundaries", () => {
+    expect(op("/api/v1/orders/quote", "post").security).toEqual(secured);
+    expect(op("/api/v1/promotions/available", "get").security).toBeUndefined();
+    expect(doc.components?.schemas).toEqual(
+      expect.objectContaining({
+        PricingQuote: expect.anything(),
+        PublicPromotion: expect.anything(),
+      }),
     );
   });
 

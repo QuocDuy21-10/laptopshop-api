@@ -10,6 +10,9 @@ export const placeOrderBody = z.object({
 });
 export type PlaceOrderBody = z.infer<typeof placeOrderBody>;
 
+export const quoteOrderBody = z.object({ couponCode: z.string().trim().min(1).max(50).optional() });
+export type QuoteOrderBody = z.infer<typeof quoteOrderBody>;
+
 export { idempotencyKeyHeader } from "lib/idempotency";
 
 // YYYY-MM-DD with a real calendar check (2026-02-30 is rejected)
