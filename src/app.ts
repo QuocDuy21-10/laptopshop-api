@@ -15,7 +15,11 @@ import { createLimiters } from "middlewares/rate-limit";
 import { errorHandler, notFoundHandler } from "middlewares/error.middleware";
 import { paymentWebhookRoutes } from "modules/payments/payments.routes";
 import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
-import { createAdvisorService, type AdvisorService } from "modules/advisor/advisor.service";
+import {
+  createAdvisorService,
+  decorateAdvisorProducts,
+  type AdvisorService,
+} from "modules/advisor/advisor.service";
 import { createReviewImageStorage } from "lib/storage/s3-review-image-storage";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
 
@@ -61,7 +65,10 @@ export const createApp = (deps: AppDeps = {}): Express => {
   const advisor =
     deps.advisor ??
     ({
-      service: createAdvisorService({ repository: new PrismaAdvisorRepository() }),
+      service: createAdvisorService({
+        repository: new PrismaAdvisorRepository(),
+        priceProducts: decorateAdvisorProducts,
+      }),
       identitySecret: env.JWT_SECRET,
     } as const);
   const reviewImages =

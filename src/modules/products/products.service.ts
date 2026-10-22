@@ -20,6 +20,7 @@ import {
 import { productWhere } from "modules/products/products.filter";
 import { getReviewStatsForProductIds } from "modules/products/products.review-stats.repository";
 import { queryRatedProductPage } from "modules/products/products.rating.repository";
+import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
 
 const nonNullEntries = (data: Record<string, unknown>) =>
   Object.fromEntries(
@@ -36,11 +37,14 @@ export const listProducts = async (
       where: { id: { in: ratedPage.productIds }, isActive: true },
     });
     const byId = new Map(rows.map((row) => [row.id, row]));
+    const promotions = await resolveAutomaticPromotions(prisma, ratedPage.productIds, new Date());
     return {
       items: ratedPage.productIds
         .map((id) => byId.get(id))
         .filter((row): row is Product => Boolean(row))
-        .map((row) => toCatalogProductDto(row, ratedPage.summaries.get(row.id))),
+        .map((row) =>
+          toCatalogProductDto(row, ratedPage.summaries.get(row.id), promotions.get(row.id) ?? null),
+        ),
       meta: pageMeta(q, ratedPage.total),
     };
   }
@@ -53,8 +57,15 @@ export const listProducts = async (
   ]);
   if (admin) return { items: rows.map(toProductDto), meta: pageMeta(q, total) };
   const summaries = await getReviewStatsForProductIds(rows.map((row) => row.id));
+  const promotions = await resolveAutomaticPromotions(
+    prisma,
+    rows.map((row) => row.id),
+    new Date(),
+  );
   return {
-    items: rows.map((row) => toCatalogProductDto(row, summaries.get(row.id))),
+    items: rows.map((row) =>
+      toCatalogProductDto(row, summaries.get(row.id), promotions.get(row.id) ?? null),
+    ),
     meta: pageMeta(q, total),
   };
 };
@@ -64,7 +75,12 @@ export const getProduct = async (id: number, admin = false) => {
   if (!product || (!admin && !product.isActive)) throw notFound("Product");
   if (admin) return toProductDto(product);
   const summaries = await getReviewStatsForProductIds([product.id]);
-  return toCatalogProductDto(product, summaries.get(product.id));
+  const promotions = await resolveAutomaticPromotions(prisma, [product.id], new Date());
+  return toCatalogProductDto(
+    product,
+    summaries.get(product.id),
+    promotions.get(product.id) ?? null,
+  );
 };
 
 export const compareProducts = async (ids: number[]) => {
@@ -74,7 +90,8 @@ export const compareProducts = async (ids: number[]) => {
   if (missingIds.length) {
     throw new AppError("Product not found", 404, "NOT_FOUND", { missingIds });
   }
-  return ids.map((id) => toProductDto(byId.get(id)!));
+  const promotions = await resolveAutomaticPromotions(prisma, ids, new Date());
+  return ids.map((id) => toCatalogProductDto(byId.get(id)!, undefined, promotions.get(id) ?? null));
 };
 
 export const createProduct = async (

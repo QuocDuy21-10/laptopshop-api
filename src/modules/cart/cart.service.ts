@@ -1,8 +1,9 @@
 import { Product } from "@prisma/client";
 import { prisma } from "config/client";
 import { AppError, notFound } from "lib/errors";
-import { toProductDto } from "modules/products/products.mapper";
 import { AddItemBody } from "modules/cart/cart.schema";
+import { toPricedProductDto } from "modules/products/products.mapper";
+import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
 
 export const outOfStock = (productId: number) =>
   new AppError("Not enough stock", 409, "OUT_OF_STOCK", { productId });
@@ -12,17 +13,26 @@ export const productUnavailable = (productId: number) =>
 
 type Line = { id: number; quantity: number; product: Product };
 
-const toCartDto = (lines: Line[]) => {
+const toCartDto = (
+  lines: Line[],
+  promotions: Awaited<ReturnType<typeof resolveAutomaticPromotions>>,
+) => {
   const items = lines.map((l) => ({
     id: l.id,
     quantity: l.quantity,
-    lineTotal: l.product.price * l.quantity,
-    product: toProductDto(l.product),
+    listLineTotal: l.product.price * l.quantity,
+    productDiscountAmount: (promotions.get(l.product.id)?.unitDiscount ?? 0) * l.quantity,
+    lineTotal: (l.product.price - (promotions.get(l.product.id)?.unitDiscount ?? 0)) * l.quantity,
+    product: toPricedProductDto(l.product, promotions.get(l.product.id) ?? null),
   }));
+  const subtotal = items.reduce((n, i) => n + i.listLineTotal, 0);
+  const productDiscount = items.reduce((n, i) => n + i.productDiscountAmount, 0);
   return {
     items,
     itemCount: items.reduce((n, i) => n + i.quantity, 0),
-    subtotal: items.reduce((n, i) => n + i.lineTotal, 0),
+    subtotal,
+    productDiscount,
+    totalAfterProductDiscount: subtotal - productDiscount,
   };
 };
 export type CartDto = ReturnType<typeof toCartDto>;
@@ -33,7 +43,12 @@ export const getCart = async (userId: number) => {
     select: { id: true, quantity: true, product: true },
     orderBy: { id: "asc" },
   });
-  return toCartDto(lines);
+  const promotions = await resolveAutomaticPromotions(
+    prisma,
+    lines.map((line) => line.product.id),
+    new Date(),
+  );
+  return toCartDto(lines, promotions);
 };
 
 export const addItem = async (userId: number, { productId, quantity }: AddItemBody) => {

@@ -12,8 +12,18 @@ export const resetDb = async () => {
   await prisma.stockMovement.deleteMany();
   await prisma.stockReceipt.deleteMany();
   await prisma.orderStatusHistory.deleteMany();
+  await prisma.promotionRedemption.deleteMany();
   await prisma.orderDetail.deleteMany();
   await prisma.order.deleteMany();
+  await prisma.order.updateMany({
+    where: { couponPromotionId: { not: null } },
+    data: { couponPromotionId: null },
+  });
+  await prisma.promotionUserUsage.deleteMany();
+  await prisma.promotionProduct.deleteMany();
+  await prisma.couponPolicy.deleteMany();
+  await prisma.automaticPromotionPolicy.deleteMany();
+  await prisma.promotion.deleteMany();
   await prisma.cartDetail.deleteMany();
   await prisma.cart.deleteMany();
   await prisma.refreshToken.deleteMany();
@@ -75,13 +85,17 @@ export const receiver = {
   receiverName: "R",
   receiverAddress: "Addr",
   receiverPhone: "0900000000",
+  pricingFingerprint: "a".repeat(64),
 };
 
 export const createCompletedOrderItem = async (userId: number, productId: number) => {
   const order = await prisma.order.create({
     data: {
       totalPrice: 1000,
-      ...receiver,
+      subtotalPrice: 1000,
+      receiverName: receiver.receiverName,
+      receiverAddress: receiver.receiverAddress,
+      receiverPhone: receiver.receiverPhone,
       status: "COMPLETED",
       paymentMethod: "COD",
       paymentStatus: "PAYMENT_SUCCESS",

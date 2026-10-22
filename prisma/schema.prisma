@@ -24,6 +24,33 @@ enum ReviewImageStatus {
   DELETING
 }
 
+enum PromotionKind {
+  COUPON
+  AUTOMATIC
+}
+
+enum PromotionState {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ENDED
+}
+
+enum DiscountKind {
+  PERCENT
+  FIXED
+}
+
+enum CouponScope {
+  ORDER
+  PRODUCT
+}
+
+enum RedemptionStatus {
+  APPLIED
+  REVERSED
+}
+
 model User {
   id          Int     @id @default(autoincrement())
   username    String  @unique @db.VarChar(255)
@@ -49,6 +76,10 @@ model User {
   reviewHelpfulVotes      ReviewHelpful[]
   reviewRepliesCreated    ReviewReply[]         @relation("ReviewReplyCreator")
   reviewRepliesUpdated    ReviewReply[]         @relation("ReviewReplyUpdater")
+  promotionsCreated       Promotion[]           @relation("PromotionCreator")
+  promotionsUpdated       Promotion[]           @relation("PromotionUpdater")
+  promotionUsages         PromotionUserUsage[]
+  promotionRedemptions    PromotionRedemption[]
 
   @@map("users")
 }
@@ -90,11 +121,12 @@ model Product {
   weightGrams      Int?
   warrantyMonths   Int?
 
-  cartDetails    CartDetail[]
-  orderDetails   OrderDetail[]
-  stockMovements StockMovement[]
-  receiptItems   StockReceiptItem[]
-  reviews        Review[]
+  cartDetails      CartDetail[]
+  orderDetails     OrderDetail[]
+  stockMovements   StockMovement[]
+  receiptItems     StockReceiptItem[]
+  promotionTargets PromotionProduct[]
+  reviews          Review[]
 
   @@map("products")
 }
@@ -124,12 +156,20 @@ model CartDetail {
 }
 
 model Order {
-  id              Int    @id @default(autoincrement())
-  totalPrice      Int
-  receiverAddress String @db.VarChar(255)
-  receiverName    String @db.VarChar(255)
-  receiverPhone   String @db.VarChar(255)
-  status          String @default("PENDING") // PENDING, COMPLETED, CANCELLED
+  id                     Int     @id @default(autoincrement())
+  totalPrice             Int
+  subtotalPrice          Int
+  productDiscountAmount  Int     @default(0)
+  couponEligibleSubtotal Int     @default(0)
+  couponDiscountAmount   Int     @default(0)
+  couponPromotionId      Int?
+  couponCode             String? @db.VarChar(50)
+  couponName             String? @db.VarChar(150)
+  requestHash            String? @db.Char(64)
+  receiverAddress        String  @db.VarChar(255)
+  receiverName           String  @db.VarChar(255)
+  receiverPhone          String  @db.VarChar(255)
+  status                 String  @default("PENDING") // PENDING, COMPLETED, CANCELLED
 
   paymentMethod  String // COD, BANK...
   paymentStatus  String // PAYMENT_UNPAID, PAYMENT_SUCCESS, PAYMENT_FAILED
@@ -138,12 +178,14 @@ model Order {
   createdAt      DateTime  @default(now())
   completedAt    DateTime?
 
-  user           User                 @relation(fields: [userId], references: [id])
-  userId         Int
-  orderDetails   OrderDetail[]
-  history        OrderStatusHistory[]
-  stockMovements StockMovement[]
-  payment        Payment?
+  user             User                 @relation(fields: [userId], references: [id])
+  userId           Int
+  orderDetails     OrderDetail[]
+  history          OrderStatusHistory[]
+  stockMovements   StockMovement[]
+  payment          Payment?
+  couponPromotion  Promotion?           @relation("OrderCouponPromotion", fields: [couponPromotionId], references: [id], onDelete: Restrict)
+  couponRedemption PromotionRedemption?
 
   @@unique([userId, idempotencyKey])
   @@index([status, createdAt])
@@ -152,9 +194,13 @@ model Order {
 }
 
 model OrderDetail {
-  id       Int @id @default(autoincrement())
-  price    Int
-  quantity Int
+  id                     Int     @id @default(autoincrement())
+  price                  Int
+  quantity               Int
+  productDiscountAmount  Int     @default(0)
+  couponDiscountAmount   Int     @default(0)
+  automaticPromotionId   Int?
+  automaticPromotionName String? @db.VarChar(150)
 
   order   Order @relation(fields: [orderId], references: [id])
   orderId Int
@@ -162,9 +208,115 @@ model OrderDetail {
   product   Product @relation(fields: [productId], references: [id])
   productId Int
 
-  review Review?
+  review             Review?
+  automaticPromotion Promotion? @relation("OrderDetailAutomaticPromotion", fields: [automaticPromotionId], references: [id], onDelete: Restrict)
 
   @@map("order_detail")
+}
+
+model Promotion {
+  id             Int            @id @default(autoincrement())
+  kind           PromotionKind
+  state          PromotionState @default(DRAFT)
+  name           String         @db.VarChar(150)
+  description    String?        @db.VarChar(500)
+  discountKind   DiscountKind
+  discountValue  Int
+  pricingVersion Int            @default(1)
+  startsAt       DateTime
+  endsAt         DateTime
+  activatedAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  createdById Int
+  updatedById Int
+
+  createdBy User @relation("PromotionCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedBy User @relation("PromotionUpdater", fields: [updatedById], references: [id], onDelete: Restrict)
+
+  couponPolicy    CouponPolicy?
+  automaticPolicy AutomaticPromotionPolicy?
+  products        PromotionProduct[]
+  redemptions     PromotionRedemption[]
+  userUsages      PromotionUserUsage[]
+  couponOrders    Order[]                   @relation("OrderCouponPromotion")
+  automaticLines  OrderDetail[]             @relation("OrderDetailAutomaticPromotion")
+
+  @@index([kind, state, startsAt, endsAt])
+  @@map("promotions")
+}
+
+model CouponPolicy {
+  promotionId    Int         @id
+  code           String      @unique @db.VarChar(50)
+  scope          CouponScope
+  minOrderValue  Int         @default(0)
+  maxDiscount    Int?
+  maxUses        Int?
+  usedCount      Int         @default(0)
+  maxUsesPerUser Int         @default(1)
+  isPublic       Boolean     @default(false)
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+
+  @@index([isPublic])
+  @@map("coupon_policies")
+}
+
+model AutomaticPromotionPolicy {
+  promotionId         Int     @id
+  priority            Int     @default(0)
+  stackableWithCoupon Boolean @default(false)
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+
+  @@index([priority])
+  @@map("automatic_promotion_policies")
+}
+
+model PromotionProduct {
+  promotionId Int
+  productId   Int
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@id([promotionId, productId])
+  @@index([productId, promotionId])
+  @@map("promotion_products")
+}
+
+model PromotionUserUsage {
+  promotionId Int
+  userId      Int
+  usedCount   Int @default(0)
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([promotionId, userId])
+  @@map("promotion_user_usages")
+}
+
+model PromotionRedemption {
+  id             Int              @id @default(autoincrement())
+  promotionId    Int
+  userId         Int
+  orderId        Int              @unique
+  discountAmount Int
+  status         RedemptionStatus @default(APPLIED)
+  createdAt      DateTime         @default(now())
+  reversedAt     DateTime?
+  reverseReason  String?          @db.VarChar(50)
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Restrict)
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+  @@index([promotionId, status, createdAt])
+  @@index([userId, promotionId, status])
+  @@map("promotion_redemptions")
 }
 
 model Review {
@@ -187,9 +339,9 @@ model Review {
   moderatedAt   DateTime?
   moderatedById Int?
 
-  images ReviewImage[]
+  images       ReviewImage[]
   helpfulVotes ReviewHelpful[]
-  reply ReviewReply?
+  reply        ReviewReply?
 
   user        User        @relation("ReviewAuthor", fields: [userId], references: [id], onDelete: Restrict)
   product     Product     @relation(fields: [productId], references: [id], onDelete: Restrict)

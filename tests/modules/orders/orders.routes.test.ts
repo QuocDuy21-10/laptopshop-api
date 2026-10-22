@@ -4,8 +4,39 @@ import request from "supertest";
 import { prismaError, prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { USER, cookieFor } from "../../helpers/auth";
+import { createPricingFingerprint } from "modules/promotions/promotion-fingerprint";
 
-const receiver = { receiverName: "R", receiverAddress: "Addr", receiverPhone: "0900000000" };
+const receiver = {
+  receiverName: "R",
+  receiverAddress: "Addr",
+  receiverPhone: "0900000000",
+  pricingFingerprint: createPricingFingerprint({
+    lines: [
+      {
+        productId: 1,
+        quantity: 2,
+        listPrice: 50,
+        automaticPromotionId: null,
+        pricingVersion: null,
+      },
+      {
+        productId: 2,
+        quantity: 1,
+        listPrice: 100,
+        automaticPromotionId: null,
+        pricingVersion: null,
+      },
+    ],
+    coupon: null,
+    totals: {
+      subtotalPrice: 200,
+      productDiscountAmount: 0,
+      couponEligibleSubtotal: 0,
+      couponDiscountAmount: 0,
+      totalPrice: 200,
+    },
+  }),
+};
 const orderRow = (over: Record<string, unknown> = {}) => ({
   id: 50,
   userId: USER.id,
@@ -55,6 +86,19 @@ beforeEach(() => {
 });
 
 describe("POST /api/v1/orders", () => {
+  it("requires a pricing fingerprint for checkout", async () => {
+    const res = await request(buildApp())
+      .post("/api/v1/orders")
+      .set("Cookie", cookieFor(USER))
+      .set("Idempotency-Key", "k1")
+      .send({
+        receiverName: receiver.receiverName,
+        receiverAddress: receiver.receiverAddress,
+        receiverPhone: receiver.receiverPhone,
+      });
+    expect(res.status).toBe(400);
+  });
+
   it("rejects BANK_TRANSFER while the backend feature flag is disabled", async () => {
     prismaMock.order.findUnique.mockResolvedValue(null);
     const res = await post().send({ ...receiver, paymentMethod: "BANK_TRANSFER" });
@@ -100,8 +144,20 @@ describe("POST /api/v1/orders", () => {
     const data = prismaMock.order.create.mock.calls[0][0].data;
     expect(data).toMatchObject({ userId: USER.id, idempotencyKey: "k1", totalPrice: 200 });
     expect(data.orderDetails.create).toEqual([
-      { productId: 1, quantity: 2, price: 50 },
-      { productId: 2, quantity: 1, price: 100 },
+      expect.objectContaining({
+        productId: 1,
+        quantity: 2,
+        price: 50,
+        productDiscountAmount: 0,
+        couponDiscountAmount: 0,
+      }),
+      expect.objectContaining({
+        productId: 2,
+        quantity: 1,
+        price: 100,
+        productDiscountAmount: 0,
+        couponDiscountAmount: 0,
+      }),
     ]);
     expect(prismaMock.cartDetail.deleteMany).toHaveBeenCalledWith({
       where: { cart: { userId: USER.id } },

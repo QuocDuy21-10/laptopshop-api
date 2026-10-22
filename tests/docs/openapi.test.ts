@@ -25,15 +25,23 @@ const V1_PATHS = [
   "/api/v1/cart/items",
   "/api/v1/cart/items/{id}",
   "/api/v1/orders",
+  "/api/v1/orders/quote",
   "/api/v1/orders/checkout-attempt",
   "/api/v1/orders/me",
   "/api/v1/orders/me/{id}",
   "/api/v1/orders/me/{id}/payment",
   "/api/v1/orders/me/{id}/cancel",
   "/api/v1/payments/methods",
+  "/api/v1/promotions/available",
   "/api/v1/webhooks/payments/{provider}",
   "/api/v1/admin/products",
   "/api/v1/admin/products/{id}",
+  "/api/v1/admin/promotions",
+  "/api/v1/admin/promotions/{id}",
+  "/api/v1/admin/promotions/{id}/state",
+  "/api/v1/admin/promotions/{id}/clone",
+  "/api/v1/admin/promotions/{id}/redemptions",
+  "/api/v1/admin/promotions/{id}/summary",
   "/api/v1/admin/users",
   "/api/v1/admin/users/{id}",
   "/api/v1/admin/inventory/adjustments",
@@ -172,6 +180,17 @@ describe("openapi document", () => {
     );
   });
 
+  it("documents the quote and public promotion boundaries", () => {
+    expect(op("/api/v1/orders/quote", "post").security).toEqual(secured);
+    expect(op("/api/v1/promotions/available", "get").security).toBeUndefined();
+    expect(doc.components?.schemas).toEqual(
+      expect.objectContaining({
+        PricingQuote: expect.anything(),
+        PublicPromotion: expect.anything(),
+      }),
+    );
+  });
+
   it("documents the inventory receipt and movement contract", () => {
     const adjustment = op("/api/v1/admin/inventory/adjustments", "post");
     expect(adjustment.responses[200]).toBeDefined();
@@ -190,6 +209,21 @@ describe("openapi document", () => {
     );
     expect(op("/api/v1/admin/inventory/receipts", "post").responses[409]).toBeDefined();
     expect(op("/api/v1/admin/inventory/receipts/{id}/post", "post").responses[409]).toBeDefined();
+  });
+
+  it("documents the protected promotion lifecycle contract", () => {
+    expect(op("/api/v1/admin/promotions", "get").security).toEqual(secured);
+    expect(op("/api/v1/admin/promotions", "post").responses[201]).toBeDefined();
+    expect(op("/api/v1/admin/promotions/{id}/state", "patch").responses[409]).toBeDefined();
+    expect(op("/api/v1/admin/promotions/{id}/redemptions", "get").responses[403]).toBeDefined();
+    expect(doc.components?.schemas).toEqual(
+      expect.objectContaining({
+        PromotionSummary: expect.anything(),
+        PromotionDetail: expect.anything(),
+        PromotionRedemption: expect.anything(),
+        PromotionStats: expect.anything(),
+      }),
+    );
   });
 
   it("documents product visibility and the admin product filters", () => {
