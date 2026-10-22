@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { validate } from "middlewares/validate";
+import { optionalAuthenticate } from "middlewares/authenticate";
 import {
   adminPromotionQuery,
   createPromotionBody,
@@ -7,6 +8,7 @@ import {
   promotionRedemptionQuery,
   transitionPromotionBody,
   updatePromotionBody,
+  flashSaleAvailabilityQuery,
 } from "modules/promotions/promotions.schema";
 import {
   clonePromotionHandler,
@@ -15,6 +17,7 @@ import {
   getPromotionSummaryHandler,
   listPromotionRedemptionsHandler,
   listAvailablePromotionsHandler,
+  flashSaleAvailabilityHandler,
   listPromotionsHandler,
   transitionPromotionHandler,
   updatePromotionHandler,
@@ -24,6 +27,12 @@ export const adminPromotionRoutes = Router();
 export const promotionRoutes = Router();
 
 promotionRoutes.get("/available", listAvailablePromotionsHandler);
+promotionRoutes.get(
+  "/flash-sales/availability",
+  optionalAuthenticate,
+  validate({ query: flashSaleAvailabilityQuery }),
+  flashSaleAvailabilityHandler,
+);
 
 adminPromotionRoutes.get("/", validate({ query: adminPromotionQuery }), listPromotionsHandler);
 adminPromotionRoutes.post("/", validate({ body: createPromotionBody }), createPromotionHandler);

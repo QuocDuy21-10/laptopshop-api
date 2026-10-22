@@ -71,6 +71,7 @@ import {
   promotionRedemptionQuery,
   transitionPromotionBody,
   updatePromotionBody,
+  flashSaleAvailabilityQuery,
 } from "modules/promotions/promotions.schema";
 
 extendZodWithOpenApi(z);
@@ -269,6 +270,21 @@ const PublicPromotion = registry.register(
     discountValue: z.number(),
     minOrderValue: z.number(),
     maxDiscount: z.number().nullable(),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime(),
+  }),
+);
+const FlashSaleAvailability = registry.register(
+  "FlashSaleAvailability",
+  z.object({
+    productId: z.number(),
+    promotionId: z.number(),
+    name: z.string(),
+    state: z.enum(["SCHEDULED", "RUNNING"]),
+    available: z.boolean(),
+    remainingQuota: z.number().nullable(),
+    maxUnitsPerUser: z.number(),
+    userRemainingQuota: z.number().optional(),
     startsAt: z.string().datetime(),
     endsAt: z.string().datetime(),
   }),
@@ -1173,6 +1189,19 @@ op({
   summary: "List public promotions",
   tag: "promotions",
   ok: [200, "OK", data(z.array(PublicPromotion))],
+});
+op({
+  method: "get",
+  path: `${v1}/promotions/flash-sales/availability`,
+  summary: "Get Flash Sale availability",
+  tag: "promotions",
+  request: { query: flashSaleAvailabilityQuery },
+  ok: [
+    200,
+    "OK",
+    data(z.object({ serverTime: z.string().datetime(), items: z.array(FlashSaleAvailability) })),
+  ],
+  errors: { 400: "Invalid product batch" },
 });
 
 // admin

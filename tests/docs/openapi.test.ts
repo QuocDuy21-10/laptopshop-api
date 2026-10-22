@@ -33,6 +33,7 @@ const V1_PATHS = [
   "/api/v1/orders/me/{id}/cancel",
   "/api/v1/payments/methods",
   "/api/v1/promotions/available",
+  "/api/v1/promotions/flash-sales/availability",
   "/api/v1/webhooks/payments/{provider}",
   "/api/v1/admin/products",
   "/api/v1/admin/products/{id}",
@@ -187,8 +188,10 @@ describe("openapi document", () => {
       expect.objectContaining({
         PricingQuote: expect.anything(),
         PublicPromotion: expect.anything(),
+        FlashSaleAvailability: expect.anything(),
       }),
     );
+    expect(op("/api/v1/promotions/flash-sales/availability", "get").security).toBeUndefined();
   });
 
   it("documents the inventory receipt and movement contract", () => {

@@ -213,3 +213,22 @@ export type AdminPromotionQuery = z.infer<typeof adminPromotionQuery>;
 
 export const promotionRedemptionQuery = pageQuery;
 export type PromotionRedemptionQuery = z.infer<typeof promotionRedemptionQuery>;
+
+export const flashSaleAvailabilityQuery = z
+  .object({
+    productIds: z.preprocess(
+      (value) => (typeof value === "string" ? value.split(",") : value),
+      z.array(z.coerce.number().int().positive()).min(1).max(20),
+    ),
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (new Set(value.productIds).size !== value.productIds.length) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["productIds"],
+        message: "productIds must be unique",
+      });
+    }
+  });
+export type FlashSaleAvailabilityQuery = z.infer<typeof flashSaleAvailabilityQuery>;

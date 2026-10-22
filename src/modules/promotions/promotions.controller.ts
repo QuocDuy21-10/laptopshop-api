@@ -19,6 +19,8 @@ import {
   updatePromotion,
 } from "modules/promotions/promotions.service";
 import { listAvailablePromotions, quoteOrder } from "modules/promotions/promotions.service";
+import { getFlashSaleAvailability } from "modules/promotions/flash-sale-availability";
+import type { FlashSaleAvailabilityQuery } from "modules/promotions/promotions.schema";
 
 export const quoteOrderHandler: RequestHandler = async (req, res) => {
   res.json({ data: await quoteOrder(req.auth!.id, req.body?.couponCode) });
@@ -26,6 +28,17 @@ export const quoteOrderHandler: RequestHandler = async (req, res) => {
 
 export const listAvailablePromotionsHandler: RequestHandler = async (_req, res) => {
   res.json({ data: await listAvailablePromotions() });
+};
+
+export const flashSaleAvailabilityHandler: RequestHandler = async (req, res) => {
+  const query = res.locals.query as FlashSaleAvailabilityQuery;
+  res.json({
+    data: await getFlashSaleAvailability({
+      productIds: query.productIds,
+      userId: req.auth?.id,
+      now: new Date(),
+    }),
+  });
 };
 
 export const createPromotionHandler: RequestHandler = async (req, res) => {
