@@ -74,6 +74,13 @@ import {
   flashSaleAvailabilityQuery,
   flashSaleAllocationQuery,
 } from "modules/promotions/promotions.schema";
+import {
+  configurePriceAlertBody,
+  wishlistProductParams,
+  wishlistQuery,
+  wishlistStatusQuery,
+} from "modules/wishlist/wishlist.schema";
+import { notificationsQuery } from "modules/notifications/notifications.schema";
 
 extendZodWithOpenApi(z);
 
@@ -161,6 +168,50 @@ const ProductReviewSummary = registry.register(
 const CatalogProduct = registry.register(
   "CatalogProduct",
   z.object({ ...PricedProduct.shape, reviewSummary: ProductReviewSummary }),
+);
+const PriceAlertMode = registry.register(
+  "PriceAlertMode",
+  z.enum(["PERCENT_DROP", "TARGET_PRICE"]),
+);
+void PriceAlertMode;
+const NullablePriceAlertMode = z.enum(["PERCENT_DROP", "TARGET_PRICE"]).nullable();
+const WishlistItem = registry.register(
+  "WishlistItem",
+  z.object({
+    id: z.number(),
+    productId: z.number(),
+    product: PricedProduct,
+    alertMode: NullablePriceAlertMode,
+    targetPrice: z.number().int().nullable(),
+    referencePrice: z.number().int().nullable(),
+    lastAlertMode: NullablePriceAlertMode,
+    lastAlertedPrice: z.number().int().nullable(),
+    lastAlertedAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  }),
+);
+const WishlistSummary = registry.register(
+  "WishlistSummary",
+  z.object({ itemCount: z.number().int() }),
+);
+const WishlistStatus = registry.register(
+  "WishlistStatus",
+  z.object({ productId: z.number().int(), isWishlisted: z.boolean() }),
+);
+const Notification = registry.register(
+  "Notification",
+  z.object({
+    id: z.number(),
+    productId: z.number().nullable(),
+    type: z.enum(["PRICE_DROP"]),
+    title: z.string(),
+    message: z.string(),
+    oldPrice: z.number().int().nullable(),
+    newPrice: z.number().int().nullable(),
+    readAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+  }),
 );
 const AdvisorRequest = registry.register(
   "AdvisorRequest",
@@ -424,7 +475,7 @@ const PublicReview = registry.register(
     helpfulCount: z.number().int().min(0),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
-    officialReply: z.union([PublicOfficialReply, z.null()]),
+    officialReply: PublicOfficialReply.nullable(),
   }),
 );
 const ReviewSummary = registry.register(
@@ -460,7 +511,7 @@ const ReviewEligibility = registry.register(
     reason: z
       .enum(["NOT_PURCHASED", "ORDER_NOT_COMPLETED", "PAYMENT_NOT_CONFIRMED", "ALREADY_REVIEWED"])
       .nullable(),
-    existingReview: z.union([OwnerReview, z.null()]),
+    existingReview: OwnerReview.nullable(),
     willRequireModeration: z.boolean(),
   }),
 );
@@ -492,7 +543,7 @@ const AdminReviewListItem = registry.register(
       .nullable(),
     images: z.array(ReviewImage),
     helpfulCount: z.number().int().min(0),
-    officialReply: z.union([AdminOfficialReply, z.null()]),
+    officialReply: AdminOfficialReply.nullable(),
   }),
 );
 const AdminReviewDetail = registry.register("AdminReviewDetail", AdminReviewListItem);
@@ -899,6 +950,105 @@ op({
   request: { body: avatarForm(updateMeBody) },
   ok: [200, "OK", data(User)],
   errors: { 400: "Invalid input" },
+});
+
+// wishlist
+op({
+  method: "get",
+  path: `${v1}/wishlist`,
+  summary: "List my wishlist",
+  tag: "wishlist",
+  auth: "user",
+  request: { query: wishlistQuery },
+  ok: [200, "OK", page(WishlistItem)],
+});
+op({
+  method: "get",
+  path: `${v1}/wishlist/summary`,
+  summary: "Get my wishlist summary",
+  tag: "wishlist",
+  auth: "user",
+  ok: [200, "OK", data(WishlistSummary)],
+});
+op({
+  method: "get",
+  path: `${v1}/wishlist/status`,
+  summary: "Get wishlist status for products",
+  tag: "wishlist",
+  auth: "user",
+  request: { query: wishlistStatusQuery },
+  ok: [200, "OK", data(z.array(WishlistStatus))],
+  errors: { 400: "Invalid product batch" },
+});
+op({
+  method: "put",
+  path: `${v1}/wishlist/items/{productId}`,
+  summary: "Add a product to my wishlist",
+  tag: "wishlist",
+  auth: "user",
+  request: { params: wishlistProductParams },
+  ok: [200, "OK", data(WishlistItem)],
+  errors: { 404: "Product not found", 409: "Product unavailable or wishlist limit reached" },
+});
+op({
+  method: "patch",
+  path: `${v1}/wishlist/items/{productId}`,
+  summary: "Configure a wishlist price alert",
+  tag: "wishlist",
+  auth: "user",
+  request: { params: wishlistProductParams, body: json(configurePriceAlertBody) },
+  ok: [200, "OK", data(WishlistItem)],
+  errors: {
+    400: "Invalid target price",
+    404: "Wishlist item not found",
+    409: "Product unavailable",
+  },
+});
+op({
+  method: "delete",
+  path: `${v1}/wishlist/items/{productId}`,
+  summary: "Remove a product from my wishlist",
+  tag: "wishlist",
+  auth: "user",
+  request: { params: wishlistProductParams },
+  ok: [204, "Removed"],
+});
+
+// notifications
+op({
+  method: "get",
+  path: `${v1}/notifications`,
+  summary: "List my notifications",
+  tag: "notifications",
+  auth: "user",
+  request: { query: notificationsQuery },
+  ok: [200, "OK", page(Notification)],
+});
+op({
+  method: "get",
+  path: `${v1}/notifications/unread-count`,
+  summary: "Get my unread notification count",
+  tag: "notifications",
+  auth: "user",
+  ok: [200, "OK", data(z.object({ unreadCount: z.number().int() }))],
+});
+op({
+  method: "patch",
+  path: `${v1}/notifications/read-all`,
+  summary: "Mark all my notifications read",
+  tag: "notifications",
+  auth: "user",
+  ok: [200, "OK", data(z.object({ updatedCount: z.number().int() }))],
+});
+op({
+  method: "patch",
+  path: `${v1}/notifications/{id}/read`,
+  summary: "Mark one notification read",
+  tag: "notifications",
+  auth: "user",
+  request: id,
+  ok: [200, "OK", data(Notification)],
+  errors: { 404: "Notification not found" },
 });
 
 // products

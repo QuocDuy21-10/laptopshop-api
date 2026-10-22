@@ -1,6 +1,8 @@
 import { prisma } from "config/client";
 
 export const resetDb = async () => {
+  await prisma.notification.deleteMany();
+  await prisma.wishlistItem.deleteMany();
   await prisma.paymentWebhookEvent.deleteMany();
   await prisma.paymentProviderCheckpoint.deleteMany();
   await prisma.payment.deleteMany();
