@@ -27,6 +27,7 @@ enum ReviewImageStatus {
 enum PromotionKind {
   COUPON
   AUTOMATIC
+  FLASH_SALE
 }
 
 enum PromotionState {
@@ -49,6 +50,11 @@ enum CouponScope {
 enum RedemptionStatus {
   APPLIED
   REVERSED
+}
+
+enum FlashSaleAllocationStatus {
+  CLAIMED
+  RELEASED
 }
 
 model User {
@@ -76,6 +82,8 @@ model User {
   reviewHelpfulVotes      ReviewHelpful[]
   reviewRepliesCreated    ReviewReply[]         @relation("ReviewReplyCreator")
   reviewRepliesUpdated    ReviewReply[]         @relation("ReviewReplyUpdater")
+  flashSaleUsages         FlashSaleUserUsage[]
+  flashSaleAllocations    FlashSaleAllocation[]
   promotionsCreated       Promotion[]           @relation("PromotionCreator")
   promotionsUpdated       Promotion[]           @relation("PromotionUpdater")
   promotionUsages         PromotionUserUsage[]
@@ -126,6 +134,7 @@ model Product {
   stockMovements   StockMovement[]
   receiptItems     StockReceiptItem[]
   promotionTargets PromotionProduct[]
+  flashSaleQuotas  FlashSaleProductQuota[]
   reviews          Review[]
 
   @@map("products")
@@ -186,6 +195,7 @@ model Order {
   payment          Payment?
   couponPromotion  Promotion?           @relation("OrderCouponPromotion", fields: [couponPromotionId], references: [id], onDelete: Restrict)
   couponRedemption PromotionRedemption?
+  flashSaleAllocations FlashSaleAllocation[]
 
   @@unique([userId, idempotencyKey])
   @@index([status, createdAt])
@@ -210,6 +220,7 @@ model OrderDetail {
 
   review             Review?
   automaticPromotion Promotion? @relation("OrderDetailAutomaticPromotion", fields: [automaticPromotionId], references: [id], onDelete: Restrict)
+  flashSaleAllocation FlashSaleAllocation?
 
   @@map("order_detail")
 }
@@ -237,11 +248,13 @@ model Promotion {
 
   couponPolicy    CouponPolicy?
   automaticPolicy AutomaticPromotionPolicy?
+  flashSalePolicy FlashSalePolicy?
   products        PromotionProduct[]
   redemptions     PromotionRedemption[]
   userUsages      PromotionUserUsage[]
   couponOrders    Order[]                   @relation("OrderCouponPromotion")
   automaticLines  OrderDetail[]             @relation("OrderDetailAutomaticPromotion")
+  flashSaleQuotas FlashSaleProductQuota[]
 
   @@index([kind, state, startsAt, endsAt])
   @@map("promotions")
@@ -317,6 +330,78 @@ model PromotionRedemption {
   @@index([promotionId, status, createdAt])
   @@index([userId, promotionId, status])
   @@map("promotion_redemptions")
+}
+
+model FlashSalePolicy {
+  promotionId         Int     @id
+  priority            Int     @default(0)
+  stackableWithCoupon Boolean @default(false)
+  showRemainingQuota  Boolean @default(true)
+
+  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  quotas    FlashSaleProductQuota[]
+
+  @@map("flash_sale_policies")
+}
+
+model FlashSaleProductQuota {
+  promotionId     Int
+  productId       Int
+  totalQuota      Int
+  claimedUnits    Int      @default(0)
+  maxUnitsPerUser Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  promotion   Promotion             @relation(fields: [promotionId], references: [id], onDelete: Restrict, map: "flash_sale_product_quotas_promotion_fkey")
+  policy      FlashSalePolicy       @relation(fields: [promotionId], references: [promotionId], onDelete: Restrict, map: "flash_sale_product_quotas_policy_fkey")
+  product     Product               @relation(fields: [productId], references: [id], onDelete: Restrict)
+  usages      FlashSaleUserUsage[]
+  allocations FlashSaleAllocation[]
+
+  @@id([promotionId, productId])
+  @@index([productId, promotionId])
+  @@map("flash_sale_product_quotas")
+}
+
+model FlashSaleUserUsage {
+  promotionId  Int
+  productId    Int
+  userId       Int
+  claimedUnits Int @default(0)
+
+  quota FlashSaleProductQuota @relation(fields: [promotionId, productId], references: [promotionId, productId], onDelete: Restrict)
+  user  User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([promotionId, productId, userId])
+  @@index([userId, promotionId])
+  @@map("flash_sale_user_usages")
+}
+
+model FlashSaleAllocation {
+  id             Int                       @id @default(autoincrement())
+  promotionId    Int
+  productId      Int
+  userId         Int
+  orderId        Int
+  orderDetailId  Int                       @unique
+  quantity       Int
+  discountAmount Int
+  status         FlashSaleAllocationStatus @default(CLAIMED)
+  createdAt      DateTime                  @default(now())
+  releasedAt     DateTime?
+  releaseReason  String?                   @db.VarChar(50)
+
+  quota       FlashSaleProductQuota @relation(fields: [promotionId, productId], references: [promotionId, productId], onDelete: Restrict)
+  user        User                  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  order       Order                 @relation(fields: [orderId], references: [id], onDelete: Restrict)
+  orderDetail OrderDetail           @relation(fields: [orderDetailId], references: [id], onDelete: Restrict)
+
+  @@unique([promotionId, productId, orderId])
+  @@index([promotionId, productId, status])
+  @@index([userId, promotionId, status])
+  @@index([createdAt])
+  @@map("flash_sale_allocations")
 }
 
 model Review {

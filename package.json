@@ -18,6 +18,7 @@
     "products:audit-facets": "ts-node -r tsconfig-paths/register src/scripts/audit-product-facets.ts",
     "products:audit-rating": "ts-node -r tsconfig-paths/register src/scripts/audit-product-rating-query.ts",
     "inventory:verify-ledger": "ts-node -r tsconfig-paths/register src/scripts/verify-stock-ledger.ts",
+    "promotions:verify-flash-sale": "ts-node -r tsconfig-paths/register src/scripts/verify-flash-sale.ts",
     "review-images:reconcile": "ts-node -r tsconfig-paths/register src/scripts/reconcile-review-images.ts",
     "prisma:deploy": "prisma migrate deploy",
     "prepare": "husky"
