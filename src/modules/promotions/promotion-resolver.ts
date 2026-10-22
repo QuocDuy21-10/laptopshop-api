@@ -15,6 +15,20 @@ export type ResolvedAutomaticPromotion = AutomaticPromotionInput & {
   unitDiscount: number;
 };
 
+export type ResolvedFlashSale = ResolvedAutomaticPromotion & {
+  kind: "FLASH_SALE";
+  totalQuota: number;
+  claimedUnits: number;
+  remainingQuota: number;
+  maxUnitsPerUser: number;
+  showRemainingQuota: boolean;
+  userClaimedUnits?: number;
+  userRemainingQuota?: number;
+};
+
+export type ResolvedPromotion =
+  (ResolvedAutomaticPromotion & { kind: "AUTOMATIC" }) | ResolvedFlashSale;
+
 type PromotionRow = {
   id: number;
   name: string;
@@ -24,7 +38,157 @@ type PromotionRow = {
   startsAt: Date;
   endsAt: Date;
   automaticPolicy: { priority: number; stackableWithCoupon: boolean } | null;
+  flashSalePolicy: {
+    priority: number;
+    stackableWithCoupon: boolean;
+    showRemainingQuota: boolean;
+    quotas: Array<{
+      productId: number;
+      totalQuota: number;
+      claimedUnits: number;
+      maxUnitsPerUser: number;
+      product?: { price: number };
+      usages?: Array<{ userId: number; claimedUnits: number }>;
+    }>;
+  } | null;
   products: Array<{ productId: number; product?: { price: number } }>;
+};
+
+const promotionQuery = (productIds: number[], now: Date, userId?: number) => ({
+  where: {
+    kind: { in: ["AUTOMATIC", "FLASH_SALE"] },
+    state: "ACTIVE",
+    startsAt: { lte: now },
+    endsAt: { gt: now },
+    OR: [
+      { products: { some: { productId: { in: productIds } } } },
+      { flashSalePolicy: { quotas: { some: { productId: { in: productIds } } } } },
+    ],
+  },
+  include: {
+    automaticPolicy: true,
+    products: {
+      where: { productId: { in: productIds } },
+      select: { productId: true, product: { select: { price: true } } },
+    },
+    flashSalePolicy: {
+      include: {
+        quotas: {
+          where: { productId: { in: productIds } },
+          include: {
+            product: { select: { price: true } },
+            ...(userId === undefined ? {} : { usages: { where: { userId } } }),
+          },
+        },
+      },
+    },
+  },
+});
+
+export const resolveProductPromotions = async (
+  client: PrismaClientLike,
+  productIds: number[],
+  now: Date,
+  userId?: number,
+): Promise<Map<number, ResolvedPromotion>> => {
+  const ids = [...new Set(productIds)].sort((a, b) => a - b);
+  if (ids.length === 0) return new Map();
+  const rows = ((await client.promotion.findMany(promotionQuery(ids, now, userId))) ??
+    []) as PromotionRow[];
+  const candidatesByProduct = new Map<
+    number,
+    Array<{
+      candidate: AutomaticPromotionInput;
+      listPrice: number;
+      resolved: ResolvedPromotion;
+    }>
+  >();
+
+  const addCandidate = (
+    productId: number,
+    candidate: AutomaticPromotionInput,
+    listPrice: number,
+    resolved: ResolvedPromotion,
+  ) => {
+    const list = candidatesByProduct.get(productId) ?? [];
+    list.push({ candidate, listPrice, resolved });
+    candidatesByProduct.set(productId, list);
+  };
+
+  for (const row of rows) {
+    if (row.automaticPolicy) {
+      const candidate: AutomaticPromotionInput = {
+        id: row.id,
+        name: row.name,
+        discountKind: row.discountKind,
+        discountValue: row.discountValue,
+        priority: row.automaticPolicy.priority,
+        stackableWithCoupon: row.automaticPolicy.stackableWithCoupon,
+        pricingVersion: row.pricingVersion,
+      };
+      for (const target of row.products) {
+        addCandidate(
+          target.productId,
+          candidate,
+          target.product?.price ?? Number.MAX_SAFE_INTEGER,
+          {
+            ...candidate,
+            kind: "AUTOMATIC",
+            endsAt: row.endsAt,
+            unitDiscount: automaticDiscountPerUnit(
+              candidate,
+              target.product?.price ?? Number.MAX_SAFE_INTEGER,
+            ),
+          },
+        );
+      }
+    }
+    if (row.flashSalePolicy) {
+      for (const quota of row.flashSalePolicy.quotas) {
+        const candidate: AutomaticPromotionInput = {
+          id: row.id,
+          name: row.name,
+          discountKind: row.discountKind,
+          discountValue: row.discountValue,
+          priority: row.flashSalePolicy.priority,
+          stackableWithCoupon: row.flashSalePolicy.stackableWithCoupon,
+          pricingVersion: row.pricingVersion,
+        };
+        const listPrice = quota.product?.price ?? Number.MAX_SAFE_INTEGER;
+        const userClaimedUnits = quota.usages?.[0]?.claimedUnits;
+        addCandidate(quota.productId, candidate, listPrice, {
+          ...candidate,
+          kind: "FLASH_SALE",
+          endsAt: row.endsAt,
+          unitDiscount: automaticDiscountPerUnit(candidate, listPrice),
+          totalQuota: quota.totalQuota,
+          claimedUnits: quota.claimedUnits,
+          remainingQuota: Math.max(0, quota.totalQuota - quota.claimedUnits),
+          maxUnitsPerUser: quota.maxUnitsPerUser,
+          showRemainingQuota: row.flashSalePolicy.showRemainingQuota,
+          ...(userClaimedUnits === undefined
+            ? {}
+            : {
+                userClaimedUnits,
+                userRemainingQuota: Math.max(0, quota.maxUnitsPerUser - userClaimedUnits),
+              }),
+        });
+      }
+    }
+  }
+
+  const result = new Map<number, ResolvedPromotion>();
+  for (const productId of ids) {
+    const candidates = candidatesByProduct.get(productId) ?? [];
+    const winner = selectAutomaticPromotion(
+      candidates.map(({ candidate }) => candidate),
+      candidates[0]?.listPrice ?? Number.MAX_SAFE_INTEGER,
+    );
+    if (!winner) continue;
+    const resolved = candidates.find(({ candidate }) => candidate.id === winner.id)?.resolved;
+    if (resolved) result.set(productId, resolved);
+  }
+  return result;
 };
 
 export const resolveAutomaticPromotions = async (

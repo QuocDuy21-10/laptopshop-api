@@ -11,6 +11,8 @@ export type AutomaticPromotionInput = {
   pricingVersion: number;
 };
 
+export type PromotionCandidateKind = "AUTOMATIC" | "FLASH_SALE";
+
 export type CouponInput = {
   id: number;
   code: string;
@@ -79,6 +81,17 @@ export type PricingFingerprintLineInput = {
   listPrice: number;
   automaticPromotionId: number | null;
   pricingVersion: number | null;
+  promotionId?: number | null;
+  promotionKind?: PromotionCandidateKind | null;
+  discountKind?: DiscountKind | null;
+  discountValue?: number | null;
+  priority?: number | null;
+  stackableWithCoupon?: boolean | null;
+  maxUnitsPerUser?: number | null;
+  totalQuota?: number | null;
+  claimedUnits?: number | null;
+  remainingQuota?: number | null;
+  showRemainingQuota?: boolean | null;
 };
 
 export type PricingFingerprintInput = {
