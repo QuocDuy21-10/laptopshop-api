@@ -57,6 +57,15 @@ enum FlashSaleAllocationStatus {
   RELEASED
 }
 
+enum PriceAlertMode {
+  PERCENT_DROP
+  TARGET_PRICE
+}
+
+enum NotificationType {
+  PRICE_DROP
+}
+
 model User {
   id          Int     @id @default(autoincrement())
   username    String  @unique @db.VarChar(255)
@@ -88,6 +97,8 @@ model User {
   promotionsUpdated       Promotion[]           @relation("PromotionUpdater")
   promotionUsages         PromotionUserUsage[]
   promotionRedemptions    PromotionRedemption[]
+  wishlistItems           WishlistItem[]
+  notifications           Notification[]
 
   @@map("users")
 }
@@ -136,8 +147,52 @@ model Product {
   promotionTargets PromotionProduct[]
   flashSaleQuotas  FlashSaleProductQuota[]
   reviews          Review[]
+  wishlistItems    WishlistItem[]
+  notifications    Notification[]
 
   @@map("products")
+}
+
+model WishlistItem {
+  id               Int             @id @default(autoincrement())
+  userId           Int
+  productId        Int
+  alertMode        PriceAlertMode?
+  targetPrice      Int?
+  referencePrice   Int?
+  lastAlertMode    PriceAlertMode?
+  lastAlertedPrice Int?
+  lastAlertedAt    DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, productId])
+  @@index([productId, alertMode])
+  @@index([userId, createdAt])
+  @@map("wishlist_items")
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int
+  productId Int?
+  type      NotificationType
+  title     String           @db.VarChar(255)
+  message   String           @db.VarChar(500)
+  oldPrice  Int?
+  newPrice  Int?
+  dedupeKey String           @unique @db.VarChar(191)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  @@index([userId, readAt, createdAt])
+  @@map("notifications")
 }
 
 model Cart {
@@ -187,14 +242,14 @@ model Order {
   createdAt      DateTime  @default(now())
   completedAt    DateTime?
 
-  user             User                 @relation(fields: [userId], references: [id])
-  userId           Int
-  orderDetails     OrderDetail[]
-  history          OrderStatusHistory[]
-  stockMovements   StockMovement[]
-  payment          Payment?
-  couponPromotion  Promotion?           @relation("OrderCouponPromotion", fields: [couponPromotionId], references: [id], onDelete: Restrict)
-  couponRedemption PromotionRedemption?
+  user                 User                  @relation(fields: [userId], references: [id])
+  userId               Int
+  orderDetails         OrderDetail[]
+  history              OrderStatusHistory[]
+  stockMovements       StockMovement[]
+  payment              Payment?
+  couponPromotion      Promotion?            @relation("OrderCouponPromotion", fields: [couponPromotionId], references: [id], onDelete: Restrict)
+  couponRedemption     PromotionRedemption?
   flashSaleAllocations FlashSaleAllocation[]
 
   @@unique([userId, idempotencyKey])
@@ -218,8 +273,8 @@ model OrderDetail {
   product   Product @relation(fields: [productId], references: [id])
   productId Int
 
-  review             Review?
-  automaticPromotion Promotion? @relation("OrderDetailAutomaticPromotion", fields: [automaticPromotionId], references: [id], onDelete: Restrict)
+  review              Review?
+  automaticPromotion  Promotion?           @relation("OrderDetailAutomaticPromotion", fields: [automaticPromotionId], references: [id], onDelete: Restrict)
   flashSaleAllocation FlashSaleAllocation?
 
   @@map("order_detail")
@@ -338,7 +393,7 @@ model FlashSalePolicy {
   stackableWithCoupon Boolean @default(false)
   showRemainingQuota  Boolean @default(true)
 
-  promotion Promotion @relation(fields: [promotionId], references: [id], onDelete: Restrict)
+  promotion Promotion               @relation(fields: [promotionId], references: [id], onDelete: Restrict)
   quotas    FlashSaleProductQuota[]
 
   @@map("flash_sale_policies")
