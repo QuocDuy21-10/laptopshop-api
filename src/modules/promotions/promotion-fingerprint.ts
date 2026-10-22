@@ -1,0 +1,35 @@
+import { sha256Canonical } from "lib/idempotency";
+import type {
+  CheckoutRequestHashInput,
+  PricingFingerprintInput,
+} from "modules/promotions/promotions.types";
+
+const normalized = (value: string) => value.trim();
+
+export const createPricingFingerprint = (input: PricingFingerprintInput) =>
+  sha256Canonical([
+    [...input.lines]
+      .sort((a, b) => a.productId - b.productId)
+      .map((line) => ({
+        ...line,
+      })),
+    input.coupon
+      ? {
+          ...input.coupon,
+          targetProductIds: [...input.coupon.targetProductIds].sort((a, b) => a - b),
+        }
+      : null,
+    input.totals,
+  ]);
+
+export const createCheckoutRequestHash = (input: CheckoutRequestHashInput) =>
+  sha256Canonical([
+    {
+      receiverName: normalized(input.receiverName),
+      receiverAddress: normalized(input.receiverAddress),
+      receiverPhone: normalized(input.receiverPhone),
+      paymentMethod: normalized(input.paymentMethod),
+      couponCode: input.couponCode ? normalized(input.couponCode).toUpperCase() : null,
+      pricingFingerprint: input.pricingFingerprint,
+    },
+  ]);
