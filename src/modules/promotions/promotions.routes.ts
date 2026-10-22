@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { validate } from "middlewares/validate";
+import { optionalAuthenticate } from "middlewares/authenticate";
 import {
   adminPromotionQuery,
   createPromotionBody,
@@ -7,6 +8,8 @@ import {
   promotionRedemptionQuery,
   transitionPromotionBody,
   updatePromotionBody,
+  flashSaleAvailabilityQuery,
+  flashSaleAllocationQuery,
 } from "modules/promotions/promotions.schema";
 import {
   clonePromotionHandler,
@@ -15,6 +18,8 @@ import {
   getPromotionSummaryHandler,
   listPromotionRedemptionsHandler,
   listAvailablePromotionsHandler,
+  flashSaleAvailabilityHandler,
+  listFlashSaleAllocationsHandler,
   listPromotionsHandler,
   transitionPromotionHandler,
   updatePromotionHandler,
@@ -24,6 +29,12 @@ export const adminPromotionRoutes = Router();
 export const promotionRoutes = Router();
 
 promotionRoutes.get("/available", listAvailablePromotionsHandler);
+promotionRoutes.get(
+  "/flash-sales/availability",
+  optionalAuthenticate,
+  validate({ query: flashSaleAvailabilityQuery }),
+  flashSaleAvailabilityHandler,
+);
 
 adminPromotionRoutes.get("/", validate({ query: adminPromotionQuery }), listPromotionsHandler);
 adminPromotionRoutes.post("/", validate({ body: createPromotionBody }), createPromotionHandler);
@@ -52,4 +63,9 @@ adminPromotionRoutes.get(
   "/:id/summary",
   validate({ params: promotionIdParams }),
   getPromotionSummaryHandler,
+);
+adminPromotionRoutes.get(
+  "/:id/allocations",
+  validate({ params: promotionIdParams, query: flashSaleAllocationQuery }),
+  listFlashSaleAllocationsHandler,
 );

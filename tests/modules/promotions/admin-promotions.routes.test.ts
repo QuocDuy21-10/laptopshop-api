@@ -90,6 +90,55 @@ describe("admin promotion routes", () => {
     expect(response.body.data).not.toHaveProperty("password");
   });
 
+  it("creates and returns a Flash Sale quota policy", async () => {
+    const flashPromotion = {
+      ...promotion,
+      kind: "FLASH_SALE",
+      couponPolicy: null,
+      automaticPolicy: null,
+      flashSalePolicy: {
+        promotionId: 10,
+        priority: 20,
+        stackableWithCoupon: false,
+        showRemainingQuota: true,
+        quotas: [
+          {
+            promotionId: 10,
+            productId: 3,
+            totalQuota: 10,
+            claimedUnits: 0,
+            maxUnitsPerUser: 2,
+            product: { id: 3, name: "Laptop", image: null },
+          },
+        ],
+      },
+    };
+    prismaMock.promotion.create.mockResolvedValue(flashPromotion);
+    const response = await request(buildApp())
+      .post(endpoint)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({
+        kind: "FLASH_SALE",
+        name: "Flash Sale",
+        discountKind: "PERCENT",
+        discountValue: 15,
+        startsAt: "2026-10-01T00:00:00.000Z",
+        endsAt: "2026-11-01T00:00:00.000Z",
+        flashSale: {
+          priority: 20,
+          stackableWithCoupon: false,
+          showRemainingQuota: true,
+          items: [{ productId: 3, totalQuota: 10, maxUnitsPerUser: 2 }],
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.data).toMatchObject({
+      kind: "FLASH_SALE",
+      flashSale: { priority: 20, quotas: [{ productId: 3, totalQuota: 10 }] },
+    });
+  });
+
   it("lists promotions with pagination", async () => {
     const response = await request(buildApp())
       .get(`${endpoint}?page=2&pageSize=10`)
@@ -117,5 +166,59 @@ describe("admin promotion routes", () => {
       .send({ discountValue: 20 });
     expect(locked.status).toBe(409);
     expect(locked.body.error.code).toBe("PROMOTION_FIELD_LOCKED");
+  });
+
+  it("allows only an active Flash Sale quota increase without bumping pricingVersion", async () => {
+    const activeFlash = {
+      ...promotion,
+      kind: "FLASH_SALE",
+      state: "ACTIVE",
+      activatedAt: new Date("2026-10-01T00:00:00.000Z"),
+      couponPolicy: null,
+      automaticPolicy: null,
+      flashSalePolicy: {
+        promotionId: 10,
+        priority: 20,
+        stackableWithCoupon: false,
+        showRemainingQuota: true,
+        quotas: [
+          {
+            promotionId: 10,
+            productId: 3,
+            totalQuota: 5,
+            claimedUnits: 1,
+            maxUnitsPerUser: 2,
+            product: { id: 3, name: "Laptop", image: null },
+          },
+        ],
+      },
+    };
+    prismaMock.promotion.findUnique.mockResolvedValue(activeFlash);
+    prismaMock.flashSalePolicy.update.mockResolvedValue(activeFlash.flashSalePolicy);
+    prismaMock.flashSaleProductQuota.update.mockResolvedValue(
+      activeFlash.flashSalePolicy.quotas[0],
+    );
+    prismaMock.promotion.update.mockResolvedValue(activeFlash);
+
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({
+        flashSale: {
+          items: [{ productId: 3, totalQuota: 10, maxUnitsPerUser: 2 }],
+        },
+      });
+
+    expect(response.status).toBe(200);
+    expect(prismaMock.flashSaleProductQuota.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { totalQuota: 10 },
+      }),
+    );
+    expect(prismaMock.promotion.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ pricingVersion: expect.anything() }),
+      }),
+    );
   });
 });

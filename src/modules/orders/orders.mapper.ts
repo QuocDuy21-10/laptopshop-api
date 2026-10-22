@@ -3,7 +3,12 @@ import { productImage } from "modules/products/products.mapper";
 
 export const orderInclude = {
   orderDetails: {
-    include: { product: { select: { name: true, image: true } } },
+    include: {
+      product: { select: { name: true, image: true } },
+      flashSaleAllocation: {
+        select: { promotionId: true, quantity: true, discountAmount: true, status: true },
+      },
+    },
     orderBy: { id: "asc" },
   },
 } satisfies Prisma.OrderInclude;
@@ -37,6 +42,19 @@ export const toOrderDto = (o: OrderRow) => ({
     netLineTotal: d.price * d.quantity - d.productDiscountAmount - d.couponDiscountAmount,
     automaticPromotionId: d.automaticPromotionId,
     automaticPromotionName: d.automaticPromotionName,
+    promotionKind: d.flashSaleAllocation
+      ? "FLASH_SALE"
+      : d.automaticPromotionId
+        ? "AUTOMATIC"
+        : null,
+    flashSaleAllocation: d.flashSaleAllocation
+      ? {
+          promotionId: d.flashSaleAllocation.promotionId,
+          quantity: d.flashSaleAllocation.quantity,
+          discountAmount: d.flashSaleAllocation.discountAmount,
+          status: d.flashSaleAllocation.status,
+        }
+      : null,
   })),
 });
 export type OrderDto = ReturnType<typeof toOrderDto>;

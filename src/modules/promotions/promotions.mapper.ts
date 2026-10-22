@@ -1,6 +1,10 @@
 import type { PromotionState } from "@prisma/client";
 import { toActor } from "modules/orders/orders.mapper";
-import type { PromotionRow, RedemptionRow } from "modules/promotions/promotions.repository";
+import type {
+  FlashSaleAllocationRow,
+  PromotionRow,
+  RedemptionRow,
+} from "modules/promotions/promotions.repository";
 
 export const effectivePromotionState = (
   state: PromotionState,
@@ -29,6 +33,7 @@ const lockedFields = (promotion: PromotionRow) =>
         "maxUsesPerUser",
         "priority",
         "stackableWithCoupon",
+        "maxUnitsPerUser",
       ]
     : [];
 
@@ -56,7 +61,7 @@ export const toPromotionSummaryDto = (promotion: PromotionRow, now = new Date())
         isPublic: promotion.couponPolicy.isPublic,
       }
     : null,
-  priority: promotion.automaticPolicy?.priority ?? null,
+  priority: promotion.automaticPolicy?.priority ?? promotion.flashSalePolicy?.priority ?? null,
   redemptionCount: promotion._count.redemptions,
 });
 export type AdminPromotionSummaryDto = ReturnType<typeof toPromotionSummaryDto>;
@@ -91,7 +96,21 @@ export const toPromotionDetailDto = (promotion: PromotionRow, now = new Date()) 
         targetProductIds: promotion.products.map((target) => target.productId),
       }
     : null,
-  products: promotion.products.map((target) => ({
+  flashSale: promotion.flashSalePolicy
+    ? {
+        priority: promotion.flashSalePolicy.priority,
+        stackableWithCoupon: promotion.flashSalePolicy.stackableWithCoupon,
+        showRemainingQuota: promotion.flashSalePolicy.showRemainingQuota,
+        quotas: promotion.flashSalePolicy.quotas.map((quota) => ({
+          productId: quota.productId,
+          totalQuota: quota.totalQuota,
+          claimedUnits: quota.claimedUnits,
+          remainingQuota: Math.max(0, quota.totalQuota - quota.claimedUnits),
+          maxUnitsPerUser: quota.maxUnitsPerUser,
+        })),
+      }
+    : null,
+  products: (promotion.flashSalePolicy?.quotas ?? promotion.products).map((target) => ({
     id: target.product.id,
     name: target.product.name,
     image: target.product.image ? `/images/product/${target.product.image}` : null,
@@ -113,3 +132,21 @@ export const toRedemptionDto = (redemption: RedemptionRow) => ({
   reverseReason: redemption.reverseReason,
 });
 export type PromotionRedemptionDto = ReturnType<typeof toRedemptionDto>;
+
+export const toFlashSaleAllocationDto = (allocation: FlashSaleAllocationRow) => ({
+  id: allocation.id,
+  promotionId: allocation.promotionId,
+  productId: allocation.productId,
+  product: allocation.quota.product,
+  user: allocation.user,
+  orderId: allocation.orderId,
+  orderStatus: allocation.order.status,
+  orderDetailId: allocation.orderDetailId,
+  quantity: allocation.quantity,
+  discountAmount: allocation.discountAmount,
+  status: allocation.status,
+  createdAt: allocation.createdAt,
+  releasedAt: allocation.releasedAt,
+  releaseReason: allocation.releaseReason,
+});
+export type FlashSaleAllocationDto = ReturnType<typeof toFlashSaleAllocationDto>;

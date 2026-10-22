@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { AppError, notFound } from "lib/errors";
 import { moveStock } from "modules/inventory/inventory.service";
 import { reverseCouponRedemption } from "modules/promotions/promotion-usage";
+import { releaseFlashSaleAllocations } from "modules/promotions/flash-sale-quota";
 import { orderInclude, toOrderDto, type OrderDto } from "modules/orders/orders.mapper";
 import {
   canTransition,
@@ -71,6 +72,11 @@ export const cancelOrder = async (
   await reverseCouponRedemption(tx, {
     orderId: input.orderId,
     reason: input.reason ?? "CANCELLED",
+    now: input.now,
+  });
+  await releaseFlashSaleAllocations(tx, {
+    orderId: input.orderId,
+    reason: input.reason ?? input.paymentDisposition,
     now: input.now,
   });
   await tx.orderStatusHistory.create({

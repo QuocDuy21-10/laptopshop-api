@@ -11,6 +11,7 @@ export const resetDb = async () => {
   await prisma.stockReceiptItem.deleteMany();
   await prisma.stockMovement.deleteMany();
   await prisma.stockReceipt.deleteMany();
+  await prisma.flashSaleAllocation.deleteMany();
   await prisma.orderStatusHistory.deleteMany();
   await prisma.promotionRedemption.deleteMany();
   await prisma.orderDetail.deleteMany();
@@ -20,9 +21,12 @@ export const resetDb = async () => {
     data: { couponPromotionId: null },
   });
   await prisma.promotionUserUsage.deleteMany();
+  await prisma.flashSaleUserUsage.deleteMany();
   await prisma.promotionProduct.deleteMany();
   await prisma.couponPolicy.deleteMany();
   await prisma.automaticPromotionPolicy.deleteMany();
+  await prisma.flashSaleProductQuota.deleteMany();
+  await prisma.flashSalePolicy.deleteMany();
   await prisma.promotion.deleteMany();
   await prisma.cartDetail.deleteMany();
   await prisma.cart.deleteMany();

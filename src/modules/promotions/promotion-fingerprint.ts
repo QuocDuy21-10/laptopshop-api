@@ -11,7 +11,18 @@ export const createPricingFingerprint = (input: PricingFingerprintInput) =>
     [...input.lines]
       .sort((a, b) => a.productId - b.productId)
       .map((line) => ({
-        ...line,
+        productId: line.productId,
+        quantity: line.quantity,
+        listPrice: line.listPrice,
+        promotionId: line.promotionId ?? line.automaticPromotionId,
+        promotionKind:
+          line.promotionKind ?? (line.automaticPromotionId === null ? null : "AUTOMATIC"),
+        pricingVersion: line.pricingVersion,
+        discountKind: line.discountKind ?? null,
+        discountValue: line.discountValue ?? null,
+        priority: line.priority ?? null,
+        stackableWithCoupon: line.stackableWithCoupon ?? null,
+        maxUnitsPerUser: line.maxUnitsPerUser ?? null,
       })),
     input.coupon
       ? {

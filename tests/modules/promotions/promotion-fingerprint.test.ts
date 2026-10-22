@@ -66,6 +66,49 @@ describe("promotion fingerprints", () => {
     );
   });
 
+  it("ignores mutable Flash Sale counters and visibility but includes pricing config", () => {
+    const base = {
+      ...fingerprintInput(),
+      lines: fingerprintInput().lines.map((line) => ({
+        ...line,
+        promotionKind: "FLASH_SALE" as const,
+        discountKind: "PERCENT" as const,
+        discountValue: 20,
+        priority: 3,
+        stackableWithCoupon: true,
+        maxUnitsPerUser: 2,
+        totalQuota: 10,
+        claimedUnits: 2,
+        remainingQuota: 8,
+        showRemainingQuota: true,
+      })),
+    };
+    expect(createPricingFingerprint(base)).toBe(
+      createPricingFingerprint({
+        ...base,
+        lines: base.lines.map((line) => ({
+          ...line,
+          totalQuota: 100,
+          claimedUnits: 99,
+          remainingQuota: 1,
+          showRemainingQuota: false,
+        })),
+      }),
+    );
+    expect(createPricingFingerprint(base)).not.toBe(
+      createPricingFingerprint({
+        ...base,
+        lines: base.lines.map((line) => ({ ...line, discountValue: 25 })),
+      }),
+    );
+    expect(createPricingFingerprint(base)).not.toBe(
+      createPricingFingerprint({
+        ...base,
+        lines: base.lines.map((line) => ({ ...line, maxUnitsPerUser: 1 })),
+      }),
+    );
+  });
+
   it("normalizes checkout receiver and coupon fields before hashing", () => {
     const base: CheckoutRequestHashInput = {
       receiverName: " Nguyễn A ",

@@ -71,6 +71,8 @@ import {
   promotionRedemptionQuery,
   transitionPromotionBody,
   updatePromotionBody,
+  flashSaleAvailabilityQuery,
+  flashSaleAllocationQuery,
 } from "modules/promotions/promotions.schema";
 
 extendZodWithOpenApi(z);
@@ -273,6 +275,21 @@ const PublicPromotion = registry.register(
     endsAt: z.string().datetime(),
   }),
 );
+const FlashSaleAvailability = registry.register(
+  "FlashSaleAvailability",
+  z.object({
+    productId: z.number(),
+    promotionId: z.number(),
+    name: z.string(),
+    state: z.enum(["SCHEDULED", "RUNNING"]),
+    available: z.boolean(),
+    remainingQuota: z.number().nullable(),
+    maxUnitsPerUser: z.number(),
+    userRemainingQuota: z.number().optional(),
+    startsAt: z.string().datetime(),
+    endsAt: z.string().datetime(),
+  }),
+);
 const orderShape = {
   id: z.number(),
   status: z.enum(ORDER_STATUSES),
@@ -302,6 +319,15 @@ const orderShape = {
       netLineTotal: z.number(),
       automaticPromotionId: z.number().nullable(),
       automaticPromotionName: z.string().nullable(),
+      promotionKind: z.enum(["AUTOMATIC", "FLASH_SALE"]).nullable(),
+      flashSaleAllocation: z
+        .object({
+          promotionId: z.number(),
+          quantity: z.number(),
+          discountAmount: z.number(),
+          status: z.enum(["CLAIMED", "RELEASED"]),
+        })
+        .nullable(),
     }),
   ),
 };
@@ -613,7 +639,7 @@ const PromotionSummary = registry.register(
   "PromotionSummary",
   z.object({
     id: z.number(),
-    kind: z.enum(["COUPON", "AUTOMATIC"]),
+    kind: z.enum(["COUPON", "AUTOMATIC", "FLASH_SALE"]),
     state: z.enum(["DRAFT", "ACTIVE", "PAUSED", "ENDED"]),
     effectiveState: z.enum([
       "DRAFT",
@@ -661,6 +687,22 @@ const PromotionDetail = registry.register(
         targetProductIds: z.array(z.number()),
       })
       .nullable(),
+    flashSale: z
+      .object({
+        priority: z.number(),
+        stackableWithCoupon: z.boolean(),
+        showRemainingQuota: z.boolean(),
+        quotas: z.array(
+          z.object({
+            productId: z.number(),
+            totalQuota: z.number(),
+            claimedUnits: z.number(),
+            remainingQuota: z.number(),
+            maxUnitsPerUser: z.number(),
+          }),
+        ),
+      })
+      .nullable(),
   }),
 );
 const PromotionRedemption = registry.register(
@@ -683,10 +725,36 @@ const PromotionStats = registry.register(
   "PromotionStats",
   z.object({
     promotionId: z.number(),
-    kind: z.enum(["COUPON", "AUTOMATIC"]),
+    kind: z.enum(["COUPON", "AUTOMATIC", "FLASH_SALE"]),
     redemptionCount: z.number(),
     activeUsageCount: z.number(),
     totalDiscountAmount: z.number(),
+    totalQuota: z.number().optional(),
+    claimedUnits: z.number().optional(),
+    remainingUnits: z.number().optional(),
+    releasedUnits: z.number().optional(),
+    completedUnits: z.number().optional(),
+    allocationCount: z.number().optional(),
+    breakdown: z.array(z.record(z.number())).optional(),
+  }),
+);
+const FlashSaleAllocation = registry.register(
+  "FlashSaleAllocation",
+  z.object({
+    id: z.number(),
+    promotionId: z.number(),
+    productId: z.number(),
+    product: z.object({ id: z.number(), name: z.string() }),
+    user: z.object({ id: z.number(), username: z.string(), fullName: z.string().nullable() }),
+    orderId: z.number(),
+    orderStatus: z.string(),
+    orderDetailId: z.number(),
+    quantity: z.number(),
+    discountAmount: z.number(),
+    status: z.enum(["CLAIMED", "RELEASED"]),
+    createdAt: z.string().datetime(),
+    releasedAt: z.string().datetime().nullable(),
+    releaseReason: z.string().nullable(),
   }),
 );
 
@@ -1158,6 +1226,19 @@ op({
   tag: "promotions",
   ok: [200, "OK", data(z.array(PublicPromotion))],
 });
+op({
+  method: "get",
+  path: `${v1}/promotions/flash-sales/availability`,
+  summary: "Get Flash Sale availability",
+  tag: "promotions",
+  request: { query: flashSaleAvailabilityQuery },
+  ok: [
+    200,
+    "OK",
+    data(z.object({ serverTime: z.string().datetime(), items: z.array(FlashSaleAvailability) })),
+  ],
+  errors: { 400: "Invalid product batch" },
+});
 
 // admin
 op({
@@ -1247,6 +1328,16 @@ op({
   request: { params: promotionIdParams },
   ok: [200, "OK", data(PromotionStats)],
   errors: { 404: "Promotion not found" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/promotions/{id}/allocations`,
+  summary: "List Flash Sale allocation history",
+  tag: "admin",
+  auth: "admin",
+  request: { params: promotionIdParams, query: flashSaleAllocationQuery },
+  ok: [200, "OK", page(FlashSaleAllocation)],
+  errors: { 403: "Admin only", 404: "Promotion not found" },
 });
 op({
   method: "post",

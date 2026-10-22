@@ -33,6 +33,7 @@ const V1_PATHS = [
   "/api/v1/orders/me/{id}/cancel",
   "/api/v1/payments/methods",
   "/api/v1/promotions/available",
+  "/api/v1/promotions/flash-sales/availability",
   "/api/v1/webhooks/payments/{provider}",
   "/api/v1/admin/products",
   "/api/v1/admin/products/{id}",
@@ -42,6 +43,7 @@ const V1_PATHS = [
   "/api/v1/admin/promotions/{id}/clone",
   "/api/v1/admin/promotions/{id}/redemptions",
   "/api/v1/admin/promotions/{id}/summary",
+  "/api/v1/admin/promotions/{id}/allocations",
   "/api/v1/admin/users",
   "/api/v1/admin/users/{id}",
   "/api/v1/admin/inventory/adjustments",
@@ -187,8 +189,10 @@ describe("openapi document", () => {
       expect.objectContaining({
         PricingQuote: expect.anything(),
         PublicPromotion: expect.anything(),
+        FlashSaleAvailability: expect.anything(),
       }),
     );
+    expect(op("/api/v1/promotions/flash-sales/availability", "get").security).toBeUndefined();
   });
 
   it("documents the inventory receipt and movement contract", () => {
@@ -216,14 +220,19 @@ describe("openapi document", () => {
     expect(op("/api/v1/admin/promotions", "post").responses[201]).toBeDefined();
     expect(op("/api/v1/admin/promotions/{id}/state", "patch").responses[409]).toBeDefined();
     expect(op("/api/v1/admin/promotions/{id}/redemptions", "get").responses[403]).toBeDefined();
+    expect(op("/api/v1/admin/promotions/{id}/allocations", "get").responses[403]).toBeDefined();
     expect(doc.components?.schemas).toEqual(
       expect.objectContaining({
         PromotionSummary: expect.anything(),
         PromotionDetail: expect.anything(),
         PromotionRedemption: expect.anything(),
         PromotionStats: expect.anything(),
+        FlashSaleAllocation: expect.anything(),
       }),
     );
+    expect(
+      (doc.components?.schemas?.PromotionDetail as any).allOf[1].properties.flashSale,
+    ).toBeDefined();
   });
 
   it("documents product visibility and the admin product filters", () => {
