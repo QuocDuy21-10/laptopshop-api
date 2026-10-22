@@ -7,6 +7,8 @@ export const placeOrderBody = z.object({
   receiverAddress: z.string().trim().min(1).max(255),
   receiverPhone: z.string().trim().min(8).max(20),
   paymentMethod: z.enum(["COD", "BANK_TRANSFER"]).default("COD"),
+  couponCode: z.string().trim().min(1).max(50).optional(),
+  pricingFingerprint: z.string().trim().length(64),
 });
 export type PlaceOrderBody = z.infer<typeof placeOrderBody>;
 

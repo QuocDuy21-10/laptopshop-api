@@ -28,6 +28,14 @@ import {
   PAYMENT_STATUS,
 } from "modules/orders/order-status";
 import { createTransferCode } from "modules/payments/payment-reference";
+import { calculatePromotionPricing } from "modules/promotions/promotion-pricing";
+import {
+  createCheckoutRequestHash,
+  createPricingFingerprint,
+} from "modules/promotions/promotion-fingerprint";
+import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
+import { resolveCoupon } from "modules/promotions/promotions.service";
+import { claimCouponUsage, recordCouponRedemption } from "modules/promotions/promotion-usage";
 
 const findByKey = (userId: number, idempotencyKey: string) =>
   prisma.order.findUnique({
@@ -37,8 +45,25 @@ const findByKey = (userId: number, idempotencyKey: string) =>
 
 export const placeOrder = async (userId: number, key: string, receiver: PlaceOrderBody) => {
   const paymentMethod = receiver.paymentMethod ?? "COD";
+  const requestHash = createCheckoutRequestHash({
+    receiverName: receiver.receiverName,
+    receiverAddress: receiver.receiverAddress,
+    receiverPhone: receiver.receiverPhone,
+    paymentMethod,
+    couponCode: receiver.couponCode,
+    pricingFingerprint: receiver.pricingFingerprint,
+  });
   const existing = await findByKey(userId, key);
-  if (existing) return { order: toOrderDto(existing), created: false };
+  if (existing) {
+    if (existing.requestHash && existing.requestHash !== requestHash) {
+      throw new AppError(
+        "Idempotency key was reused with a different request",
+        409,
+        "IDEMPOTENCY_KEY_REUSED",
+      );
+    }
+    return { order: toOrderDto(existing), created: false };
+  }
   if (paymentMethod === "BANK_TRANSFER" && !env.BANK_TRANSFER_ENABLED) {
     throw new AppError("Bank transfer is unavailable", 409, "PAYMENT_METHOD_UNAVAILABLE");
   }
@@ -54,6 +79,52 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
       for (const line of lines) {
         if (!line.product.isActive) throw productUnavailable(line.productId);
       }
+      const automaticPromotions = await resolveAutomaticPromotions(
+        tx,
+        lines.map((line) => line.productId),
+        new Date(),
+      );
+      const pricingLines = lines.map((line) => ({
+        productId: line.productId,
+        quantity: line.quantity,
+        listPrice: line.product.price,
+        automaticCandidates: automaticPromotions.has(line.productId)
+          ? [automaticPromotions.get(line.productId)!]
+          : [],
+      }));
+      const coupon = receiver.couponCode
+        ? await resolveCoupon(tx, receiver.couponCode, userId, pricingLines, new Date())
+        : null;
+      const pricing = calculatePromotionPricing({ lines: pricingLines, coupon });
+      const minimumBase =
+        coupon?.scope === "PRODUCT"
+          ? pricing.couponEligibleSubtotal
+          : pricing.subtotalPrice - pricing.productDiscountAmount;
+      if (coupon && minimumBase < coupon.minOrderValue) {
+        throw new AppError("Minimum order value is not met", 409, "MIN_ORDER_NOT_MET");
+      }
+      const fingerprint = createPricingFingerprint({
+        lines: pricingLines.map((line) => ({
+          productId: line.productId,
+          quantity: line.quantity,
+          listPrice: line.listPrice,
+          automaticPromotionId: line.automaticCandidates?.[0]?.id ?? null,
+          pricingVersion: line.automaticCandidates?.[0]?.pricingVersion ?? null,
+        })),
+        coupon: coupon
+          ? {
+              id: coupon.id,
+              pricingVersion: coupon.pricingVersion,
+              scope: coupon.scope,
+              targetProductIds: coupon.targetProductIds,
+            }
+          : null,
+        totals: pricing,
+      });
+      if ((coupon || automaticPromotions.size > 0) && fingerprint !== receiver.pricingFingerprint) {
+        throw new AppError("Promotion pricing changed", 409, "PROMOTION_CHANGED");
+      }
+      if (coupon) await claimCouponUsage(tx, { promotionId: coupon.id, userId, now: new Date() });
       // stock is taken before the order rows exist: order_detail's foreign key share-locks the product,
       // and upgrading that to the update lock in two concurrent checkouts would deadlock
       const movements = [];
@@ -68,9 +139,9 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
           }),
         );
       }
-      const totalPrice = lines.reduce((sum, l) => sum + l.product.price * l.quantity, 0);
+      const totalPrice = pricing.totalPrice;
       const payment =
-        paymentMethod === "BANK_TRANSFER"
+        paymentMethod === "BANK_TRANSFER" && totalPrice > 0
           ? (() => {
               const expiresAt = new Date(Date.now() + env.PAYMENT_TTL_MINUTES * 60_000);
               return {
@@ -92,19 +163,35 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
         userId,
         idempotencyKey: key,
         totalPrice,
-        subtotalPrice: totalPrice,
+        subtotalPrice: pricing.subtotalPrice,
+        productDiscountAmount: pricing.productDiscountAmount,
+        couponEligibleSubtotal: pricing.couponEligibleSubtotal,
+        couponDiscountAmount: pricing.couponDiscountAmount,
+        couponPromotionId: coupon?.id,
+        couponCode: coupon?.code,
+        couponName: coupon?.name,
+        requestHash,
         receiverName: receiver.receiverName,
         receiverAddress: receiver.receiverAddress,
         receiverPhone: receiver.receiverPhone,
         status: ORDER_STATUS.PENDING,
-        paymentMethod,
-        paymentStatus: PAYMENT_STATUS.UNPAID,
+        paymentMethod: totalPrice === 0 ? "FREE" : paymentMethod,
+        paymentStatus: totalPrice === 0 ? PAYMENT_STATUS.SUCCESS : PAYMENT_STATUS.UNPAID,
         ...(payment ? { payment: { create: payment } } : {}),
         orderDetails: {
           create: lines.map((l) => ({
             productId: l.productId,
             quantity: l.quantity,
             price: l.product.price,
+            productDiscountAmount: pricing.lines.find((priced) => priced.productId === l.productId)!
+              .productDiscountAmount,
+            couponDiscountAmount: pricing.lines.find((priced) => priced.productId === l.productId)!
+              .couponDiscountAmount,
+            automaticPromotionId: pricing.lines.find((priced) => priced.productId === l.productId)!
+              .automaticPromotion?.id,
+            automaticPromotionName: pricing.lines.find(
+              (priced) => priced.productId === l.productId,
+            )!.automaticPromotion?.name,
           })),
         },
       };
@@ -112,6 +199,14 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
         data: orderData,
         include: orderInclude,
       });
+      if (coupon) {
+        await recordCouponRedemption(tx, {
+          promotionId: coupon.id,
+          userId,
+          orderId: created.id,
+          discountAmount: pricing.couponDiscountAmount,
+        });
+      }
       await tx.orderStatusHistory.create({
         data: {
           orderId: created.id,
@@ -131,6 +226,7 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
     });
     return { order: toOrderDto(order), created: true };
   } catch (e) {
+    if (e instanceof AppError && e.code === "IDEMPOTENCY_KEY_REUSED") throw e;
     // a concurrent request with the same key may have won (P2002, OUT_OF_STOCK or CART_EMPTY here)
     const winner = await findByKey(userId, key);
     if (winner) return { order: toOrderDto(winner), created: false };
