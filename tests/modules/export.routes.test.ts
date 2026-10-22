@@ -34,7 +34,7 @@ describe("CSV exports", () => {
     );
     expect(res.text).toContain("Mã đơn,Ngày đặt");
     expect(res.text).toContain(
-      "50,2026-10-02 00:30,,A,a@b.co,'=cmd,0900000000,HN,200,PENDING,PAYMENT_UNPAID",
+      "50,2026-10-02 00:30,,A,a@b.co,'=cmd,0900000000,HN,,,,200,PENDING,PAYMENT_UNPAID",
     );
     expect(prismaMock.order.findMany.mock.calls[0][0].where).toEqual({
       status: "PENDING",

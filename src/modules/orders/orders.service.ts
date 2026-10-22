@@ -36,6 +36,7 @@ import {
 import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
 import { resolveCoupon } from "modules/promotions/promotions.service";
 import { claimCouponUsage, recordCouponRedemption } from "modules/promotions/promotion-usage";
+import { cancelOrder } from "modules/orders/order-cancellation.service";
 
 const findByKey = (userId: number, idempotencyKey: string) =>
   prisma.order.findUnique({
@@ -260,6 +261,17 @@ export const changeStatus = async (
   scope: { actorId?: number; userId?: number; from?: OrderStatus[]; reason?: string },
 ) =>
   prisma.$transaction(async (tx) => {
+    if (to === ORDER_STATUS.CANCELLED) {
+      return cancelOrder(tx, {
+        orderId,
+        actorId: scope.actorId,
+        userId: scope.userId,
+        from: scope.from ?? ["PENDING", "SHIPPING"],
+        reason: scope.reason,
+        paymentDisposition: "CANCEL",
+        now: new Date(),
+      });
+    }
     const order = await tx.order.findFirst({
       where: { id: orderId, ...(scope.userId ? { userId: scope.userId } : {}) },
       select: { status: true, paymentMethod: true, paymentStatus: true },
@@ -273,13 +285,6 @@ export const changeStatus = async (
       order.paymentStatus !== PAYMENT_STATUS.SUCCESS
     ) {
       throw new AppError("Payment is required before fulfillment", 409, "PAYMENT_REQUIRED");
-    }
-    if (
-      to === ORDER_STATUS.CANCELLED &&
-      order.paymentMethod === "BANK_TRANSFER" &&
-      order.paymentStatus === PAYMENT_STATUS.SUCCESS
-    ) {
-      throw new AppError("A paid order requires refund handling", 409, "PAID_ORDER_CANNOT_CANCEL");
     }
     // conditional on the status we read, so two concurrent changes cannot both apply (no double restock)
     const { count } = await tx.order.updateMany({
@@ -304,31 +309,6 @@ export const changeStatus = async (
         ...(scope.reason ? { reason: scope.reason } : {}),
       },
     });
-    if (to === ORDER_STATUS.CANCELLED && order.paymentMethod === "BANK_TRANSFER") {
-      await tx.payment.updateMany({
-        where: { orderId, status: "PENDING" },
-        data: { status: "CANCELLED", cancelledAt: new Date() },
-      });
-      await tx.order.updateMany({
-        where: { id: orderId, status: ORDER_STATUS.CANCELLED },
-        data: { paymentStatus: PAYMENT_STATUS.FAILED },
-      });
-    }
-    if (to === ORDER_STATUS.CANCELLED) {
-      const lines = await tx.orderDetail.findMany({
-        where: { orderId },
-        orderBy: { productId: "asc" },
-      });
-      for (const l of lines) {
-        await moveStock(tx, {
-          productId: l.productId,
-          delta: l.quantity,
-          reason: "ORDER_CANCEL",
-          orderId,
-          actorId: scope.actorId,
-        });
-      }
-    }
     return toOrderDto(
       await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: orderInclude }),
     );
@@ -394,6 +374,9 @@ const ORDER_COLUMNS: CsvColumn<ExportOrderRow>[] = [
   { header: "Người nhận", value: (o) => o.receiverName },
   { header: "SĐT", value: (o) => o.receiverPhone },
   { header: "Địa chỉ", value: (o) => o.receiverAddress },
+  { header: "Tạm tính", value: (o) => o.subtotalPrice },
+  { header: "Giảm giá sản phẩm", value: (o) => o.productDiscountAmount },
+  { header: "Giảm giá coupon", value: (o) => o.couponDiscountAmount },
   { header: "Tổng tiền", value: (o) => o.totalPrice },
   { header: "Trạng thái", value: (o) => o.status },
   { header: "Thanh toán", value: (o) => o.paymentStatus },

@@ -12,8 +12,8 @@ import { PAYMENT_EVENT_STATUS, PAYMENT_STATUS } from "modules/payments/payment-s
 import { encryptPayload } from "modules/payments/payment-crypto";
 import { PaymentEventQuery } from "modules/payments/payments.schema";
 import { ORDER_STATUS, PAYMENT_STATUS as ORDER_PAYMENT_STATUS } from "modules/orders/order-status";
-import { moveStock } from "modules/inventory/inventory.service";
 import { orderInclude, toOrderDto } from "modules/orders/orders.mapper";
+import { cancelOrder } from "modules/orders/order-cancellation.service";
 
 export const listPaymentMethods = () => [
   { code: "COD", enabled: true },
@@ -189,44 +189,24 @@ export const ingestPaymentTransaction = async (
 export const expirePayments = async (now = new Date()) => {
   const payments = await prisma.payment.findMany({
     where: { status: PAYMENT_STATUS.PENDING, cancelAfter: { lte: now } },
-    include: { order: { include: { orderDetails: true } } },
+    select: { orderId: true },
   });
   let expired = 0;
   for (const payment of payments) {
     await prisma.$transaction(async (tx) => {
-      const orderUpdated = await tx.order.updateMany({
-        where: {
-          id: payment.orderId,
-          status: ORDER_STATUS.PENDING,
-          paymentStatus: ORDER_PAYMENT_STATUS.UNPAID,
-        },
-        data: { status: ORDER_STATUS.CANCELLED, paymentStatus: ORDER_PAYMENT_STATUS.FAILED },
-      });
-      if (orderUpdated.count === 0) return;
-      const updated = await tx.payment.updateMany({
-        where: { id: payment.id, status: PAYMENT_STATUS.PENDING },
-        data: { status: PAYMENT_STATUS.EXPIRED, cancelledAt: now },
-      });
-      if (updated.count === 0)
-        throw new AppError("Payment changed while expiring", 409, "PAYMENT_EXPIRY_RACE");
-      for (const line of payment.order.orderDetails)
-        await moveStock(tx, {
-          productId: line.productId,
-          delta: line.quantity,
-          reason: "ORDER_CANCEL",
+      try {
+        await cancelOrder(tx, {
           orderId: payment.orderId,
-          note: "Payment expired",
-        });
-      await tx.orderStatusHistory.create({
-        data: {
-          orderId: payment.orderId,
-          fromStatus: ORDER_STATUS.PENDING,
-          toStatus: ORDER_STATUS.CANCELLED,
-          actorId: undefined,
+          from: [ORDER_STATUS.PENDING],
+          paymentDisposition: "EXPIRE",
           reason: "PAYMENT_EXPIRED",
-        },
-      });
-      expired += 1;
+          now,
+        });
+        expired += 1;
+      } catch (error) {
+        if (error instanceof AppError && error.code === "INVALID_STATUS_TRANSITION") return;
+        throw error;
+      }
     });
   }
   return expired;

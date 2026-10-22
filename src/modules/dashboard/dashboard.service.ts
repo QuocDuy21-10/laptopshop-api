@@ -60,7 +60,8 @@ export const getSales = async ({ from, to }: SalesQuery) => {
       GROUP BY day`,
     prisma.$queryRaw<TopRow[]>`
       SELECT od.productId AS productId, p.name AS name,
-             SUM(od.quantity) AS quantity, SUM(od.price * od.quantity) AS revenue
+             SUM(od.quantity) AS quantity,
+             SUM(od.price * od.quantity - od.productDiscountAmount - od.couponDiscountAmount) AS revenue
       FROM order_detail od
       JOIN orders o ON o.id = od.orderId
       JOIN products p ON p.id = od.productId
