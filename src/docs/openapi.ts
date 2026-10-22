@@ -473,7 +473,7 @@ const PublicReview = registry.register(
     helpfulCount: z.number().int().min(0),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
-    officialReply: z.union([PublicOfficialReply, z.null()]),
+    officialReply: PublicOfficialReply.nullable(),
   }),
 );
 const ReviewSummary = registry.register(
@@ -509,7 +509,7 @@ const ReviewEligibility = registry.register(
     reason: z
       .enum(["NOT_PURCHASED", "ORDER_NOT_COMPLETED", "PAYMENT_NOT_CONFIRMED", "ALREADY_REVIEWED"])
       .nullable(),
-    existingReview: z.union([OwnerReview, z.null()]),
+    existingReview: OwnerReview.nullable(),
     willRequireModeration: z.boolean(),
   }),
 );
@@ -541,7 +541,7 @@ const AdminReviewListItem = registry.register(
       .nullable(),
     images: z.array(ReviewImage),
     helpfulCount: z.number().int().min(0),
-    officialReply: z.union([AdminOfficialReply, z.null()]),
+    officialReply: AdminOfficialReply.nullable(),
   }),
 );
 const AdminReviewDetail = registry.register("AdminReviewDetail", AdminReviewListItem);
