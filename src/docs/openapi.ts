@@ -80,6 +80,7 @@ import {
   wishlistQuery,
   wishlistStatusQuery,
 } from "modules/wishlist/wishlist.schema";
+import { notificationsQuery } from "modules/notifications/notifications.schema";
 
 extendZodWithOpenApi(z);
 
@@ -195,6 +196,20 @@ const WishlistSummary = registry.register(
 const WishlistStatus = registry.register(
   "WishlistStatus",
   z.object({ productId: z.number().int(), isWishlisted: z.boolean() }),
+);
+const Notification = registry.register(
+  "Notification",
+  z.object({
+    id: z.number(),
+    productId: z.number().nullable(),
+    type: z.enum(["PRICE_DROP"]),
+    title: z.string(),
+    message: z.string(),
+    oldPrice: z.number().int().nullable(),
+    newPrice: z.number().int().nullable(),
+    readAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+  }),
 );
 const AdvisorRequest = registry.register(
   "AdvisorRequest",
@@ -995,6 +1010,43 @@ op({
   auth: "user",
   request: { params: wishlistProductParams },
   ok: [204, "Removed"],
+});
+
+// notifications
+op({
+  method: "get",
+  path: `${v1}/notifications`,
+  summary: "List my notifications",
+  tag: "notifications",
+  auth: "user",
+  request: { query: notificationsQuery },
+  ok: [200, "OK", page(Notification)],
+});
+op({
+  method: "get",
+  path: `${v1}/notifications/unread-count`,
+  summary: "Get my unread notification count",
+  tag: "notifications",
+  auth: "user",
+  ok: [200, "OK", data(z.object({ unreadCount: z.number().int() }))],
+});
+op({
+  method: "patch",
+  path: `${v1}/notifications/read-all`,
+  summary: "Mark all my notifications read",
+  tag: "notifications",
+  auth: "user",
+  ok: [200, "OK", data(z.object({ updatedCount: z.number().int() }))],
+});
+op({
+  method: "patch",
+  path: `${v1}/notifications/{id}/read`,
+  summary: "Mark one notification read",
+  tag: "notifications",
+  auth: "user",
+  request: id,
+  ok: [200, "OK", data(Notification)],
+  errors: { 404: "Notification not found" },
 });
 
 // products
