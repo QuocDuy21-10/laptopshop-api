@@ -6,6 +6,10 @@ const V1_PATHS = [
   "/api/v1/auth/refresh",
   "/api/v1/auth/logout",
   "/api/v1/users/me",
+  "/api/v1/wishlist",
+  "/api/v1/wishlist/summary",
+  "/api/v1/wishlist/status",
+  "/api/v1/wishlist/items/{productId}",
   "/api/v1/products",
   "/api/v1/products/filters",
   "/api/v1/products/facets",
@@ -94,6 +98,9 @@ describe("openapi document", () => {
     expect(op("/api/v1/auth/login", "post").security).toBeUndefined();
     expect(op("/api/v1/webhooks/payments/{provider}", "post").security).toBeUndefined();
     expect(op("/api/v1/cart", "get").security).toEqual(secured);
+    expect(op("/api/v1/wishlist", "get").security).toEqual(secured);
+    expect(op("/api/v1/wishlist/status", "get").security).toEqual(secured);
+    expect(op("/api/v1/wishlist/items/{productId}", "patch").responses[400]).toBeDefined();
     expect(op("/api/v1/admin/dashboard", "get").security).toEqual(secured);
     expect(op("/api/v1/admin/dashboard", "get").responses["403"]).toBeDefined();
     expect(op("/api/v1/advisor/recommend", "post").security).toEqual([
@@ -101,6 +108,21 @@ describe("openapi document", () => {
       { cookieAuth: [] },
       { bearerAuth: [] },
     ]);
+  });
+
+  it("documents the wishlist contract and alert modes", () => {
+    expect(doc.components?.schemas).toEqual(
+      expect.objectContaining({
+        PriceAlertMode: expect.anything(),
+        WishlistItem: expect.anything(),
+        WishlistSummary: expect.anything(),
+        WishlistStatus: expect.anything(),
+      }),
+    );
+    const patch = op("/api/v1/wishlist/items/{productId}", "patch");
+    const body = patch.requestBody.content["application/json"].schema;
+    expect(body.anyOf).toHaveLength(3);
+    expect(op("/api/v1/wishlist/items/{productId}", "delete").responses[204]).toBeDefined();
   });
 
   it("documents the advisor request and response contract", () => {
