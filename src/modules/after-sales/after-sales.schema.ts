@@ -111,3 +111,27 @@ export const assignServiceRequestBody = z.object({
   assignedToId: z.coerce.number().int().positive().nullable(),
   expectedVersion: z.number().int().positive(),
 });
+
+export const quoteParams = z.object({
+  id: z.coerce.number().int().positive(),
+  itemId: z.coerce.number().int().positive(),
+  quoteId: z.coerce.number().int().positive(),
+});
+export const sendQuoteBody = z.object({
+  expectedVersion: z.number().int().positive(),
+  validDays: z.number().int().min(1).max(30).default(7),
+  note: z.string().trim().max(1000).optional(),
+  lines: z
+    .array(
+      z.object({
+        description: z.string().trim().min(1).max(255),
+        quantity: z.number().int().positive(),
+        unitPrice: z.number().int().nonnegative(),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+export type SendQuoteBody = z.infer<typeof sendQuoteBody>;
+export const quoteDecisionBody = z.object({ decision: z.enum(["ACCEPT", "DECLINE"]) });
+export type QuoteDecisionBody = z.infer<typeof quoteDecisionBody>;

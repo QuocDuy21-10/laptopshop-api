@@ -48,6 +48,8 @@ const V1_PATHS = [
   "/api/v1/admin/after-sales/{id}/items/{itemId}/status",
   "/api/v1/admin/after-sales/{id}/messages",
   "/api/v1/admin/after-sales/{id}/notes",
+  "/api/v1/after-sales/{id}/items/{itemId}/quotes/{quoteId}/decision",
+  "/api/v1/admin/after-sales/{id}/items/{itemId}/quotes",
   "/api/v1/admin/after-sales",
   "/api/v1/admin/after-sales/summary",
   "/api/v1/admin/after-sales/assignees",

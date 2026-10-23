@@ -17,6 +17,8 @@ import {
   getAdminServiceRequestSummaryHandler,
   listAdminServiceRequestsHandler,
   listAfterSalesAssigneesHandler,
+  decideQuoteHandler,
+  sendQuoteHandler,
   transitionItemHandler,
 } from "modules/after-sales/after-sales.controller";
 import {
@@ -30,6 +32,9 @@ import {
   serviceItemParams,
   serviceMessageBody,
   transitionItemBody,
+  quoteDecisionBody,
+  quoteParams,
+  sendQuoteBody,
 } from "modules/after-sales/after-sales.schema";
 
 export const afterSalesRoutes = Router();
@@ -71,6 +76,11 @@ afterSalesRoutes.post(
   validate({ params: serviceItemParams, body: completionDisputeBody }),
   disputeMyItemHandler,
 );
+afterSalesRoutes.post(
+  "/:id/items/:itemId/quotes/:quoteId/decision",
+  validate({ params: quoteParams, body: quoteDecisionBody }),
+  decideQuoteHandler,
+);
 
 export const adminAfterSalesRoutes = Router();
 adminAfterSalesRoutes.get(
@@ -104,4 +114,9 @@ adminAfterSalesRoutes.patch(
   "/:id/items/:itemId/status",
   validate({ params: serviceItemParams, body: transitionItemBody }),
   transitionItemHandler,
+);
+adminAfterSalesRoutes.post(
+  "/:id/items/:itemId/quotes",
+  validate({ params: serviceItemParams, body: sendQuoteBody }),
+  sendQuoteHandler,
 );

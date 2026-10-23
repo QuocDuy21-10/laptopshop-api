@@ -1675,6 +1675,32 @@ op({
 });
 op({
   method: "post",
+  path: `${v1}/after-sales/{id}/items/{itemId}/quotes/{quoteId}/decision`,
+  summary: "Decide an after-sales quote",
+  tag: "after-sales",
+  auth: "user",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number(), quoteId: z.number() }),
+    body: json(z.object({ decision: z.enum(["ACCEPT", "DECLINE"]) })),
+  },
+  ok: [200, "Updated", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Quote expired or already decided" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/after-sales/{id}/items/{itemId}/quotes`,
+  summary: "Send an after-sales quote",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: json(z.record(z.unknown())),
+  },
+  ok: [201, "Created", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Quote or version conflict" },
+});
+op({
+  method: "post",
   path: `${v1}/after-sales/{id}/items/{itemId}/attachments`,
   summary: "Upload after-sales images",
   tag: "after-sales",

@@ -19,11 +19,14 @@ import {
   transitionItem,
 } from "modules/after-sales/after-sales.actions";
 import { addInternalNote, addPublicMessage } from "modules/after-sales/after-sales.events";
+import { decideQuote, sendQuote } from "modules/after-sales/after-sales.quotes";
+import type { SendQuoteInput } from "modules/after-sales/after-sales.quotes";
 import type {
   CreateServiceRequestBody,
   DeviceEligibilityQuery,
   ServiceRequestQuery,
   AdminServiceRequestQuery,
+  QuoteDecisionBody,
 } from "modules/after-sales/after-sales.schema";
 
 export const listEligibleDevicesHandler: RequestHandler = async (req, res) => {
@@ -117,4 +120,28 @@ export const getAdminServiceRequestSummaryHandler: RequestHandler = async (_req,
 export const assignServiceRequestHandler: RequestHandler = async (req, res) => {
   const id = Number((res.locals.params as { id: number }).id);
   res.json({ data: await assignServiceRequest(req.auth!.id, id, req.body) });
+};
+
+export const sendQuoteHandler: RequestHandler = async (req, res) => {
+  const { id, itemId } = res.locals.params as { id: number; itemId: number };
+  res
+    .status(201)
+    .json({ data: await sendQuote(req.auth!.id, id, itemId, req.body as SendQuoteInput) });
+};
+
+export const decideQuoteHandler: RequestHandler = async (req, res) => {
+  const { id, itemId, quoteId } = res.locals.params as {
+    id: number;
+    itemId: number;
+    quoteId: number;
+  };
+  res.json({
+    data: await decideQuote(
+      req.auth!.id,
+      id,
+      itemId,
+      quoteId,
+      (req.body as QuoteDecisionBody).decision,
+    ),
+  });
 };
