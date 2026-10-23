@@ -77,3 +77,8 @@ export const completionDisputeBody = z.object({
   reason: z.enum(["DEVICE_NOT_RECEIVED", "ISSUE_PERSISTS"]),
   note: z.string().trim().min(1).max(2000),
 });
+
+export const serviceMessageBody = z.object({
+  itemId: z.coerce.number().int().positive().optional(),
+  body: z.string().trim().min(1).max(5000),
+});

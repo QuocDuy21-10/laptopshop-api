@@ -4,6 +4,9 @@ import { validate } from "middlewares/validate";
 import {
   createServiceRequestHandler,
   cancelMyItemHandler,
+  addAdminMessageHandler,
+  addInternalNoteHandler,
+  addPublicMessageHandler,
   confirmMyItemHandler,
   disputeMyItemHandler,
   getMyServiceRequestHandler,
@@ -18,6 +21,7 @@ import {
   serviceRequestParams,
   serviceRequestQuery,
   serviceItemParams,
+  serviceMessageBody,
   transitionItemBody,
 } from "modules/after-sales/after-sales.schema";
 
@@ -34,6 +38,11 @@ afterSalesRoutes.get(
   "/devices",
   validate({ query: deviceEligibilityQuery }),
   listEligibleDevicesHandler,
+);
+afterSalesRoutes.post(
+  "/:id/messages",
+  validate({ params: serviceRequestParams, body: serviceMessageBody }),
+  addPublicMessageHandler,
 );
 afterSalesRoutes.get(
   "/:id",
@@ -57,6 +66,16 @@ afterSalesRoutes.post(
 );
 
 export const adminAfterSalesRoutes = Router();
+adminAfterSalesRoutes.post(
+  "/:id/messages",
+  validate({ params: serviceRequestParams, body: serviceMessageBody }),
+  addAdminMessageHandler,
+);
+adminAfterSalesRoutes.post(
+  "/:id/notes",
+  validate({ params: serviceRequestParams, body: serviceMessageBody }),
+  addInternalNoteHandler,
+);
 adminAfterSalesRoutes.patch(
   "/:id/items/:itemId/status",
   validate({ params: serviceItemParams, body: transitionItemBody }),

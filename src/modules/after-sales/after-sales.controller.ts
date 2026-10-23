@@ -13,6 +13,7 @@ import {
   disputeMyItem,
   transitionItem,
 } from "modules/after-sales/after-sales.actions";
+import { addInternalNote, addPublicMessage } from "modules/after-sales/after-sales.events";
 import type {
   CreateServiceRequestBody,
   DeviceEligibilityQuery,
@@ -68,4 +69,23 @@ export const disputeMyItemHandler: RequestHandler = async (req, res) => {
 export const transitionItemHandler: RequestHandler = async (req, res) => {
   const { id, itemId } = res.locals.params as { id: number; itemId: number };
   res.json({ data: await transitionItem({ id: req.auth!.id }, id, itemId, req.body) });
+};
+
+export const addPublicMessageHandler: RequestHandler = async (req, res) => {
+  const id = Number((res.locals.params as { id: number }).id);
+  res.status(201).json({
+    data: await addPublicMessage({ id: req.auth!.id, role: "USER" }, id, req.body),
+  });
+};
+
+export const addAdminMessageHandler: RequestHandler = async (req, res) => {
+  const id = Number((res.locals.params as { id: number }).id);
+  res
+    .status(201)
+    .json({ data: await addPublicMessage({ id: req.auth!.id, role: "ADMIN" }, id, req.body) });
+};
+
+export const addInternalNoteHandler: RequestHandler = async (req, res) => {
+  const id = Number((res.locals.params as { id: number }).id);
+  res.status(201).json({ data: await addInternalNote(req.auth!.id, id, req.body) });
 };

@@ -1622,6 +1622,19 @@ op({
   errors: { 404: "Not found", 409: "Invalid transition" },
 });
 op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/messages`,
+  summary: "Send a public after-sales message",
+  tag: "after-sales",
+  auth: "user",
+  request: {
+    params: idParams,
+    body: json(z.object({ itemId: z.number().optional(), body: z.string().min(1) })),
+  },
+  ok: [201, "Created", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Conversation unavailable" },
+});
+op({
   method: "patch",
   path: `${v1}/admin/after-sales/{id}/items/{itemId}/status`,
   summary: "Transition an after-sales device",
@@ -1633,6 +1646,32 @@ op({
   },
   ok: [200, "Updated", data(z.unknown())],
   errors: { 404: "Not found", 409: "Invalid transition or version conflict" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/after-sales/{id}/messages`,
+  summary: "Send a public admin after-sales message",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: idParams,
+    body: json(z.object({ itemId: z.number().optional(), body: z.string().min(1) })),
+  },
+  ok: [201, "Created", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Conversation unavailable" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/after-sales/{id}/notes`,
+  summary: "Add an internal after-sales note",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: idParams,
+    body: json(z.object({ itemId: z.number().optional(), body: z.string().min(1) })),
+  },
+  ok: [201, "Created", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Conversation unavailable" },
 });
 op({
   method: "get",
