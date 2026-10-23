@@ -16,6 +16,18 @@ const schema = z
     PRICE_ALERT_INTERVAL_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(300_000),
     PRICE_ALERT_PRODUCT_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
     PRICE_ALERT_LOCK_TTL_MS: z.coerce.number().int().min(10_000).max(900_000).default(240_000),
+    NOTIFICATION_OUTBOX_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    NOTIFICATION_WORKER_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    NOTIFICATION_QUEUE_PREFIX: z.string().min(1).default("laptopshop"),
+    OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
+    OUTBOX_LEASE_MS: z.coerce.number().int().min(10_000).max(900_000).default(60_000),
+    DELIVERY_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(5),
     CORS_ORIGINS: z
       .string()
       .default("http://localhost:3000")

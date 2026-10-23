@@ -38,6 +38,12 @@ describe("parseEnv", () => {
     expect(e.PRICE_ALERT_INTERVAL_MS).toBe(300_000);
     expect(e.PRICE_ALERT_PRODUCT_BATCH_SIZE).toBe(100);
     expect(e.PRICE_ALERT_LOCK_TTL_MS).toBe(240_000);
+    expect(e.NOTIFICATION_OUTBOX_ENABLED).toBe(false);
+    expect(e.NOTIFICATION_WORKER_ENABLED).toBe(false);
+    expect(e.NOTIFICATION_QUEUE_PREFIX).toBe("laptopshop");
+    expect(e.OUTBOX_BATCH_SIZE).toBe(100);
+    expect(e.OUTBOX_LEASE_MS).toBe(60_000);
+    expect(e.DELIVERY_MAX_ATTEMPTS).toBe(5);
   });
 
   it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {

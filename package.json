@@ -57,6 +57,7 @@
     "@prisma/client": "6.3.0",
     "@sentry/node": "11.8.0",
     "bcrypt": "5.1.1",
+    "bullmq": "^6.4.0",
     "compression": "1.8.2",
     "cors": "2.8.5",
     "dotenv": "16.4.7",

@@ -8,8 +8,7 @@ const config: Config = {
   globalSetup: "<rootDir>/tests/integration/global-setup.ts",
   transform: { "^.+\\.ts$": ["ts-jest", { diagnostics: false }] },
   moduleNameMapper: {
-    "^(config|middlewares|models|routes|lib|docs|modules)/(.*)$":
-      "<rootDir>/src/$1/$2",
+    "^(config|middlewares|models|routes|lib|docs|modules|queues)/(.*)$": "<rootDir>/src/$1/$2",
   },
   testTimeout: 30_000,
 };
