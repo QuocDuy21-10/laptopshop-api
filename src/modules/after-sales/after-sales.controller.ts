@@ -6,6 +6,11 @@ import {
   getMyServiceRequest,
   listMyEligibleDevices,
   listMyServiceRequests,
+  assignServiceRequest,
+  getAdminServiceRequest,
+  getAfterSalesAssignees,
+  getAdminServiceRequestSummary,
+  listAdminServiceRequestCases,
 } from "modules/after-sales/after-sales.service";
 import {
   cancelMyItem,
@@ -18,6 +23,7 @@ import type {
   CreateServiceRequestBody,
   DeviceEligibilityQuery,
   ServiceRequestQuery,
+  AdminServiceRequestQuery,
 } from "modules/after-sales/after-sales.schema";
 
 export const listEligibleDevicesHandler: RequestHandler = async (req, res) => {
@@ -88,4 +94,27 @@ export const addAdminMessageHandler: RequestHandler = async (req, res) => {
 export const addInternalNoteHandler: RequestHandler = async (req, res) => {
   const id = Number((res.locals.params as { id: number }).id);
   res.status(201).json({ data: await addInternalNote(req.auth!.id, id, req.body) });
+};
+
+export const listAdminServiceRequestsHandler: RequestHandler = async (req, res) => {
+  const result = await listAdminServiceRequestCases(res.locals.query as AdminServiceRequestQuery);
+  res.json({ data: result.items, meta: result.meta });
+};
+
+export const getAdminServiceRequestHandler: RequestHandler = async (req, res) => {
+  const id = Number((res.locals.params as { id: number }).id);
+  res.json({ data: await getAdminServiceRequest(id) });
+};
+
+export const listAfterSalesAssigneesHandler: RequestHandler = async (_req, res) => {
+  res.json({ data: await getAfterSalesAssignees() });
+};
+
+export const getAdminServiceRequestSummaryHandler: RequestHandler = async (_req, res) => {
+  res.json({ data: await getAdminServiceRequestSummary() });
+};
+
+export const assignServiceRequestHandler: RequestHandler = async (req, res) => {
+  const id = Number((res.locals.params as { id: number }).id);
+  res.json({ data: await assignServiceRequest(req.auth!.id, id, req.body) });
 };

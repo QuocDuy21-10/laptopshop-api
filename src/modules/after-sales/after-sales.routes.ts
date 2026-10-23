@@ -7,16 +7,23 @@ import {
   addAdminMessageHandler,
   addInternalNoteHandler,
   addPublicMessageHandler,
+  assignServiceRequestHandler,
   confirmMyItemHandler,
   disputeMyItemHandler,
   getMyServiceRequestHandler,
   listEligibleDevicesHandler,
   listMyServiceRequestsHandler,
+  getAdminServiceRequestHandler,
+  getAdminServiceRequestSummaryHandler,
+  listAdminServiceRequestsHandler,
+  listAfterSalesAssigneesHandler,
   transitionItemHandler,
 } from "modules/after-sales/after-sales.controller";
 import {
   createServiceRequestBody,
   completionDisputeBody,
+  adminServiceRequestQuery,
+  assignServiceRequestBody,
   deviceEligibilityQuery,
   serviceRequestParams,
   serviceRequestQuery,
@@ -66,6 +73,23 @@ afterSalesRoutes.post(
 );
 
 export const adminAfterSalesRoutes = Router();
+adminAfterSalesRoutes.get(
+  "/",
+  validate({ query: adminServiceRequestQuery }),
+  listAdminServiceRequestsHandler,
+);
+adminAfterSalesRoutes.get("/summary", getAdminServiceRequestSummaryHandler);
+adminAfterSalesRoutes.get("/assignees", listAfterSalesAssigneesHandler);
+adminAfterSalesRoutes.get(
+  "/:id",
+  validate({ params: serviceRequestParams }),
+  getAdminServiceRequestHandler,
+);
+adminAfterSalesRoutes.patch(
+  "/:id/assign",
+  validate({ params: serviceRequestParams, body: assignServiceRequestBody }),
+  assignServiceRequestHandler,
+);
 adminAfterSalesRoutes.post(
   "/:id/messages",
   validate({ params: serviceRequestParams, body: serviceMessageBody }),

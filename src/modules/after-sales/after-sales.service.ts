@@ -3,18 +3,24 @@ import { prisma } from "config/client";
 import { AppError, isUniqueViolation } from "lib/errors";
 import type { PageQuery } from "lib/http";
 import {
+  toAdminServiceRequestDto,
   toCustomerServiceRequestDto,
   toEligibleDeviceDto,
 } from "modules/after-sales/after-sales.mapper";
 import { classifyCoverage } from "modules/after-sales/after-sales.eligibility";
 import {
   customerServiceRequestInclude,
+  adminServiceRequestInclude,
+  findAdminServiceRequest,
   findCustomerServiceRequest,
+  listAdminServiceRequests,
+  listAfterSalesAssignees,
   lockOrderDetails,
   listCustomerServiceRequests,
 } from "modules/after-sales/after-sales.repository";
 import { listEligibleDeviceRows } from "modules/after-sales/after-sales.repository";
 import type {
+  AdminServiceRequestQuery,
   CreateServiceRequestBody,
   DeviceEligibilityQuery,
 } from "modules/after-sales/after-sales.schema";
@@ -185,3 +191,77 @@ export const createServiceRequest = async (
     throw error;
   }
 };
+
+export const listAdminServiceRequestCases = async (query: AdminServiceRequestQuery) => {
+  const result = await listAdminServiceRequests(query);
+  return { items: result.rows.map(toAdminServiceRequestDto), meta: result.meta };
+};
+
+export const getAdminServiceRequest = async (id: number) => {
+  const row = await findAdminServiceRequest(id);
+  if (!row) throw new AppError("Service request not found", 404, "SERVICE_REQUEST_NOT_FOUND");
+  return toAdminServiceRequestDto(row);
+};
+
+export const getAfterSalesAssignees = async () => {
+  const rows = await listAfterSalesAssignees();
+  return rows.map((row) => ({ id: row.id, name: row.fullName ?? row.username }));
+};
+
+export const getAdminServiceRequestSummary = async () => {
+  const [total, submitted, reviewing, inProgress, awaitingCustomer, closed] = await Promise.all([
+    prisma.serviceRequest.count(),
+    prisma.serviceRequest.count({ where: { status: "SUBMITTED" } }),
+    prisma.serviceRequest.count({ where: { status: "REVIEWING" } }),
+    prisma.serviceRequest.count({ where: { status: "IN_PROGRESS" } }),
+    prisma.serviceRequest.count({ where: { status: "AWAITING_CUSTOMER" } }),
+    prisma.serviceRequest.count({ where: { status: "CLOSED" } }),
+  ]);
+  return { total, submitted, reviewing, inProgress, awaitingCustomer, closed };
+};
+
+export const assignServiceRequest = async (
+  adminId: number,
+  requestId: number,
+  input: { assignedToId: number | null; expectedVersion: number },
+) =>
+  prisma.$transaction(async (tx) => {
+    const request = await tx.serviceRequest.findUnique({
+      where: { id: requestId },
+      select: { id: true, version: true, status: true },
+    });
+    if (!request) throw new AppError("Service request not found", 404, "SERVICE_REQUEST_NOT_FOUND");
+    if (request.version !== input.expectedVersion)
+      throw new AppError("Service request changed", 409, "SERVICE_REQUEST_VERSION_CONFLICT");
+    if (input.assignedToId !== null) {
+      const assignee = await tx.user.findFirst({
+        where: { id: input.assignedToId, role: { name: "ADMIN" } },
+        select: { id: true },
+      });
+      if (!assignee)
+        throw new AppError("Invalid after-sales assignee", 409, "INVALID_AFTER_SALES_ASSIGNEE");
+    }
+    const updated = await tx.serviceRequest.updateMany({
+      where: { id: requestId, version: input.expectedVersion, status: { not: "CLOSED" } },
+      data: { assignedToId: input.assignedToId, version: { increment: 1 } },
+    });
+    if (updated.count !== 1)
+      throw new AppError("Service request changed", 409, "SERVICE_REQUEST_VERSION_CONFLICT");
+    await tx.serviceRequestEvent.create({
+      data: {
+        serviceRequestId: requestId,
+        actorId: adminId,
+        kind: "ASSIGNED",
+        visibility: "INTERNAL",
+        body:
+          input.assignedToId === null
+            ? "Đã bỏ phân công"
+            : `Đã phân công admin #${input.assignedToId}`,
+      },
+    });
+    const row = await tx.serviceRequest.findUniqueOrThrow({
+      where: { id: requestId },
+      include: adminServiceRequestInclude,
+    });
+    return toAdminServiceRequestDto(row);
+  });

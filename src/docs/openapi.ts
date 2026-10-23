@@ -1675,6 +1675,54 @@ op({
 });
 op({
   method: "get",
+  path: `${v1}/admin/after-sales`,
+  summary: "List after-sales requests",
+  tag: "admin",
+  auth: "admin",
+  request: { query: z.object({}).passthrough() },
+  ok: [200, "OK", page(z.unknown())],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/after-sales/summary`,
+  summary: "Summarize after-sales requests",
+  tag: "admin",
+  auth: "admin",
+  ok: [200, "OK", data(z.unknown())],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/after-sales/assignees`,
+  summary: "List after-sales assignees",
+  tag: "admin",
+  auth: "admin",
+  ok: [200, "OK", data(z.array(z.object({ id: z.number(), name: z.string() })))],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/after-sales/{id}`,
+  summary: "Get an after-sales request",
+  tag: "admin",
+  auth: "admin",
+  request: { params: idParams },
+  ok: [200, "OK", data(z.unknown())],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/after-sales/{id}/assign`,
+  summary: "Assign an after-sales request",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: idParams,
+    body: json(z.object({ assignedToId: z.number().nullable(), expectedVersion: z.number() })),
+  },
+  ok: [200, "Updated", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Assignee or version conflict" },
+});
+op({
+  method: "get",
   path: `${v1}/orders/me/{id}/payment`,
   summary: "Payment instructions and status",
   tag: "payments",

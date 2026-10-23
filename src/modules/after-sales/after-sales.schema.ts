@@ -82,3 +82,28 @@ export const serviceMessageBody = z.object({
   itemId: z.coerce.number().int().positive().optional(),
   body: z.string().trim().min(1).max(5000),
 });
+
+export const adminServiceRequestQuery = pageQuery.extend({
+  type: z.enum(["WARRANTY", "TECHNICAL_SUPPORT"]).optional(),
+  status: z
+    .enum([
+      "SUBMITTED",
+      "REVIEWING",
+      "IN_PROGRESS",
+      "AWAITING_CUSTOMER",
+      "PARTIALLY_COMPLETED",
+      "CLOSED",
+    ])
+    .optional(),
+  itemStatus: z.string().min(1).optional(),
+  assigneeId: z.coerce.number().int().positive().optional(),
+  q: z.string().trim().min(1).max(100).optional(),
+  from: z.string().date().optional(),
+  to: z.string().date().optional(),
+});
+export type AdminServiceRequestQuery = z.infer<typeof adminServiceRequestQuery>;
+
+export const assignServiceRequestBody = z.object({
+  assignedToId: z.coerce.number().int().positive().nullable(),
+  expectedVersion: z.number().int().positive(),
+});

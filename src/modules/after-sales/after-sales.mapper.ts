@@ -3,8 +3,11 @@ import {
   allowedRequestTypesForCoverage,
   classifyCoverage,
 } from "modules/after-sales/after-sales.eligibility";
-import type { EligibleDeviceRow } from "modules/after-sales/after-sales.repository";
-import type { CustomerServiceRequestRow } from "modules/after-sales/after-sales.repository";
+import type {
+  AdminServiceRequestRow,
+  CustomerServiceRequestRow,
+  EligibleDeviceRow,
+} from "modules/after-sales/after-sales.repository";
 import type { ServiceRequestType } from "modules/after-sales/after-sales.types";
 
 export type EligibleDeviceDto = {
@@ -153,6 +156,23 @@ export const toCustomerServiceRequestDto = (row: CustomerServiceRequestRow) => (
     fromStatus: event.fromStatus,
     toStatus: event.toStatus,
     body: event.body,
+    createdAt: event.createdAt,
+  })),
+});
+
+export const toAdminServiceRequestDto = (row: AdminServiceRequestRow) => ({
+  ...toCustomerServiceRequestDto(row as unknown as CustomerServiceRequestRow),
+  customer: row.customer,
+  assignee: row.assignee,
+  events: row.events.map((event) => ({
+    id: event.id,
+    itemId: event.serviceRequestItemId,
+    kind: event.kind,
+    visibility: event.visibility,
+    fromStatus: event.fromStatus,
+    toStatus: event.toStatus,
+    body: event.body,
+    actor: event.actor,
     createdAt: event.createdAt,
   })),
 });

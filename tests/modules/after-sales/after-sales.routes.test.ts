@@ -3,7 +3,7 @@ jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").pris
 import { createHash } from "node:crypto";
 import request from "supertest";
 import { buildApp } from "../../helpers/app";
-import { USER, cookieFor } from "../../helpers/auth";
+import { ADMIN, USER, cookieFor } from "../../helpers/auth";
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
 
 beforeEach(resetPrisma);
@@ -302,5 +302,61 @@ describe("GET /api/v1/after-sales", () => {
       .get("/api/v1/after-sales/90")
       .set("Cookie", cookieFor(USER));
     expect(res.status).toBe(404);
+  });
+});
+
+describe("admin after-sales management", () => {
+  it("filters admin requests by type and status", async () => {
+    prismaMock.serviceRequest.count.mockResolvedValue(0);
+    prismaMock.serviceRequest.findMany.mockResolvedValue([]);
+    const res = await request(buildApp())
+      .get("/api/v1/admin/after-sales?type=WARRANTY&status=REVIEWING&page=1&pageSize=10")
+      .set("Cookie", cookieFor(ADMIN));
+    expect(res.status).toBe(200);
+    expect(prismaMock.serviceRequest.findMany.mock.calls[0][0].where).toMatchObject({
+      type: "WARRANTY",
+      status: "REVIEWING",
+    });
+  });
+
+  it("lists admin assignees and permits unassignment", async () => {
+    prismaMock.user.findMany.mockResolvedValue([
+      { id: ADMIN.id, fullName: "Admin", username: "admin@test.local" },
+    ]);
+    const assignees = await request(buildApp())
+      .get("/api/v1/admin/after-sales/assignees")
+      .set("Cookie", cookieFor(ADMIN));
+    expect(assignees.status).toBe(200);
+    expect(assignees.body.data[0]).toMatchObject({ id: ADMIN.id, name: "Admin" });
+
+    prismaMock.serviceRequest.findUnique.mockResolvedValue({
+      id: 90,
+      version: 3,
+      assignedToId: ADMIN.id,
+    });
+    prismaMock.serviceRequest.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.serviceRequestEvent.create.mockResolvedValue({});
+    prismaMock.serviceRequest.findUniqueOrThrow.mockResolvedValue({
+      id: 90,
+      code: "AS-90",
+      userId: USER.id,
+      type: "WARRANTY",
+      status: "REVIEWING",
+      subject: "X",
+      previousRequestId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      closedAt: null,
+      items: [],
+      events: [],
+      previousRequest: null,
+      followUps: [],
+    });
+    const unassigned = await request(buildApp())
+      .patch("/api/v1/admin/after-sales/90/assign")
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ assignedToId: null, expectedVersion: 3 });
+    expect(unassigned.status).toBe(200);
+    expect(prismaMock.serviceRequest.updateMany.mock.calls[0][0].data.assignedToId).toBeNull();
   });
 });
