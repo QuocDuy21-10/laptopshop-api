@@ -66,39 +66,76 @@ enum NotificationType {
   PRICE_DROP
 }
 
-model User {
-  id          Int     @id @default(autoincrement())
-  username    String  @unique @db.VarChar(255)
-  password    String  @db.VarChar(255)
-  fullName    String? @db.VarChar(255)
-  address     String? @db.VarChar(255)
-  phone       String? @db.VarChar(255)
-  accountType String? @db.VarChar(50)
-  avatar      String? @db.VarChar(255)
-  role        Role    @relation(fields: [roleId], references: [id])
-  roleId      Int
+enum NotificationPriceSource {
+  LIST_PRICE
+  AUTOMATIC
+  FLASH_SALE
+}
 
-  Cart                    Cart?
-  orders                  Order[]
-  refreshTokens           RefreshToken[]
-  statusChanges           OrderStatusHistory[]
-  stockMovements          StockMovement[]
-  paymentEventResolutions PaymentWebhookEvent[]
-  stockReceiptsCreated    StockReceipt[]        @relation("ReceiptCreator")
-  stockReceiptsPosted     StockReceipt[]        @relation("ReceiptPoster")
-  reviews                 Review[]              @relation("ReviewAuthor")
-  moderatedReviews        Review[]              @relation("ReviewModerator")
-  reviewHelpfulVotes      ReviewHelpful[]
-  reviewRepliesCreated    ReviewReply[]         @relation("ReviewReplyCreator")
-  reviewRepliesUpdated    ReviewReply[]         @relation("ReviewReplyUpdater")
-  flashSaleUsages         FlashSaleUserUsage[]
-  flashSaleAllocations    FlashSaleAllocation[]
-  promotionsCreated       Promotion[]           @relation("PromotionCreator")
-  promotionsUpdated       Promotion[]           @relation("PromotionUpdater")
-  promotionUsages         PromotionUserUsage[]
-  promotionRedemptions    PromotionRedemption[]
-  wishlistItems           WishlistItem[]
-  notifications           Notification[]
+enum NotificationChannel {
+  EMAIL
+  WEB_PUSH
+}
+
+enum NotificationDeliveryParent {
+  NOTIFICATION
+  EMAIL_VERIFICATION
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  RETRYING
+  FAILED
+  DEAD
+  CANCELLED
+  SUPPRESSED
+}
+
+enum OutboxEventType {
+  PRICE_REEVALUATION_REQUESTED
+  NOTIFICATION_DELIVERY_REQUESTED
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  username        String    @unique @db.VarChar(255)
+  password        String    @db.VarChar(255)
+  fullName        String?   @db.VarChar(255)
+  address         String?   @db.VarChar(255)
+  phone           String?   @db.VarChar(255)
+  accountType     String?   @db.VarChar(50)
+  avatar          String?   @db.VarChar(255)
+  emailVerifiedAt DateTime?
+  role            Role      @relation(fields: [roleId], references: [id])
+  roleId          Int
+
+  Cart                        Cart?
+  orders                      Order[]
+  refreshTokens               RefreshToken[]
+  statusChanges               OrderStatusHistory[]
+  stockMovements              StockMovement[]
+  paymentEventResolutions     PaymentWebhookEvent[]
+  stockReceiptsCreated        StockReceipt[]               @relation("ReceiptCreator")
+  stockReceiptsPosted         StockReceipt[]               @relation("ReceiptPoster")
+  reviews                     Review[]                     @relation("ReviewAuthor")
+  moderatedReviews            Review[]                     @relation("ReviewModerator")
+  reviewHelpfulVotes          ReviewHelpful[]
+  reviewRepliesCreated        ReviewReply[]                @relation("ReviewReplyCreator")
+  reviewRepliesUpdated        ReviewReply[]                @relation("ReviewReplyUpdater")
+  flashSaleUsages             FlashSaleUserUsage[]
+  flashSaleAllocations        FlashSaleAllocation[]
+  promotionsCreated           Promotion[]                  @relation("PromotionCreator")
+  promotionsUpdated           Promotion[]                  @relation("PromotionUpdater")
+  promotionUsages             PromotionUserUsage[]
+  promotionRedemptions        PromotionRedemption[]
+  wishlistItems               WishlistItem[]
+  notifications               Notification[]
+  notificationPreference      NotificationPreference?
+  emailVerificationChallenges EmailVerificationChallenge[]
+  pushSubscriptions           PushSubscription[]
+  deliveryAudits              NotificationDeliveryAudit[]  @relation("DeliveryAuditActor")
 
   @@map("users")
 }
@@ -160,6 +197,8 @@ model WishlistItem {
   alertMode        PriceAlertMode?
   targetPrice      Int?
   referencePrice   Int?
+  includeFlashSale Boolean         @default(false)
+  alertVersion     Int             @default(1)
   lastAlertMode    PriceAlertMode?
   lastAlertedPrice Int?
   lastAlertedAt    DateTime?
@@ -176,23 +215,168 @@ model WishlistItem {
 }
 
 model Notification {
-  id        Int              @id @default(autoincrement())
-  userId    Int
-  productId Int?
-  type      NotificationType
-  title     String           @db.VarChar(255)
-  message   String           @db.VarChar(500)
-  oldPrice  Int?
-  newPrice  Int?
-  dedupeKey String           @unique @db.VarChar(191)
-  readAt    DateTime?
-  createdAt DateTime         @default(now())
+  id             Int                      @id @default(autoincrement())
+  userId         Int
+  productId      Int?
+  type           NotificationType
+  title          String                   @db.VarChar(255)
+  message        String                   @db.VarChar(500)
+  oldPrice       Int?
+  newPrice       Int?
+  priceSource    NotificationPriceSource?
+  promotionId    Int?
+  pricingVersion Int?
+  validUntil     DateTime?
+  dedupeKey      String                   @unique @db.VarChar(191)
+  readAt         DateTime?
+  createdAt      DateTime                 @default(now())
 
-  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product    Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  deliveries NotificationDelivery[]
 
   @@index([userId, readAt, createdAt])
   @@map("notifications")
+}
+
+model NotificationPreference {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @unique
+  emailEnabled   Boolean  @default(false)
+  webPushEnabled Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model EmailVerificationChallenge {
+  id                   Int       @id @default(autoincrement())
+  userId               Int
+  email                String    @db.VarChar(255)
+  otpHash              String    @db.VarChar(255)
+  otpCiphertext        String    @db.Text
+  otpIv                String    @db.VarChar(64)
+  otpTag               String    @db.VarChar(64)
+  encryptionKeyVersion String    @db.VarChar(32)
+  expiresAt            DateTime
+  failedAttempts       Int       @default(0)
+  sendCount            Int       @default(0)
+  lastSentAt           DateTime?
+  consumedAt           DateTime?
+  invalidatedAt        DateTime?
+  createdAt            DateTime  @default(now())
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([userId, consumedAt, invalidatedAt, expiresAt])
+  @@map("email_verification_challenges")
+}
+
+model PushSubscription {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  endpoint     String    @db.Text
+  endpointHash String    @unique @db.Char(64)
+  p256dh       String    @db.VarChar(255)
+  auth         String    @db.VarChar(255)
+  userAgent    String?   @db.VarChar(255)
+  lastSeenAt   DateTime  @default(now())
+  disabledAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([userId, disabledAt])
+  @@map("push_subscriptions")
+}
+
+model NotificationDelivery {
+  id                           Int                        @id @default(autoincrement())
+  notificationId               Int?
+  emailVerificationChallengeId Int?
+  pushSubscriptionId           Int?
+  parentType                   NotificationDeliveryParent
+  channel                      NotificationChannel
+  status                       NotificationDeliveryStatus @default(PENDING)
+  dedupeKey                    String                     @unique @db.VarChar(191)
+  destinationKey               String                     @db.VarChar(255)
+  destinationSnapshot          String?                    @db.Text
+  attemptCount                 Int                        @default(0)
+  nextAttemptAt                DateTime?
+  leaseOwner                   String?                    @db.VarChar(128)
+  leaseExpiresAt               DateTime?
+  providerMessageId            String?                    @db.VarChar(255)
+  normalizedErrorCode          String?                    @db.VarChar(100)
+  lastErrorAt                  DateTime?
+  deliveredAt                  DateTime?
+  createdAt                    DateTime                   @default(now())
+  updatedAt                    DateTime                   @updatedAt
+
+  notification               Notification?               @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  emailVerificationChallenge EmailVerificationChallenge? @relation(fields: [emailVerificationChallengeId], references: [id], onDelete: Cascade)
+  pushSubscription           PushSubscription?           @relation(fields: [pushSubscriptionId], references: [id], onDelete: Cascade)
+  audits                     NotificationDeliveryAudit[]
+
+  @@index([status, nextAttemptAt])
+  @@index([notificationId, channel])
+  @@index([emailVerificationChallengeId, channel])
+  @@map("notification_deliveries")
+}
+
+model NotificationDeliveryAudit {
+  id         Int      @id @default(autoincrement())
+  deliveryId Int
+  actorId    Int?
+  action     String   @db.VarChar(50)
+  reason     String?  @db.VarChar(255)
+  createdAt  DateTime @default(now())
+
+  delivery NotificationDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  actor    User?                @relation("DeliveryAuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([deliveryId, createdAt])
+  @@map("notification_delivery_audits")
+}
+
+model OutboxEvent {
+  id              Int             @id @default(autoincrement())
+  eventType       OutboxEventType
+  schemaVersion   Int             @default(1)
+  aggregateType   String          @db.VarChar(100)
+  aggregateId     Int
+  dedupeKey       String          @unique @db.VarChar(191)
+  payload         Json
+  availableAt     DateTime        @default(now())
+  leaseOwner      String?         @db.VarChar(128)
+  leaseExpiresAt  DateTime?
+  publishAttempts Int             @default(0)
+  publishedAt     DateTime?
+  lastErrorCode   String?         @db.VarChar(100)
+  createdAt       DateTime        @default(now())
+
+  @@index([publishedAt, availableAt, leaseExpiresAt])
+  @@map("outbox_events")
+}
+
+model WorkerHeartbeat {
+  id         Int      @id @default(autoincrement())
+  workerName String   @db.VarChar(100)
+  instanceId String   @db.VarChar(128)
+  status     String   @db.VarChar(32)
+  lastSeenAt DateTime @default(now())
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([workerName, instanceId])
+  @@index([workerName, lastSeenAt])
+  @@map("worker_heartbeats")
 }
 
 model Cart {
