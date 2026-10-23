@@ -389,11 +389,20 @@ const orderShape = {
   createdAt: z.string().datetime(),
   items: z.array(
     z.object({
+      orderDetailId: z.number(),
       productId: z.number(),
       name: z.string(),
       image: z.string().nullable(),
       price: z.number(),
       quantity: z.number(),
+      warrantyMonthsSnapshot: z.number().nullable(),
+      warrantyStartAt: z.string().datetime().nullable(),
+      warrantyEndAt: z.string().datetime().nullable(),
+      warrantyPolicySource: z.enum([
+        "CHECKOUT_SNAPSHOT",
+        "CURRENT_PRODUCT_POLICY_BACKFILL",
+        "UNAVAILABLE",
+      ]),
       productDiscountAmount: z.number(),
       couponDiscountAmount: z.number(),
       netLineTotal: z.number(),

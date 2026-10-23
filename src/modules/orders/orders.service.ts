@@ -7,6 +7,7 @@ import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
 import { assertDayRange, createdAtRange, formatShopDateTime } from "lib/shop-time";
 import { productUnavailable } from "modules/cart/cart.service";
 import { moveStock } from "modules/inventory/inventory.service";
+import { warrantySnapshotForCompletion } from "modules/orders/order-warranty";
 import {
   adminOrderDetailInclude,
   adminOrderInclude,
@@ -79,7 +80,9 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
       // productId order gives every checkout the same lock order, so concurrent checkouts cannot deadlock
       const lines = await tx.cartDetail.findMany({
         where: { cart: { userId } },
-        include: { product: { select: { price: true, isActive: true } } },
+        include: {
+          product: { select: { price: true, isActive: true, warrantyMonths: true } },
+        },
         orderBy: { productId: "asc" },
       });
       if (lines.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
@@ -218,6 +221,8 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
             couponDiscountAmount: pricedByProduct.get(l.productId)!.couponDiscountAmount,
             automaticPromotionId: pricedByProduct.get(l.productId)!.automaticPromotion?.id,
             automaticPromotionName: pricedByProduct.get(l.productId)!.automaticPromotion?.name,
+            warrantyMonthsSnapshot: l.product.warrantyMonths,
+            warrantyPolicySource: "CHECKOUT_SNAPSHOT",
           })),
         },
       };
@@ -319,7 +324,12 @@ export const changeStatus = async (
     }
     const order = await tx.order.findFirst({
       where: { id: orderId, ...(scope.userId ? { userId: scope.userId } : {}) },
-      select: { status: true, paymentMethod: true, paymentStatus: true },
+      select: {
+        status: true,
+        paymentMethod: true,
+        paymentStatus: true,
+        orderDetails: { select: { id: true, warrantyMonthsSnapshot: true } },
+      },
     });
     if (!order) throw notFound("Order");
     const allowedFrom = !scope.from || scope.from.includes(order.status as OrderStatus);
@@ -331,19 +341,32 @@ export const changeStatus = async (
     ) {
       throw new AppError("Payment is required before fulfillment", 409, "PAYMENT_REQUIRED");
     }
+    const completedAt = to === ORDER_STATUS.COMPLETED ? new Date() : null;
     // conditional on the status we read, so two concurrent changes cannot both apply (no double restock)
     const { count } = await tx.order.updateMany({
       where: { id: orderId, status: order.status },
       data: {
         status: to,
         ...(to === ORDER_STATUS.COMPLETED && order.paymentMethod !== "BANK_TRANSFER"
-          ? { paymentStatus: PAYMENT_STATUS.SUCCESS, completedAt: new Date() }
+          ? { paymentStatus: PAYMENT_STATUS.SUCCESS, completedAt }
           : to === ORDER_STATUS.COMPLETED
-            ? { completedAt: new Date() }
+            ? { completedAt }
             : {}),
       },
     });
     if (count === 0) throw invalidTransition(order.status, to);
+    if (completedAt) {
+      for (const detail of order.orderDetails ?? []) {
+        const warranty = warrantySnapshotForCompletion({
+          months: detail.warrantyMonthsSnapshot,
+          completedAt,
+        });
+        await tx.orderDetail.update({
+          where: { id: detail.id },
+          data: { warrantyStartAt: warranty.startAt, warrantyEndAt: warranty.endAt },
+        });
+      }
+    }
     // same transaction as the status change, so history never misses or invents a transition
     await tx.orderStatusHistory.create({
       data: {

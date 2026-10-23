@@ -60,12 +60,13 @@ export const createUser = async () => {
   });
 };
 
-export const createProduct = (quantity: number, price = 1000) =>
+export const createProduct = (quantity: number, price = 1000, warrantyMonths?: number | null) =>
   prisma.product.create({
     data: {
       name: `product-${quantity}-${price}`,
       price,
       quantity,
+      ...(warrantyMonths === undefined ? {} : { warrantyMonths }),
       ...(quantity
         ? {
             stockMovements: {

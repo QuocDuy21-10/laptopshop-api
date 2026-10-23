@@ -62,6 +62,12 @@ enum PriceAlertMode {
   TARGET_PRICE
 }
 
+enum WarrantyPolicySource {
+  CHECKOUT_SNAPSHOT
+  CURRENT_PRODUCT_POLICY_BACKFILL
+  UNAVAILABLE
+}
+
 enum NotificationType {
   PRICE_DROP
 }
@@ -450,6 +456,10 @@ model OrderDetail {
   couponDiscountAmount   Int     @default(0)
   automaticPromotionId   Int?
   automaticPromotionName String? @db.VarChar(150)
+  warrantyMonthsSnapshot Int?
+  warrantyStartAt        DateTime?
+  warrantyEndAt          DateTime?
+  warrantyPolicySource   WarrantyPolicySource @default(UNAVAILABLE)
 
   order   Order @relation(fields: [orderId], references: [id])
   orderId Int
