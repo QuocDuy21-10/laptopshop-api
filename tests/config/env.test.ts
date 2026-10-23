@@ -48,6 +48,10 @@ describe("parseEnv", () => {
     expect(e.PRICE_RESOLVER_SHADOW_MODE).toBe(false);
     expect(e.WEB_PUSH_ENABLED).toBe(false);
     expect(e.VAPID_PUBLIC_KEY).toBeUndefined();
+    expect(e.EMAIL_ENABLED).toBe(false);
+    expect(e.EMAIL_PROVIDER).toBe("smtp");
+    expect(e.SMTP_PORT).toBe(1025);
+    expect(e.EMAIL_OTP_KEY_VERSION).toBe("v1");
   });
 
   it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {
@@ -110,6 +114,19 @@ describe("parseEnv", () => {
       VAPID_PRIVATE_KEY: "private",
     });
     expect(e.WEB_PUSH_ENABLED).toBe(true);
+  });
+
+  it("requires OTP encryption and rejects SMTP Email in production", () => {
+    expect(() => parseEnv({ ...base, EMAIL_ENABLED: "true" })).toThrow(/EMAIL_OTP_ENCRYPTION_KEY/);
+    expect(() =>
+      parseEnv({
+        ...base,
+        NODE_ENV: "production",
+        ADMIN_PASSWORD: "a-long-password-1",
+        EMAIL_ENABLED: "true",
+        EMAIL_OTP_ENCRYPTION_KEY: "a".repeat(64),
+      }),
+    ).toThrow(/EMAIL_PROVIDER/);
   });
 
   it("rejects fake provider in production and missing live secrets", () => {

@@ -83,6 +83,7 @@ import {
 import { notificationsQuery } from "modules/notifications/notifications.schema";
 import { updateNotificationPreferencesBody } from "modules/notifications/notification-preferences.schema";
 import { webPushSubscriptionBody } from "modules/notifications/web-push.schema";
+import { confirmEmailVerificationBody } from "modules/email-verification/email-verification.schema";
 
 extendZodWithOpenApi(z);
 
@@ -1059,6 +1060,25 @@ op({
   tag: "notifications",
   auth: "user",
   ok: [200, "OK", data(z.object({ enabled: z.boolean(), publicKey: z.string().nullable() }))],
+});
+op({
+  method: "post",
+  path: v1 + "/me/email-verification/request",
+  summary: "Request email verification OTP",
+  tag: "users",
+  auth: "user",
+  ok: [202, "Accepted", data(z.object({ accepted: z.boolean() }))],
+  errors: { 429: "Rate limited", 503: "Email delivery unavailable" },
+});
+op({
+  method: "post",
+  path: v1 + "/me/email-verification/confirm",
+  summary: "Confirm email verification OTP",
+  tag: "users",
+  auth: "user",
+  request: { body: json(confirmEmailVerificationBody) },
+  ok: [200, "Verified", data(z.object({ verified: z.boolean() }))],
+  errors: { 400: "Invalid or expired OTP", 409: "Email changed", 429: "OTP locked" },
 });
 op({
   method: "post",

@@ -43,6 +43,22 @@ const schema = z
     VAPID_SUBJECT: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     VAPID_PUBLIC_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     VAPID_PRIVATE_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    EMAIL_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    EMAIL_PROVIDER: z.enum(["smtp", "http"]).default("smtp"),
+    EMAIL_FROM: z.string().min(1).default("LaptopShop <no-reply@laptopshop.test>"),
+    SMTP_HOST: z.string().min(1).default("localhost"),
+    SMTP_PORT: z.coerce.number().int().positive().default(1025),
+    SMTP_SECURE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    SMTP_USER: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    SMTP_PASSWORD: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    EMAIL_OTP_ENCRYPTION_KEY: z.preprocess(emptyToUndefined, z.string().length(64).optional()),
+    EMAIL_OTP_KEY_VERSION: z.string().min(1).default("v1"),
     CORS_ORIGINS: z
       .string()
       .default("http://localhost:3000")
@@ -112,6 +128,29 @@ const schema = z
             message: key + " is required when WEB_PUSH_ENABLED=true",
           });
         }
+      }
+    }
+    if (Boolean(e.SMTP_USER) !== Boolean(e.SMTP_PASSWORD)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["SMTP_USER"],
+        message: "SMTP_USER and SMTP_PASSWORD must be configured together",
+      });
+    }
+    if (e.EMAIL_ENABLED) {
+      if (!e.EMAIL_OTP_ENCRYPTION_KEY) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["EMAIL_OTP_ENCRYPTION_KEY"],
+          message: "EMAIL_OTP_ENCRYPTION_KEY is required when EMAIL_ENABLED=true",
+        });
+      }
+      if (e.NODE_ENV === "production" && e.EMAIL_PROVIDER === "smtp") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["EMAIL_PROVIDER"],
+          message: "SMTP Email provider is not enabled for production",
+        });
       }
     }
     if (e.NODE_ENV === "production" && (e.ADMIN_PASSWORD?.length ?? 0) < 12) {
