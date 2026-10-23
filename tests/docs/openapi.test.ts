@@ -17,6 +17,9 @@ const V1_PATHS = [
   "/api/v1/web-push/subscriptions/{id}",
   "/api/v1/me/email-verification/request",
   "/api/v1/me/email-verification/confirm",
+  "/api/v1/admin/notifications/operations",
+  "/api/v1/admin/notification-deliveries",
+  "/api/v1/admin/notification-deliveries/{id}/retry",
   "/api/v1/notifications/unread-count",
   "/api/v1/notifications/read-all",
   "/api/v1/notifications/{id}/read",
@@ -115,6 +118,7 @@ describe("openapi document", () => {
     expect(op("/api/v1/notification-preferences", "get").security).toEqual(secured);
     expect(op("/api/v1/web-push/config", "get").security).toEqual(secured);
     expect(op("/api/v1/me/email-verification/request", "post").security).toEqual(secured);
+    expect(op("/api/v1/admin/notifications/operations", "get").security).toEqual(secured);
     expect(op("/api/v1/notifications/read-all", "patch").security).toEqual(secured);
     expect(op("/api/v1/admin/dashboard", "get").security).toEqual(secured);
     expect(op("/api/v1/admin/dashboard", "get").responses["403"]).toBeDefined();

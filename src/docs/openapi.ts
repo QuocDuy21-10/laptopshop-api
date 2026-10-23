@@ -84,6 +84,10 @@ import { notificationsQuery } from "modules/notifications/notifications.schema";
 import { updateNotificationPreferencesBody } from "modules/notifications/notification-preferences.schema";
 import { webPushSubscriptionBody } from "modules/notifications/web-push.schema";
 import { confirmEmailVerificationBody } from "modules/email-verification/email-verification.schema";
+import {
+  notificationDeliveryQuery,
+  retryNotificationDeliveryBody,
+} from "modules/notifications/admin-notifications.schema";
 
 extendZodWithOpenApi(z);
 
@@ -1079,6 +1083,33 @@ op({
   request: { body: json(confirmEmailVerificationBody) },
   ok: [200, "Verified", data(z.object({ verified: z.boolean() }))],
   errors: { 400: "Invalid or expired OTP", 409: "Email changed", 429: "OTP locked" },
+});
+op({
+  method: "get",
+  path: v1 + "/admin/notifications/operations",
+  summary: "Notification operations",
+  tag: "admin",
+  auth: "admin",
+  ok: [200, "OK", data(z.record(z.unknown()))],
+});
+op({
+  method: "get",
+  path: v1 + "/admin/notification-deliveries",
+  summary: "List notification deliveries",
+  tag: "admin",
+  auth: "admin",
+  request: { query: notificationDeliveryQuery },
+  ok: [200, "OK", page(z.record(z.unknown()))],
+});
+op({
+  method: "post",
+  path: v1 + "/admin/notification-deliveries/{id}/retry",
+  summary: "Retry a failed notification delivery",
+  tag: "admin",
+  auth: "admin",
+  request: { ...id, body: json(retryNotificationDeliveryBody) },
+  ok: [200, "OK", data(z.object({ id: z.number(), status: z.string() }))],
+  errors: { 404: "Delivery not found", 409: "Delivery is not retryable" },
 });
 op({
   method: "post",

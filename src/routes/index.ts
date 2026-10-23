@@ -27,6 +27,7 @@ import { notificationRoutes } from "modules/notifications/notifications.routes";
 import { notificationPreferencesRoutes } from "modules/notifications/notification-preferences.routes";
 import { webPushRoutes } from "modules/notifications/web-push.routes";
 import { emailVerificationRoutes } from "modules/email-verification/email-verification.routes";
+import { adminNotificationRoutes } from "modules/notifications/admin-notifications.routes";
 
 export const createApiV1Router = (
   advisor: AdvisorRouteDeps,
@@ -67,6 +68,7 @@ export const createApiV1Router = (
   admin.use("/payment-events", adminPaymentRoutes);
   admin.use("/reviews", adminReviewRoutes);
   admin.use("/promotions", adminPromotionRoutes);
+  admin.use("/", adminNotificationRoutes);
   router.use("/admin", admin);
 
   router.use(notFoundHandler);
