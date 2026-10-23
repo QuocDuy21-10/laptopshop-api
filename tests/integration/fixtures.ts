@@ -16,6 +16,12 @@ export const resetDb = async () => {
   await prisma.reviewImage.deleteMany();
   await prisma.reviewHelpful.deleteMany();
   await prisma.reviewReply.deleteMany();
+  await prisma.serviceQuoteLine.deleteMany();
+  await prisma.serviceQuote.deleteMany();
+  await prisma.serviceRequestAttachment.deleteMany();
+  await prisma.serviceRequestEvent.deleteMany();
+  await prisma.serviceRequestItem.deleteMany();
+  await prisma.serviceRequest.deleteMany();
   await prisma.review.deleteMany();
   await prisma.stockReceiptItem.deleteMany();
   await prisma.stockMovement.deleteMany();
