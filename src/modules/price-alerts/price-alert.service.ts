@@ -1,8 +1,13 @@
 import { Product } from "@prisma/client";
 import { prisma } from "config/client";
+import { env } from "config/env";
 import { isUniqueViolation } from "lib/errors";
+import {
+  resolveAlertPriceSnapshots,
+  type PriceSnapshot,
+} from "modules/pricing/alert-price-resolver";
+import { createOutboxEvent } from "modules/outbox/outbox.repository";
 import { evaluatePriceAlert } from "modules/price-alerts/price-alert.policy";
-import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
 
 export type PriceAlertSweepStats = {
   productsScanned: number;
@@ -31,15 +36,23 @@ export type PriceAlertCandidate = {
   mode: "PERCENT_DROP" | "TARGET_PRICE";
   referencePrice: number;
   targetPrice: number | null;
+  stablePrice: number;
   currentPrice: number;
+  source: PriceSnapshot["source"];
+  promotionId: number | null;
+  pricingVersion: number | null;
+  validUntil: Date | null;
+  alertVersion: number;
+  includeFlashSale: boolean;
 };
 
 class StaleAlertConfiguration extends Error {}
 
 const chunk = <T>(items: T[], size: number) => {
   const chunks: T[][] = [];
-  for (let index = 0; index < items.length; index += size)
+  for (let index = 0; index < items.length; index += size) {
     chunks.push(items.slice(index, index + size));
+  }
   return chunks;
 };
 
@@ -47,12 +60,80 @@ const notificationContent = (candidate: PriceAlertCandidate) =>
   candidate.mode === "TARGET_PRICE"
     ? {
         title: "Sản phẩm yêu thích đã đạt giá mục tiêu",
-        message: `${candidate.productName} đã đạt mức giá mục tiêu ${candidate.targetPrice}đ.`,
+        message:
+          candidate.productName +
+          " đã đạt mức giá mục tiêu " +
+          String(candidate.targetPrice) +
+          "đ.",
       }
     : {
         title: "Sản phẩm yêu thích vừa giảm giá",
-        message: `${candidate.productName} đã giảm từ ${candidate.referencePrice}đ xuống ${candidate.currentPrice}đ.`,
+        message:
+          candidate.productName +
+          " đã giảm từ " +
+          String(candidate.referencePrice) +
+          "đ xuống " +
+          String(candidate.currentPrice) +
+          "đ.",
       };
+
+const createNotificationDeliveryOutbox = async (
+  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
+  notificationId: number,
+  candidate: PriceAlertCandidate,
+) => {
+  const preference = await tx.notificationPreference.findUnique({
+    where: { userId: candidate.userId },
+  });
+  const user = await tx.user.findUnique({
+    where: { id: candidate.userId },
+    select: { username: true, emailVerifiedAt: true },
+  });
+
+  if (preference?.emailEnabled && user?.emailVerifiedAt) {
+    const delivery = await tx.notificationDelivery.create({
+      data: {
+        notificationId,
+        parentType: "NOTIFICATION",
+        channel: "EMAIL",
+        dedupeKey: "notification-email-" + notificationId + "-" + user.username,
+        destinationKey: user.username,
+      },
+    });
+    await createOutboxEvent(tx, {
+      eventType: "NOTIFICATION_DELIVERY_REQUESTED",
+      aggregateType: "NotificationDelivery",
+      aggregateId: delivery.id,
+      dedupeKey: "delivery-outbox-" + delivery.id,
+      payload: { deliveryId: delivery.id, notificationId },
+    });
+  }
+
+  if (preference?.webPushEnabled) {
+    const subscriptions = await tx.pushSubscription.findMany({
+      where: { userId: candidate.userId, disabledAt: null },
+    });
+    for (const subscription of subscriptions) {
+      const delivery = await tx.notificationDelivery.create({
+        data: {
+          notificationId,
+          parentType: "NOTIFICATION",
+          pushSubscriptionId: subscription.id,
+          channel: "WEB_PUSH",
+          dedupeKey: "notification-push-" + notificationId + "-" + subscription.id,
+          destinationKey: subscription.endpointHash,
+        },
+      });
+      await createOutboxEvent(tx, {
+        eventType: "NOTIFICATION_DELIVERY_REQUESTED",
+        aggregateType: "NotificationDelivery",
+        aggregateId: delivery.id,
+        dedupeKey: "delivery-outbox-" + delivery.id,
+        payload: { deliveryId: delivery.id, notificationId },
+      });
+    }
+  }
+};
 
 export const commitPriceAlertCandidate = async (
   client: typeof prisma,
@@ -62,7 +143,7 @@ export const commitPriceAlertCandidate = async (
   try {
     await client.$transaction(async (tx) => {
       const content = notificationContent(candidate);
-      await tx.notification.create({
+      const notification = await tx.notification.create({
         data: {
           userId: candidate.userId,
           productId: candidate.productId,
@@ -71,7 +152,21 @@ export const commitPriceAlertCandidate = async (
           message: content.message,
           oldPrice: candidate.referencePrice,
           newPrice: candidate.currentPrice,
-          dedupeKey: `price-drop:${candidate.wishlistItemId}:${candidate.referencePrice}:${candidate.currentPrice}`,
+          priceSource: candidate.source,
+          promotionId: candidate.promotionId,
+          pricingVersion: candidate.pricingVersion,
+          validUntil: candidate.validUntil,
+          dedupeKey: [
+            "price-alert",
+            candidate.wishlistItemId,
+            candidate.alertVersion,
+            candidate.mode,
+            candidate.referencePrice,
+            candidate.currentPrice,
+            candidate.source,
+            candidate.promotionId ?? "none",
+            candidate.pricingVersion ?? "none",
+          ].join("-"),
         },
       });
 
@@ -86,7 +181,10 @@ export const commitPriceAlertCandidate = async (
               lastAlertedAt: now,
             }
           : {
-              referencePrice: candidate.currentPrice,
+              referencePrice:
+                candidate.source === "FLASH_SALE"
+                  ? candidate.referencePrice
+                  : candidate.stablePrice,
               lastAlertMode: "PERCENT_DROP" as const,
               lastAlertedPrice: candidate.currentPrice,
               lastAlertedAt: now,
@@ -95,12 +193,15 @@ export const commitPriceAlertCandidate = async (
         where: {
           id: candidate.wishlistItemId,
           alertMode: candidate.mode,
+          alertVersion: candidate.alertVersion,
+          includeFlashSale: candidate.includeFlashSale,
           referencePrice: candidate.referencePrice,
           targetPrice: candidate.targetPrice,
         },
         data,
       });
       if (updated.count !== 1) throw new StaleAlertConfiguration();
+      await createNotificationDeliveryOutbox(tx, notification.id, candidate);
     });
     return "created";
   } catch (error) {
@@ -117,6 +218,8 @@ type WatchedItem = {
   alertMode: "PERCENT_DROP" | "TARGET_PRICE" | null;
   targetPrice: number | null;
   referencePrice: number | null;
+  includeFlashSale: boolean;
+  alertVersion: number;
 };
 
 type ScanProduct = Pick<Product, "id" | "name" | "price" | "quantity" | "isActive">;
@@ -155,6 +258,8 @@ export const runPriceAlertSweep = async (input: RunPriceAlertSweepInput) => {
             alertMode: true,
             targetPrice: true,
             referencePrice: true,
+            includeFlashSale: true,
+            alertVersion: true,
           },
         }),
       ]);
@@ -162,22 +267,33 @@ export const runPriceAlertSweep = async (input: RunPriceAlertSweepInput) => {
       const productById = new Map(
         (products as ScanProduct[]).map((product) => [product.id, product]),
       );
-      const eligibleIds = (products as ScanProduct[])
-        .filter((product) => product.isActive && product.quantity > 0)
-        .map((product) => product.id);
-      const promotions = await resolveAutomaticPromotions(client, eligibleIds, now);
+      const watchedItems = items as WatchedItem[];
+      const snapshots = await resolveAlertPriceSnapshots(
+        client,
+        watchedItems.map((item) => ({
+          wishlistItemId: item.id,
+          userId: item.userId,
+          productId: item.productId,
+          includeFlashSale: env.FLASH_SALE_PRICE_ALERT_ENABLED && item.includeFlashSale,
+        })),
+        now,
+      );
 
-      for (const item of items as WatchedItem[]) {
+      for (const item of watchedItems) {
         stats.itemsEvaluated += 1;
         const product = productById.get(item.productId);
-        if (!product || !product.isActive || product.quantity <= 0 || !item.alertMode) continue;
-        const promotion = promotions.get(item.productId) ?? null;
-        const currentPrice = product.price - (promotion?.unitDiscount ?? 0);
+        const snapshot = snapshots.get(item.id);
+        if (!product || !item.alertMode) continue;
+        if (!snapshot) {
+          stats.invalidStatesSkipped += 1;
+          continue;
+        }
+        if (!snapshot.purchasable) continue;
         const decision = evaluatePriceAlert({
           mode: item.alertMode,
           referencePrice: item.referencePrice,
           targetPrice: item.targetPrice,
-          currentPrice,
+          currentPrice: snapshot.effectivePrice,
         });
         if (!decision.triggered) {
           if (decision.reason === "INVALID_STATE") stats.invalidStatesSkipped += 1;
@@ -198,7 +314,14 @@ export const runPriceAlertSweep = async (input: RunPriceAlertSweepInput) => {
               mode: item.alertMode,
               referencePrice: item.referencePrice,
               targetPrice: item.targetPrice,
-              currentPrice,
+              stablePrice: snapshot.stablePrice,
+              currentPrice: snapshot.effectivePrice,
+              source: snapshot.source,
+              promotionId: snapshot.promotionId,
+              pricingVersion: snapshot.pricingVersion,
+              validUntil: snapshot.validUntil,
+              alertVersion: item.alertVersion,
+              includeFlashSale: item.includeFlashSale,
             },
             now,
           );
@@ -219,3 +342,15 @@ export const runPriceAlertSweep = async (input: RunPriceAlertSweepInput) => {
   }
   return stats;
 };
+
+export const evaluatePricingEvent = async (
+  client: typeof prisma,
+  _event: { productIds?: number[] },
+  now: Date,
+  productBatchSize: number,
+) =>
+  runPriceAlertSweep({
+    client,
+    now,
+    productBatchSize,
+  });

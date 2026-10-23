@@ -14,6 +14,7 @@ import {
   type AlertPriceRequest,
   type PriceSnapshot,
 } from "modules/pricing/alert-price-resolver";
+import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
 
 const WISHLIST_LIMIT = 100;
 
@@ -136,16 +137,23 @@ export const configureWishlistAlert = async (
   if (!existing) throw wishlistItemNotFound();
 
   if (input.mode === null) {
-    const updated = await prisma.wishlistItem.update({
-      where: { id: existing.id },
-      data: {
-        alertMode: null,
-        targetPrice: null,
-        referencePrice: null,
-        includeFlashSale: false,
-        alertVersion: { increment: 1 },
-      },
-      include: wishlistItemInclude,
+    const updated = await prisma.$transaction(async (tx) => {
+      const item = await tx.wishlistItem.update({
+        where: { id: existing.id },
+        data: {
+          alertMode: null,
+          targetPrice: null,
+          referencePrice: null,
+          includeFlashSale: false,
+          alertVersion: { increment: 1 },
+        },
+        include: wishlistItemInclude,
+      });
+      await requestPricingReevaluation(tx, {
+        productIds: [productId],
+        eventVersion: String(item.alertVersion),
+      });
+      return item;
     });
     return mapItem(updated);
   }
@@ -182,16 +190,23 @@ export const configureWishlistAlert = async (
     );
   }
 
-  const updated = await prisma.wishlistItem.update({
-    where: { id: existing.id },
-    data: {
-      alertMode: input.mode,
-      targetPrice: input.mode === "TARGET_PRICE" ? targetPrice : null,
-      referencePrice: snapshot.stablePrice,
-      includeFlashSale,
-      alertVersion: { increment: 1 },
-    },
-    include: wishlistItemInclude,
+  const updated = await prisma.$transaction(async (tx) => {
+    const item = await tx.wishlistItem.update({
+      where: { id: existing.id },
+      data: {
+        alertMode: input.mode,
+        targetPrice: input.mode === "TARGET_PRICE" ? targetPrice : null,
+        referencePrice: snapshot.stablePrice,
+        includeFlashSale,
+        alertVersion: { increment: 1 },
+      },
+      include: wishlistItemInclude,
+    });
+    await requestPricingReevaluation(tx, {
+      productIds: [productId],
+      eventVersion: String(item.alertVersion),
+    });
+    return item;
   });
   return toWishlistItemDto(updated, null, snapshot);
 };

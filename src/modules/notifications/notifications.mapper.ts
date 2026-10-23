@@ -8,6 +8,10 @@ export const notificationSelect = {
   message: true,
   oldPrice: true,
   newPrice: true,
+  priceSource: true,
+  promotionId: true,
+  pricingVersion: true,
+  validUntil: true,
   readAt: true,
   createdAt: true,
 } satisfies Prisma.NotificationSelect;
@@ -22,6 +26,10 @@ export const toNotificationDto = (row: NotificationRow) => ({
   message: row.message,
   oldPrice: row.oldPrice,
   newPrice: row.newPrice,
+  priceSource: row.priceSource,
+  promotionId: row.promotionId,
+  pricingVersion: row.pricingVersion,
+  validUntil: row.validUntil,
   readAt: row.readAt,
   createdAt: row.createdAt,
 });

@@ -44,6 +44,8 @@ describe("parseEnv", () => {
     expect(e.OUTBOX_BATCH_SIZE).toBe(100);
     expect(e.OUTBOX_LEASE_MS).toBe(60_000);
     expect(e.DELIVERY_MAX_ATTEMPTS).toBe(5);
+    expect(e.FLASH_SALE_PRICE_ALERT_ENABLED).toBe(false);
+    expect(e.PRICE_RESOLVER_SHADOW_MODE).toBe(false);
   });
 
   it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {

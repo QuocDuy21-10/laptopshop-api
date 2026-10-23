@@ -62,7 +62,14 @@ describe("price alert worker persistence", () => {
       mode: "PERCENT_DROP",
       referencePrice: 1_000,
       targetPrice: null,
+      stablePrice: 900,
       currentPrice: 900,
+      source: "AUTOMATIC",
+      promotionId: null,
+      pricingVersion: null,
+      validUntil: null,
+      alertVersion: 1,
+      includeFlashSale: false,
     };
     await prisma.wishlistItem.update({
       where: { id: item.id },
@@ -93,7 +100,14 @@ describe("price alert worker persistence", () => {
       mode: "TARGET_PRICE",
       referencePrice: 1_000,
       targetPrice: 850,
+      stablePrice: 800,
       currentPrice: 800,
+      source: "AUTOMATIC",
+      promotionId: null,
+      pricingVersion: null,
+      validUntil: null,
+      alertVersion: 1,
+      includeFlashSale: false,
     };
     await prisma.wishlistItem.update({ where: { id: item.id }, data: { targetPrice: 750 } });
 

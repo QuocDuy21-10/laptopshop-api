@@ -5,6 +5,9 @@ import { env } from "config/env";
 import { createRedisClient } from "config/redis";
 import { logger } from "lib/logger";
 import { runLockedPriceAlertSweep } from "modules/price-alerts/price-alert.runner";
+import { evaluatePricingEvent } from "modules/price-alerts/price-alert.service";
+import { createBullMqRedisClient, createWorker } from "queues/queue.factory";
+import { PRICING_QUEUE_NAME, type PricingEvaluationJob } from "queues/pricing.queue";
 
 const delay = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
@@ -12,6 +15,19 @@ const delay = (milliseconds: number) =>
 const main = async () => {
   const redis = createRedisClient(env.REDIS_URL);
   await redis.connect();
+  const queueConnection = env.NOTIFICATION_OUTBOX_ENABLED
+    ? await createBullMqRedisClient(env.REDIS_URL)
+    : null;
+  const pricingWorker = queueConnection
+    ? createWorker<PricingEvaluationJob>(
+        PRICING_QUEUE_NAME,
+        async (job) =>
+          evaluatePricingEvent(prisma, job.data, new Date(), env.PRICE_ALERT_PRODUCT_BATCH_SIZE),
+        queueConnection,
+        env.NOTIFICATION_QUEUE_PREFIX,
+        { concurrency: 1 },
+      )
+    : null;
   let stopping = false;
   let stopResolve!: () => void;
   const stopped = new Promise<void>((resolve) => {
@@ -41,6 +57,8 @@ const main = async () => {
       if (!stopping) await Promise.race([delay(env.PRICE_ALERT_INTERVAL_MS), stopped]);
     }
   } finally {
+    await pricingWorker?.close();
+    await queueConnection?.disconnect();
     await Promise.allSettled([redis.quit(), prisma.$disconnect()]);
   }
 };

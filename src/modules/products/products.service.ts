@@ -4,6 +4,7 @@ import { AppError, isNotFound, notFound } from "lib/errors";
 import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
 import { pageArgs, pageMeta } from "lib/http";
 import { moveStock } from "modules/inventory/inventory.service";
+import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
 import { toCatalogProductDto, toProductDto } from "modules/products/products.mapper";
 import {
   AdminExportProductsQuery,
@@ -227,9 +228,18 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
       }
       if ("panelType" in input) data = { ...data, panelType: specs.panelType };
     }
-    const product = await prisma.product.update({
-      where: { id },
-      data: { ...data, ...(image ? { image } : {}) },
+    const product = await prisma.$transaction(async (tx) => {
+      const updated = await tx.product.update({
+        where: { id },
+        data: { ...data, ...(image ? { image } : {}) },
+      });
+      if ("price" in data || "isActive" in data) {
+        await requestPricingReevaluation(tx, {
+          productIds: [id],
+          eventVersion: String(id) + "-" + String(Date.now()),
+        });
+      }
+      return updated;
     });
     return toProductDto(product);
   } catch (e) {

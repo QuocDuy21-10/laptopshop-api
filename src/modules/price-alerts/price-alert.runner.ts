@@ -3,6 +3,7 @@ import { prisma } from "config/client";
 import { logger } from "lib/logger";
 import {
   acquirePriceAlertLock,
+  renewPriceAlertLock,
   releasePriceAlertLock,
 } from "modules/price-alerts/price-alert.lock";
 import {
@@ -38,6 +39,23 @@ export const runLockedPriceAlertSweep = async (
     return null;
   }
 
+  const heartbeatEveryMs = Math.max(1_000, Math.floor(deps.lockTtlMs / 3));
+  let leaseLost = false;
+  const heartbeat = setInterval(() => {
+    void renewPriceAlertLock(deps.redis, LOCK_KEY, token, deps.lockTtlMs)
+      .then((renewed) => {
+        if (!renewed) {
+          leaseLost = true;
+          deps.logger.warn({ key: LOCK_KEY }, "price alert sweep lock lease lost");
+        }
+      })
+      .catch((error) => {
+        leaseLost = true;
+        deps.logger.error({ error, key: LOCK_KEY }, "price alert sweep lock renewal failed");
+      });
+  }, heartbeatEveryMs);
+  heartbeat.unref();
+
   try {
     const startedAt = Date.now();
     const stats = await runPriceAlertSweep({
@@ -47,11 +65,12 @@ export const runLockedPriceAlertSweep = async (
       logger: deps.logger,
     });
     deps.logger.info(
-      { ...stats, durationMs: Date.now() - startedAt },
+      { ...stats, durationMs: Date.now() - startedAt, leaseLost },
       "price alert sweep completed",
     );
     return stats;
   } finally {
+    clearInterval(heartbeat);
     try {
       await releasePriceAlertLock(deps.redis, LOCK_KEY, token);
     } catch (error) {

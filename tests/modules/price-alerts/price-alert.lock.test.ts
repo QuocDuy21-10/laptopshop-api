@@ -1,6 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import {
   acquirePriceAlertLock,
+  renewPriceAlertLock,
   releasePriceAlertLock,
 } from "modules/price-alerts/price-alert.lock";
 
@@ -36,6 +37,18 @@ describe("price alert Redis lock", () => {
     expect((redis as { eval: jest.Mock }).eval).toHaveBeenCalledWith(
       expect.stringContaining("GET"),
       { keys: ["key"], arguments: ["token"] },
+    );
+  });
+
+  it("renews only when the same token still owns the lock", async () => {
+    const evalMock = jest.fn<() => Promise<number>>();
+    evalMock.mockResolvedValue(1);
+    const redis = { eval: evalMock } as never;
+
+    await expect(renewPriceAlertLock(redis, "key", "token", 20_000)).resolves.toBe(true);
+    expect((redis as { eval: jest.Mock }).eval).toHaveBeenCalledWith(
+      expect.stringContaining("PEXPIRE"),
+      { keys: ["key"], arguments: ["token", "20000"] },
     );
   });
 });

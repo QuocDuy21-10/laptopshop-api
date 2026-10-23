@@ -26,6 +26,7 @@ import {
   resolveProductPromotions,
   type PrismaClientLike,
 } from "modules/promotions/promotion-resolver";
+import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
 import type {
   PricingLineInput,
   PricingQuoteDto,
@@ -266,7 +267,7 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
     const pricingChanged =
       Object.keys(body).some((key) => pricingFields.has(key)) ||
       (Boolean(body.flashSale) && !current.activatedAt);
-    return tx.promotion.update({
+    const updated = await tx.promotion.update({
       where: { id },
       data: {
         ...(body.name !== undefined ? { name: body.name } : {}),
@@ -280,6 +281,18 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
       },
       include: promotionInclude,
     });
+    if (pricingChanged) {
+      const productIds = [
+        ...(current.products ?? []).map((target) => target.productId),
+        ...(current.flashSalePolicy?.quotas ?? []).map((quota) => quota.productId),
+      ];
+      await requestPricingReevaluation(tx, {
+        productIds,
+        eventVersion: String(updated.pricingVersion),
+        availableAt: body.startsAt && body.startsAt > new Date() ? body.startsAt : undefined,
+      });
+    }
+    return updated;
   });
   return toPromotionDetailDto(updated);
 };
@@ -312,15 +325,30 @@ export const transitionPromotion = async (
       : action === "PAUSE"
         ? "PAUSED"
         : "ENDED";
-  const updated = await prisma.promotion.update({
-    where: { id },
-    data: {
-      state: nextState,
-      updatedById: actorId,
-      ...(action === "ACTIVATE" ? { activatedAt: now } : {}),
-      pricingVersion: { increment: 1 },
-    },
-    include: promotionInclude,
+  const updated = await prisma.$transaction(async (tx) => {
+    const promotion = await tx.promotion.update({
+      where: { id },
+      data: {
+        state: nextState,
+        updatedById: actorId,
+        ...(action === "ACTIVATE" ? { activatedAt: now } : {}),
+        pricingVersion: { increment: 1 },
+      },
+      include: promotionInclude,
+    });
+    const productIds = [
+      ...(current.products ?? []).map((target) => target.productId),
+      ...(current.flashSalePolicy?.quotas ?? []).map((quota) => quota.productId),
+    ];
+    await requestPricingReevaluation(tx, {
+      productIds,
+      eventVersion: String(promotion.pricingVersion),
+      availableAt:
+        ["ACTIVATE", "RESUME"].includes(action) && current.startsAt > now
+          ? current.startsAt
+          : undefined,
+    });
+    return promotion;
   });
   return toPromotionDetailDto(updated);
 };
