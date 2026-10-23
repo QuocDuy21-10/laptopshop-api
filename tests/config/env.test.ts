@@ -46,6 +46,8 @@ describe("parseEnv", () => {
     expect(e.DELIVERY_MAX_ATTEMPTS).toBe(5);
     expect(e.FLASH_SALE_PRICE_ALERT_ENABLED).toBe(false);
     expect(e.PRICE_RESOLVER_SHADOW_MODE).toBe(false);
+    expect(e.WEB_PUSH_ENABLED).toBe(false);
+    expect(e.VAPID_PUBLIC_KEY).toBeUndefined();
   });
 
   it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {
@@ -96,6 +98,18 @@ describe("parseEnv", () => {
     expect(e.PAYMENT_TTL_MINUTES).toBe(20);
     expect(e.PAYMENT_GRACE_SECONDS).toBe(180);
     expect(e.SEPAY_MODE).toBe("live");
+  });
+
+  it("requires all VAPID values when Web Push is enabled", () => {
+    expect(() => parseEnv({ ...base, WEB_PUSH_ENABLED: "true" })).toThrow(/VAPID/);
+    const e = parseEnv({
+      ...base,
+      WEB_PUSH_ENABLED: "true",
+      VAPID_SUBJECT: "mailto:ops@example.test",
+      VAPID_PUBLIC_KEY: "public",
+      VAPID_PRIVATE_KEY: "private",
+    });
+    expect(e.WEB_PUSH_ENABLED).toBe(true);
   });
 
   it("rejects fake provider in production and missing live secrets", () => {

@@ -36,6 +36,13 @@ const schema = z
       .enum(["true", "false"])
       .default("false")
       .transform((v) => v === "true"),
+    WEB_PUSH_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    VAPID_SUBJECT: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    VAPID_PUBLIC_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    VAPID_PRIVATE_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     CORS_ORIGINS: z
       .string()
       .default("http://localhost:3000")
@@ -96,6 +103,17 @@ const schema = z
     GIT_SHA: z.preprocess(emptyToUndefined, z.string().optional()),
   })
   .superRefine((e, ctx) => {
+    if (e.WEB_PUSH_ENABLED) {
+      for (const key of ["VAPID_SUBJECT", "VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY"] as const) {
+        if (!e[key]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: key + " is required when WEB_PUSH_ENABLED=true",
+          });
+        }
+      }
+    }
     if (e.NODE_ENV === "production" && (e.ADMIN_PASSWORD?.length ?? 0) < 12) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

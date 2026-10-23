@@ -82,6 +82,7 @@ import {
 } from "modules/wishlist/wishlist.schema";
 import { notificationsQuery } from "modules/notifications/notifications.schema";
 import { updateNotificationPreferencesBody } from "modules/notifications/notification-preferences.schema";
+import { webPushSubscriptionBody } from "modules/notifications/web-push.schema";
 
 extendZodWithOpenApi(z);
 
@@ -1050,6 +1051,52 @@ op({
   tag: "notifications",
   auth: "user",
   ok: [200, "OK", data(NotificationPreferences)],
+});
+op({
+  method: "get",
+  path: v1 + "/web-push/config",
+  summary: "Get Web Push configuration",
+  tag: "notifications",
+  auth: "user",
+  ok: [200, "OK", data(z.object({ enabled: z.boolean(), publicKey: z.string().nullable() }))],
+});
+op({
+  method: "post",
+  path: v1 + "/web-push/subscriptions",
+  summary: "Register the current browser for Web Push",
+  tag: "notifications",
+  auth: "user",
+  request: { body: json(webPushSubscriptionBody) },
+  ok: [
+    201,
+    "Created",
+    data(
+      z.object({
+        id: z.number(),
+        userAgent: z.string().nullable(),
+        lastSeenAt: z.string().datetime(),
+        disabledAt: z.string().datetime().nullable(),
+      }),
+    ),
+  ],
+});
+op({
+  method: "delete",
+  path: v1 + "/web-push/subscriptions/{id}",
+  summary: "Disable one Web Push subscription",
+  tag: "notifications",
+  auth: "user",
+  request: id,
+  ok: [204, "Disabled"],
+  errors: { 404: "Push subscription not found" },
+});
+op({
+  method: "delete",
+  path: v1 + "/web-push/subscriptions",
+  summary: "Disable all Web Push subscriptions",
+  tag: "notifications",
+  auth: "user",
+  ok: [204, "Disabled"],
 });
 op({
   method: "patch",
