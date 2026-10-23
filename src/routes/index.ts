@@ -28,6 +28,7 @@ import { notificationPreferencesRoutes } from "modules/notifications/notificatio
 import { webPushRoutes } from "modules/notifications/web-push.routes";
 import { emailVerificationRoutes } from "modules/email-verification/email-verification.routes";
 import { adminNotificationRoutes } from "modules/notifications/admin-notifications.routes";
+import { afterSalesRoutes } from "modules/after-sales/after-sales.routes";
 
 export const createApiV1Router = (
   advisor: AdvisorRouteDeps,
@@ -56,6 +57,7 @@ export const createApiV1Router = (
   router.use("/notification-preferences", notificationPreferencesRoutes);
   router.use("/web-push", webPushRoutes);
   router.use("/me/email-verification", emailVerificationRoutes);
+  router.use("/after-sales", afterSalesRoutes);
 
   const admin = express.Router();
   admin.use(authenticate, requireRole("ADMIN"));

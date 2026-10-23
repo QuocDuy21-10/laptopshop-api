@@ -82,6 +82,7 @@ import {
 } from "modules/wishlist/wishlist.schema";
 import { notificationsQuery } from "modules/notifications/notifications.schema";
 import { updateNotificationPreferencesBody } from "modules/notifications/notification-preferences.schema";
+import { deviceEligibilityQuery } from "modules/after-sales/after-sales.schema";
 import { webPushSubscriptionBody } from "modules/notifications/web-push.schema";
 import { confirmEmailVerificationBody } from "modules/email-verification/email-verification.schema";
 import {
@@ -403,6 +404,8 @@ const orderShape = {
         "CURRENT_PRODUCT_POLICY_BACKFILL",
         "UNAVAILABLE",
       ]),
+      coverage: z.enum(["IN_WARRANTY", "OUT_OF_WARRANTY", "NO_WARRANTY", "REQUIRES_VERIFICATION"]),
+      allowedRequestTypes: z.array(z.enum(["WARRANTY", "TECHNICAL_SUPPORT"])),
       productDiscountAmount: z.number(),
       couponDiscountAmount: z.number(),
       netLineTotal: z.number(),
@@ -421,6 +424,29 @@ const orderShape = {
   ),
 };
 const Order = registry.register("Order", z.object(orderShape));
+const EligibleDevice = registry.register(
+  "EligibleAfterSalesDevice",
+  z.object({
+    orderDetailId: z.number(),
+    orderId: z.number(),
+    product: z.object({ id: z.number(), name: z.string(), image: z.string().nullable() }),
+    quantity: z.number().int(),
+    activeCount: z.number().int(),
+    availableCount: z.number().int(),
+    warrantyMonthsSnapshot: z.number().int().nullable(),
+    warrantyStartAt: z.string().datetime().nullable(),
+    warrantyEndAt: z.string().datetime().nullable(),
+    warrantyPolicySource: z.enum([
+      "CHECKOUT_SNAPSHOT",
+      "CURRENT_PRODUCT_POLICY_BACKFILL",
+      "UNAVAILABLE",
+    ]),
+    coverage: z.enum(["IN_WARRANTY", "OUT_OF_WARRANTY", "NO_WARRANTY", "REQUIRES_VERIFICATION"]),
+    allowed: z.boolean(),
+    reason: z.string().nullable(),
+    allowedRequestTypes: z.array(z.enum(["WARRANTY", "TECHNICAL_SUPPORT"])),
+  }),
+);
 const PaymentInstructions = z.object({
   qrImageUrl: z.string().url(),
   bankCode: z.string(),
@@ -1494,6 +1520,16 @@ op({
   request: id,
   ok: [200, "Cancelled", data(Order)],
   errors: { 404: "Not found", 409: "Not cancellable" },
+});
+op({
+  method: "get",
+  path: `${v1}/after-sales/devices`,
+  summary: "List my eligible after-sales devices",
+  tag: "after-sales",
+  auth: "user",
+  request: { query: deviceEligibilityQuery },
+  ok: [200, "OK", page(EligibleDevice)],
+  errors: { 401: "Unauthenticated" },
 });
 op({
   method: "get",

@@ -38,6 +38,7 @@ const V1_PATHS = [
   "/api/v1/reviews/{id}/images/order",
   "/api/v1/reviews/{id}/images/{imageId}",
   "/api/v1/advisor/recommend",
+  "/api/v1/after-sales/devices",
   "/api/v1/cart",
   "/api/v1/cart/items",
   "/api/v1/cart/items/{id}",
