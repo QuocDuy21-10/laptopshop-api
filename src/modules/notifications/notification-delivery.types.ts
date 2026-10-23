@@ -29,11 +29,36 @@ export type DeliveryRecord = {
   destinationSnapshot: string | null;
   notificationId: number | null;
   emailVerificationChallengeId: number | null;
+  pushSubscriptionId?: number | null;
+  notification?: {
+    id: number;
+    title: string;
+    message: string;
+    productId: number | null;
+    oldPrice: number | null;
+    newPrice: number | null;
+    priceSource: string | null;
+    validUntil: Date | null;
+    user?: {
+      username: string;
+      emailVerifiedAt: Date | null;
+      notificationPreference?: { emailEnabled: boolean; webPushEnabled: boolean } | null;
+    } | null;
+  } | null;
   preference?: { emailEnabled: boolean; webPushEnabled: boolean } | null;
   user?: { username: string; emailVerifiedAt: Date | null } | null;
-  pushSubscription?: { disabledAt: Date | null } | null;
+  pushSubscription?: {
+    disabledAt: Date | null;
+    endpoint?: string;
+    p256dh?: string;
+    auth?: string;
+  } | null;
   emailVerificationChallenge?: {
     email: string;
+    otpCiphertext?: string;
+    otpIv?: string;
+    otpTag?: string;
+    encryptionKeyVersion?: string;
     consumedAt: Date | null;
     invalidatedAt: Date | null;
   } | null;

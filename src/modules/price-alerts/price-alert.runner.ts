@@ -63,6 +63,7 @@ export const runLockedPriceAlertSweep = async (
       now: deps.now(),
       productBatchSize: deps.productBatchSize,
       logger: deps.logger,
+      shouldContinue: () => !leaseLost,
     });
     deps.logger.info(
       { ...stats, durationMs: Date.now() - startedAt, leaseLost },

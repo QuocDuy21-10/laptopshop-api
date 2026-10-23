@@ -24,7 +24,7 @@ type DispatcherDeps = {
 
 const jobIdFor = (event: OutboxEventRecord) =>
   event.eventType === "NOTIFICATION_DELIVERY_REQUESTED"
-    ? "notification-delivery-" + event.aggregateId
+    ? "notification-delivery-" + event.aggregateId + "-" + event.id
     : "pricing-evaluation-" +
       String(
         (event.payload && typeof event.payload === "object"

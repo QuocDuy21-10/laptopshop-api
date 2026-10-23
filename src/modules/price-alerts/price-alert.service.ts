@@ -26,6 +26,7 @@ export type RunPriceAlertSweepInput = {
     warn: (fields: unknown, message: string) => void;
     error: (fields: unknown, message: string) => void;
   };
+  shouldContinue?: () => boolean;
 };
 
 export type PriceAlertCandidate = {
@@ -243,6 +244,7 @@ export const runPriceAlertSweep = async (input: RunPriceAlertSweepInput) => {
   const productIds = [...new Set(watched.map((row) => row.productId))].sort((a, b) => a - b);
 
   for (const ids of chunk(productIds, productBatchSize)) {
+    if (input.shouldContinue && !input.shouldContinue()) break;
     try {
       const [products, items] = await Promise.all([
         client.product.findMany({

@@ -29,7 +29,7 @@ describe("outbox dispatcher", () => {
     expect(queue.add).toHaveBeenCalledWith(
       "NOTIFICATION_DELIVERY_REQUESTED",
       expect.objectContaining({ deliveryId: 44, outboxEventId: 12 }),
-      expect.objectContaining({ jobId: "notification-delivery-44" }),
+      expect.objectContaining({ jobId: "notification-delivery-44-12" }),
     );
     expect(queue.add.mock.calls[0][2].jobId).not.toContain(":");
     expect(deps.markPublished).toHaveBeenCalledWith(12, "dispatcher-1");

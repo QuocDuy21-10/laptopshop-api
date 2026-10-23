@@ -11,7 +11,7 @@ export const createQueue = <T>(
   name: string,
   connection: ReturnType<typeof createNodeRedisClient>,
   prefix: string,
-) => new Queue<T>(name, { connection, prefix });
+) => new Queue<T>(name, { connection, prefix, defaultJobOptions });
 
 export const createWorker = <T>(
   name: string,

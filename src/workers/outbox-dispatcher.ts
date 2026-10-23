@@ -10,6 +10,7 @@ import {
   markOutboxFailed,
   markOutboxPublished,
 } from "modules/outbox/outbox.dispatcher";
+import { logger } from "lib/logger";
 
 export const runOutboxDispatcherOnce = async (
   connection: Awaited<ReturnType<typeof createBullMqRedisClient>>,
@@ -37,3 +38,29 @@ export const runOutboxDispatcherOnce = async (
     leaseOwner,
   });
 };
+
+const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const main = async () => {
+  if (!env.NOTIFICATION_OUTBOX_ENABLED) return;
+  const connection = await createBullMqRedisClient(env.REDIS_URL);
+  let stopping = false;
+  const stop = () => {
+    stopping = true;
+  };
+  process.on("SIGTERM", stop);
+  process.on("SIGINT", stop);
+  try {
+    while (!stopping) {
+      await runOutboxDispatcherOnce(connection);
+      if (!stopping) await delay(1_000);
+    }
+  } finally {
+    await connection.disconnect();
+    await prisma.$disconnect();
+  }
+};
+if (require.main === module)
+  main().catch((error) => {
+    logger.error({ error }, "outbox dispatcher failed");
+    process.exit(1);
+  });

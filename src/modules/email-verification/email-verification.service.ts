@@ -4,8 +4,19 @@ import { createEmailOtp, verifyEmailOtp } from "modules/email-verification/email
 import { createOutboxEvent } from "modules/outbox/outbox.repository";
 import type { EmailProvider } from "modules/notifications/providers/email.provider";
 import { prisma } from "config/client";
+import { createSmtpEmailProvider } from "modules/notifications/providers/smtp-email.provider";
 
-let emailProvider: EmailProvider | null = null;
+let emailProvider: EmailProvider | null =
+  env.EMAIL_ENABLED && env.EMAIL_PROVIDER === "smtp"
+    ? createSmtpEmailProvider({
+        host: env.SMTP_HOST,
+        port: env.SMTP_PORT,
+        secure: env.SMTP_SECURE,
+        user: env.SMTP_USER,
+        password: env.SMTP_PASSWORD,
+        from: env.EMAIL_FROM,
+      })
+    : null;
 
 export const setEmailProvider = (provider: EmailProvider | null) => {
   emailProvider = provider;
@@ -38,6 +49,11 @@ export const requestEmailVerification = async (userId: number) => {
 
   const encrypted = createEmailOtp(env.EMAIL_OTP_ENCRYPTION_KEY!, env.EMAIL_OTP_KEY_VERSION);
   return prisma.$transaction(async (tx) => {
+    const previous = await tx.emailVerificationChallenge.findFirst({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      select: { failedAttempts: true },
+    });
     await tx.emailVerificationChallenge.updateMany({
       where: { userId, consumedAt: null, invalidatedAt: null },
       data: { invalidatedAt: now },
@@ -54,6 +70,7 @@ export const requestEmailVerification = async (userId: number) => {
         expiresAt: new Date(now.getTime() + 600_000),
         lastSentAt: now,
         sendCount: 1,
+        failedAttempts: previous?.failedAttempts ?? 0,
       },
     });
     const delivery = await tx.notificationDelivery.create({
@@ -78,36 +95,47 @@ export const requestEmailVerification = async (userId: number) => {
 
 export const confirmEmailVerification = async (userId: number, code: string) => {
   const now = new Date();
-  return prisma.$transaction(async (tx) => {
-    const challenge = await tx.emailVerificationChallenge.findFirst({
-      where: { userId, consumedAt: null, invalidatedAt: null },
-      orderBy: { createdAt: "desc" },
+  const challenge = await prisma.emailVerificationChallenge.findFirst({
+    where: { userId, consumedAt: null, invalidatedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!challenge || challenge.expiresAt <= now) {
+    throw new AppError("Email OTP is expired", 400, "EMAIL_OTP_EXPIRED");
+  }
+  if (challenge.failedAttempts >= 5) {
+    throw new AppError("Email OTP is locked", 429, "EMAIL_OTP_LOCKED");
+  }
+  if (!verifyEmailOtp(challenge.otpHash, code)) {
+    const nextAttempts = challenge.failedAttempts + 1;
+    await prisma.emailVerificationChallenge.updateMany({
+      where: {
+        id: challenge.id,
+        consumedAt: null,
+        invalidatedAt: null,
+        failedAttempts: challenge.failedAttempts,
+      },
+      data: {
+        failedAttempts: { increment: 1 },
+        ...(nextAttempts >= 5 ? { invalidatedAt: now } : {}),
+      },
     });
-    if (!challenge || challenge.expiresAt <= now) {
-      throw new AppError("Email OTP is expired", 400, "EMAIL_OTP_EXPIRED");
-    }
-    if (challenge.failedAttempts >= 5) {
-      throw new AppError("Email OTP is locked", 429, "EMAIL_OTP_LOCKED");
-    }
-    if (!verifyEmailOtp(challenge.otpHash, code)) {
-      const nextAttempts = challenge.failedAttempts + 1;
-      await tx.emailVerificationChallenge.update({
-        where: { id: challenge.id },
-        data: {
-          failedAttempts: { increment: 1 },
-          ...(nextAttempts >= 5 ? { invalidatedAt: now } : {}),
-        },
-      });
-      throw new AppError("Email OTP is invalid", 400, "EMAIL_OTP_INVALID");
-    }
+    throw new AppError("Email OTP is invalid", 400, "EMAIL_OTP_INVALID");
+  }
+  return prisma.$transaction(async (tx) => {
     const user = await tx.user.findUnique({ where: { id: userId }, select: { username: true } });
     if (!user || user.username !== challenge.email) {
       throw new AppError("Email has changed", 409, "EMAIL_OTP_INVALID");
     }
-    await tx.emailVerificationChallenge.update({
-      where: { id: challenge.id },
+    const claimed = await tx.emailVerificationChallenge.updateMany({
+      where: {
+        id: challenge.id,
+        consumedAt: null,
+        invalidatedAt: null,
+        failedAttempts: challenge.failedAttempts,
+      },
       data: { consumedAt: now, otpCiphertext: "", otpIv: "", otpTag: "" },
     });
+    if (claimed.count !== 1) throw new AppError("Email OTP is invalid", 409, "EMAIL_OTP_INVALID");
     await tx.user.update({ where: { id: userId }, data: { emailVerifiedAt: now } });
     return { verified: true };
   });
