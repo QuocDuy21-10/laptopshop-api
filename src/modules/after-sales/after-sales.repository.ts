@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
-import { pageArgs, pageMeta } from "lib/http";
+import { pageArgs, pageMeta, type PageQuery } from "lib/http";
 import type { DeviceEligibilityQuery } from "modules/after-sales/after-sales.schema";
 
 export const customerServiceRequestInclude = {
@@ -13,6 +13,13 @@ export const customerServiceRequestInclude = {
   },
   events: {
     where: { visibility: "PUBLIC" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  },
+  previousRequest: {
+    select: { id: true, code: true, type: true, status: true, subject: true, createdAt: true },
+  },
+  followUps: {
+    select: { id: true, code: true, type: true, status: true, subject: true, createdAt: true },
     orderBy: [{ createdAt: "asc" }, { id: "asc" }],
   },
 } satisfies Prisma.ServiceRequestInclude;
@@ -73,3 +80,23 @@ export const lockOrderDetails = async (tx: Prisma.TransactionClient, ids: number
     orderBy: { id: "asc" },
   });
 };
+
+export const listCustomerServiceRequests = async (userId: number, query: PageQuery) => {
+  const where = { userId };
+  const [total, rows] = await Promise.all([
+    prisma.serviceRequest.count({ where }),
+    prisma.serviceRequest.findMany({
+      where,
+      include: customerServiceRequestInclude,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...pageArgs(query),
+    }),
+  ]);
+  return { rows, meta: pageMeta(query, total) };
+};
+
+export const findCustomerServiceRequest = async (userId: number, id: number) =>
+  prisma.serviceRequest.findFirst({
+    where: { id, userId },
+    include: customerServiceRequestInclude,
+  });

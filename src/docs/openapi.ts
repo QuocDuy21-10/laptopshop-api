@@ -1568,6 +1568,26 @@ op({
 });
 op({
   method: "get",
+  path: `${v1}/after-sales`,
+  summary: "List my after-sales requests",
+  tag: "after-sales",
+  auth: "user",
+  request: { query: pageQuery },
+  ok: [200, "OK", page(z.unknown())],
+  errors: { 401: "Unauthenticated" },
+});
+op({
+  method: "get",
+  path: `${v1}/after-sales/{id}`,
+  summary: "Get my after-sales request",
+  tag: "after-sales",
+  auth: "user",
+  request: { params: idParams },
+  ok: [200, "OK", data(z.unknown())],
+  errors: { 404: "Service request not found" },
+});
+op({
+  method: "get",
   path: `${v1}/orders/me/{id}/payment`,
   summary: "Payment instructions and status",
   tag: "payments",

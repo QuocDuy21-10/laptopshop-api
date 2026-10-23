@@ -1,12 +1,16 @@
 import type { RequestHandler } from "express";
 import { idempotencyKeyHeader } from "lib/idempotency";
+import type { PageQuery } from "lib/http";
 import {
   createServiceRequest,
+  getMyServiceRequest,
   listMyEligibleDevices,
+  listMyServiceRequests,
 } from "modules/after-sales/after-sales.service";
 import type {
   CreateServiceRequestBody,
   DeviceEligibilityQuery,
+  ServiceRequestQuery,
 } from "modules/after-sales/after-sales.schema";
 
 export const listEligibleDevicesHandler: RequestHandler = async (req, res) => {
@@ -25,4 +29,17 @@ export const createServiceRequestHandler: RequestHandler = async (req, res) => {
     req.body as CreateServiceRequestBody,
   );
   res.status(result.created ? 201 : 200).json({ data: result.request });
+};
+
+export const listMyServiceRequestsHandler: RequestHandler = async (req, res) => {
+  const result = await listMyServiceRequests(
+    req.auth!.id,
+    res.locals.query as ServiceRequestQuery & PageQuery,
+  );
+  res.json({ data: result.items, meta: result.meta });
+};
+
+export const getMyServiceRequestHandler: RequestHandler = async (req, res) => {
+  const id = Number((res.locals.params as { id: number }).id);
+  res.json({ data: await getMyServiceRequest(req.auth!.id, id) });
 };

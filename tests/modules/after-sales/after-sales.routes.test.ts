@@ -229,3 +229,78 @@ describe("POST /api/v1/after-sales", () => {
     expect(prismaMock.serviceRequest.create).not.toHaveBeenCalled();
   });
 });
+
+describe("GET /api/v1/after-sales", () => {
+  const requestRow = {
+    id: 90,
+    code: "AS-TEST-90",
+    userId: USER.id,
+    type: "TECHNICAL_SUPPORT",
+    status: "CLOSED",
+    subject: "Hỗ trợ đã xong",
+    previousRequestId: 12,
+    createdAt: new Date("2026-10-23T00:00:00.000Z"),
+    updatedAt: new Date("2026-10-23T01:00:00.000Z"),
+    closedAt: new Date("2026-10-23T01:00:00.000Z"),
+    items: [],
+    events: [
+      {
+        id: 1,
+        serviceRequestItemId: null,
+        kind: "REQUEST_CREATED",
+        visibility: "PUBLIC",
+        fromStatus: null,
+        toStatus: null,
+        body: "Hỗ trợ",
+        createdAt: new Date("2026-10-23T00:00:00.000Z"),
+      },
+    ],
+    previousRequest: {
+      id: 12,
+      code: "AS-OLD",
+      type: "TECHNICAL_SUPPORT",
+      status: "CLOSED",
+      subject: "Cũ",
+      createdAt: new Date("2026-10-22T00:00:00.000Z"),
+    },
+    followUps: [],
+  };
+
+  it("lists only the current customer's requests", async () => {
+    prismaMock.serviceRequest.count.mockResolvedValue(1);
+    prismaMock.serviceRequest.findMany.mockResolvedValue([requestRow]);
+
+    const res = await request(buildApp())
+      .get("/api/v1/after-sales?page=1&pageSize=10")
+      .set("Cookie", cookieFor(USER));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data[0]).toMatchObject({ id: 90, code: "AS-TEST-90", status: "CLOSED" });
+    expect(prismaMock.serviceRequest.findMany.mock.calls[0][0].where).toEqual({ userId: USER.id });
+  });
+
+  it("returns a public detail and hides internal events", async () => {
+    prismaMock.serviceRequest.findFirst.mockResolvedValue(requestRow);
+
+    const res = await request(buildApp())
+      .get("/api/v1/after-sales/90")
+      .set("Cookie", cookieFor(USER));
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.previousRequest.id).toBe(12);
+    expect(
+      res.body.data.events.every(
+        (event: { visibility?: string }) => event.visibility !== "INTERNAL",
+      ),
+    ).toBe(true);
+    expect(res.body.data.events[0]).not.toHaveProperty("objectKey");
+  });
+
+  it("returns 404 for another customer's request", async () => {
+    prismaMock.serviceRequest.findFirst.mockResolvedValue(null);
+    const res = await request(buildApp())
+      .get("/api/v1/after-sales/90")
+      .set("Cookie", cookieFor(USER));
+    expect(res.status).toBe(404);
+  });
+});

@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { prisma } from "config/client";
 import { AppError, isUniqueViolation } from "lib/errors";
+import type { PageQuery } from "lib/http";
 import {
   toCustomerServiceRequestDto,
   toEligibleDeviceDto,
@@ -8,7 +9,9 @@ import {
 import { classifyCoverage } from "modules/after-sales/after-sales.eligibility";
 import {
   customerServiceRequestInclude,
+  findCustomerServiceRequest,
   lockOrderDetails,
+  listCustomerServiceRequests,
 } from "modules/after-sales/after-sales.repository";
 import { listEligibleDeviceRows } from "modules/after-sales/after-sales.repository";
 import type {
@@ -29,6 +32,17 @@ export const listMyEligibleDevices = async (userId: number, query: DeviceEligibi
     items: result.rows.map((row) => toEligibleDeviceDto(row, query.type)),
     meta: result.meta,
   };
+};
+
+export const listMyServiceRequests = async (userId: number, query: PageQuery) => {
+  const result = await listCustomerServiceRequests(userId, query);
+  return { items: result.rows.map(toCustomerServiceRequestDto), meta: result.meta };
+};
+
+export const getMyServiceRequest = async (userId: number, id: number) => {
+  const row = await findCustomerServiceRequest(userId, id);
+  if (!row) throw new AppError("Service request not found", 404, "SERVICE_REQUEST_NOT_FOUND");
+  return toCustomerServiceRequestDto(row);
 };
 
 export const createServiceRequest = async (

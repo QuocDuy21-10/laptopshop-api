@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { pageQuery } from "lib/http";
+import { idParams, pageQuery } from "lib/http";
 import { SERVICE_REQUEST_TYPES } from "modules/after-sales/after-sales.types";
 
 export const deviceEligibilityQuery = pageQuery.extend({
@@ -40,3 +40,7 @@ export const createServiceRequestBody = z
     }
   });
 export type CreateServiceRequestBody = z.infer<typeof createServiceRequestBody>;
+
+export const serviceRequestQuery = pageQuery;
+export type ServiceRequestQuery = z.infer<typeof serviceRequestQuery>;
+export const serviceRequestParams = idParams;

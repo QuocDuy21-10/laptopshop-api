@@ -24,6 +24,25 @@ export type EligibleDeviceDto = {
   allowedRequestTypes: ServiceRequestType[];
 };
 
+export const effectiveQuoteStatus = (
+  quote: { status: string; validUntil: Date },
+  now = new Date(),
+) => (quote.status === "SENT" && quote.validUntil <= now ? "EXPIRED" : quote.status);
+
+const customerActionsFor = (
+  item: { status: string },
+  quotes: Array<{ status: string; validUntil: Date }>,
+  now: Date,
+) => {
+  const actions: string[] = [];
+  if (["SUBMITTED", "REVIEWING", "APPROVED", "AWAITING_ITEM"].includes(item.status))
+    actions.push("CANCEL");
+  if (["RETURNED", "RESOLVED"].includes(item.status)) actions.push("CONFIRM", "DISPUTE");
+  if (quotes.some((quote) => effectiveQuoteStatus(quote, now) === "SENT"))
+    actions.push("DECIDE_QUOTE");
+  return actions;
+};
+
 export const toEligibleDeviceDto = (
   row: EligibleDeviceRow,
   requestedType: ServiceRequestType,
@@ -102,10 +121,11 @@ export const toCustomerServiceRequestDto = (row: CustomerServiceRequestRow) => (
     customerConfirmedAt: item.customerConfirmedAt,
     closedAt: item.closedAt,
     closeReason: item.closeReason,
+    allowedActions: customerActionsFor(item, item.quotes, new Date()),
     quotes: item.quotes.map((quote) => ({
       id: quote.id,
       version: quote.version,
-      status: quote.status,
+      status: effectiveQuoteStatus(quote),
       currency: quote.currency,
       subtotal: quote.subtotal,
       total: quote.total,
@@ -123,10 +143,13 @@ export const toCustomerServiceRequestDto = (row: CustomerServiceRequestRow) => (
       })),
     })),
   })),
+  previousRequest: row.previousRequest,
+  followUps: row.followUps ?? [],
   events: row.events.map((event) => ({
     id: event.id,
     itemId: event.serviceRequestItemId,
     kind: event.kind,
+    visibility: event.visibility,
     fromStatus: event.fromStatus,
     toStatus: event.toStatus,
     body: event.body,
