@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { idParams, pageQuery } from "lib/http";
+import { idParams } from "lib/http";
 import { validate } from "middlewares/validate";
 import {
   getNotificationOperationsHandler,

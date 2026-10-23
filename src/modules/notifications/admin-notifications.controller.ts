@@ -5,10 +5,7 @@ import {
   listNotificationDeliveries,
   retryNotificationDelivery,
 } from "modules/notifications/admin-notifications.service";
-import type {
-  NotificationDeliveryQuery,
-  retryNotificationDeliveryBody,
-} from "modules/notifications/admin-notifications.schema";
+import type { NotificationDeliveryQuery } from "modules/notifications/admin-notifications.schema";
 
 export const getNotificationOperationsHandler: RequestHandler = async (_req, res) => {
   res.json({ data: await getNotificationOperations() });

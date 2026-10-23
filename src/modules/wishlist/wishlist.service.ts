@@ -12,7 +12,6 @@ import { type ConfigurePriceAlertBody, type WishlistQuery } from "modules/wishli
 import {
   resolveAlertPriceSnapshots,
   type AlertPriceRequest,
-  type PriceSnapshot,
 } from "modules/pricing/alert-price-resolver";
 import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
 
