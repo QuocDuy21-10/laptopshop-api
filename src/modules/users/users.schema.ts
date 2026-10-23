@@ -19,7 +19,7 @@ export const adminCreateUserBody = z.object({
 export type AdminCreateUserBody = z.infer<typeof adminCreateUserBody>;
 
 export const adminUpdateUserBody = adminCreateUserBody
-  .pick({ fullName: true, phone: true, address: true, roleId: true })
+  .pick({ username: true, fullName: true, phone: true, address: true, roleId: true })
   .partial();
 export type AdminUpdateUserBody = z.infer<typeof adminUpdateUserBody>;
 

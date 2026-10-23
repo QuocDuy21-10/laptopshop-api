@@ -5,6 +5,7 @@ import { AppError, isNotFound, isUniqueViolation, notFound } from "lib/errors";
 import { pageArgs, pageMeta } from "lib/http";
 import { hashPassword } from "lib/password";
 import { toUserDto, userSelect } from "modules/users/users.mapper";
+import { invalidateEmailIdentity } from "modules/notifications/notification-preferences.service";
 import {
   AdminCreateUserBody,
   AdminListUsersQuery,
@@ -91,11 +92,22 @@ export const updateUser = async (
   avatar?: string,
 ) => {
   let roleChanged = false;
+  let emailChanged = false;
+  let previousEmail = "";
   if (input.roleId) {
     await ensureRole(input.roleId);
-    const current = await prisma.user.findUnique({ where: { id }, select: { roleId: true } });
+    const current = await prisma.user.findUnique({
+      where: { id },
+      select: { roleId: true, username: true },
+    });
     roleChanged = current?.roleId !== input.roleId;
+    previousEmail = current?.username ?? "";
   }
+  if (input.username && !previousEmail) {
+    const current = await prisma.user.findUnique({ where: { id }, select: { username: true } });
+    previousEmail = current?.username ?? "";
+  }
+  emailChanged = Boolean(input.username && input.username !== previousEmail);
   // an admin can never demote themselves, so at least one admin always remains
   // shortcut: two admins demoting each other at the same moment can still leave none; recover with seed/ADMIN_PASSWORD, lock the admin rows (SELECT ... FOR UPDATE) once there are many admins
   if (roleChanged && actorId === id) {
@@ -115,6 +127,7 @@ export const updateUser = async (
           data: { revokedAt: new Date() },
         });
       }
+      if (emailChanged) await invalidateEmailIdentity(tx, id, previousEmail);
       return updated;
     });
     return toUserDto(user);

@@ -81,6 +81,7 @@ import {
   wishlistStatusQuery,
 } from "modules/wishlist/wishlist.schema";
 import { notificationsQuery } from "modules/notifications/notifications.schema";
+import { updateNotificationPreferencesBody } from "modules/notifications/notification-preferences.schema";
 
 extendZodWithOpenApi(z);
 
@@ -117,6 +118,7 @@ const userShape = {
   phone: z.string().nullable(),
   accountType: z.string().nullable(),
   avatar: z.string().nullable(),
+  emailVerifiedAt: z.string().datetime().nullable(),
   role: z.string(),
 };
 const User = registry.register("User", z.object(userShape));
@@ -1036,6 +1038,29 @@ op({
 });
 
 // notifications
+const NotificationPreferences = z.object({
+  inAppEnabled: z.boolean(),
+  emailEnabled: z.boolean(),
+  webPushEnabled: z.boolean(),
+});
+op({
+  method: "get",
+  path: v1 + "/notification-preferences",
+  summary: "Get notification preferences",
+  tag: "notifications",
+  auth: "user",
+  ok: [200, "OK", data(NotificationPreferences)],
+});
+op({
+  method: "patch",
+  path: v1 + "/notification-preferences",
+  summary: "Update notification preferences",
+  tag: "notifications",
+  auth: "user",
+  request: { body: json(updateNotificationPreferencesBody) },
+  ok: [200, "OK", data(NotificationPreferences)],
+  errors: { 400: "Invalid preferences", 409: "Email is not verified" },
+});
 op({
   method: "get",
   path: `${v1}/notifications`,

@@ -8,6 +8,7 @@ const row = {
   phone: null,
   accountType: "SYSTEM",
   avatar: "x.png",
+  emailVerifiedAt: null,
   role: { id: 2, name: "USER" },
 };
 

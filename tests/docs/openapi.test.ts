@@ -11,6 +11,7 @@ const V1_PATHS = [
   "/api/v1/wishlist/status",
   "/api/v1/wishlist/items/{productId}",
   "/api/v1/notifications",
+  "/api/v1/notification-preferences",
   "/api/v1/notifications/unread-count",
   "/api/v1/notifications/read-all",
   "/api/v1/notifications/{id}/read",
@@ -106,6 +107,7 @@ describe("openapi document", () => {
     expect(op("/api/v1/wishlist/status", "get").security).toEqual(secured);
     expect(op("/api/v1/wishlist/items/{productId}", "patch").responses[400]).toBeDefined();
     expect(op("/api/v1/notifications", "get").security).toEqual(secured);
+    expect(op("/api/v1/notification-preferences", "get").security).toEqual(secured);
     expect(op("/api/v1/notifications/read-all", "patch").security).toEqual(secured);
     expect(op("/api/v1/admin/dashboard", "get").security).toEqual(secured);
     expect(op("/api/v1/admin/dashboard", "get").responses["403"]).toBeDefined();

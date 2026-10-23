@@ -8,6 +8,7 @@ export const userSelect = {
   phone: true,
   accountType: true,
   avatar: true,
+  emailVerifiedAt: true,
   role: { select: { id: true, name: true } },
 } satisfies Prisma.UserSelect;
 
@@ -21,6 +22,7 @@ export const toUserDto = (u: UserRow) => ({
   phone: u.phone,
   accountType: u.accountType,
   avatar: u.avatar ? `/images/${u.avatar}` : null,
+  emailVerifiedAt: u.emailVerifiedAt,
   role: u.role.name,
 });
 
