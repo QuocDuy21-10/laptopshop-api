@@ -5,6 +5,7 @@ import { toCustomerServiceRequestDto } from "modules/after-sales/after-sales.map
 import { deriveRequestStatus } from "modules/after-sales/after-sales.aggregate";
 import { customerServiceRequestInclude } from "modules/after-sales/after-sales.repository";
 import { assertTransition, type TransitionContext } from "modules/after-sales/after-sales.status";
+import { scheduleConfirmationMilestones } from "modules/after-sales/after-sales-maintenance";
 import type {
   ServiceRequestItemStatus,
   ServiceRequestType,
@@ -58,6 +59,7 @@ const loadItem = async (tx: Prisma.TransactionClient, requestId: number, itemId:
       status: true,
       version: true,
       confirmationDueAt: true,
+      quotes: { orderBy: { version: "desc" }, take: 1, select: { status: true, validUntil: true } },
       request: { select: { id: true, type: true, userId: true } },
     },
   });
@@ -79,6 +81,7 @@ export const transitionItem = async (
       now,
       closeMode: input.closeMode,
       confirmationDueAt: item.confirmationDueAt,
+      quoteAccepted: item.quotes[0]?.status === "ACCEPTED" && item.quotes[0].validUntil > now,
     };
     assertTransition(
       item.request.type as ServiceRequestType,
@@ -94,6 +97,8 @@ export const transitionItem = async (
       );
     if (["RESOLVED", "READY_FOR_RETURN"].includes(input.to) && !input.resolution?.trim())
       throw new AppError("A resolution is required", 400, "SERVICE_RESOLUTION_REQUIRED");
+    if (input.to === "CLOSED" && input.closeMode === "ADMINISTRATIVE" && !input.note?.trim())
+      throw new AppError("A close reason is required", 400, "SERVICE_CLOSE_REASON_REQUIRED");
     const data: Prisma.ServiceRequestItemUpdateInput = {
       status: input.to,
       version: { increment: 1 },
@@ -117,12 +122,23 @@ export const transitionItem = async (
       data,
     });
     if (updated.count !== 1) throw versionConflict();
+    if (input.to === "RETURNED" || input.to === "RESOLVED") {
+      await scheduleConfirmationMilestones(tx, {
+        id: itemId,
+        version: input.expectedVersion + 1,
+        returnedAt: input.to === "RETURNED" ? now : null,
+        resolvedAt: input.to === "RESOLVED" ? now : null,
+      });
+    }
     await tx.serviceRequestEvent.create({
       data: {
         serviceRequestId: requestId,
         serviceRequestItemId: itemId,
         actorId: actor.id,
-        kind: "STATUS_CHANGED",
+        kind:
+          input.to === "CLOSED" && input.closeMode === "ADMINISTRATIVE"
+            ? "ADMIN_CLOSED"
+            : "STATUS_CHANGED",
         fromStatus: item.status,
         toStatus: input.to,
         visibility: "PUBLIC",

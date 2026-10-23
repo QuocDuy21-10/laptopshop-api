@@ -22,14 +22,6 @@ export const createServiceRequestBody = z
     items: z.array(createServiceRequestItem).min(1).max(50),
   })
   .superRefine((value, ctx) => {
-    const ids = value.items.map((item) => item.orderDetailId);
-    if (new Set(ids).size !== ids.length) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["items"],
-        message: "Each device must be listed once per request",
-      });
-    }
     const serials = value.items.map((item) => item.serialNumber?.toLowerCase()).filter(Boolean);
     if (new Set(serials).size !== serials.length) {
       ctx.addIssue({

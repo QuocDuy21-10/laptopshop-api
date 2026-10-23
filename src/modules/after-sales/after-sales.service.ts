@@ -81,7 +81,7 @@ export const createServiceRequest = async (
         tx,
         input.items.map((item) => item.orderDetailId),
       );
-      if (details.length !== input.items.length)
+      if (details.length !== new Set(input.items.map((item) => item.orderDetailId)).size)
         throw new AppError(
           "One or more order details were not found",
           404,
@@ -89,6 +89,12 @@ export const createServiceRequest = async (
         );
 
       const detailById = new Map(details.map((detail) => [detail.id, detail]));
+      const requestedByDetail = new Map<number, number>();
+      for (const item of input.items)
+        requestedByDetail.set(
+          item.orderDetailId,
+          (requestedByDetail.get(item.orderDetailId) ?? 0) + 1,
+        );
       const itemData = input.items.map((inputItem, position) => {
         const detail = detailById.get(inputItem.orderDetailId)!;
         if (
@@ -117,7 +123,7 @@ export const createServiceRequest = async (
             coverage === "OUT_OF_WARRANTY" ? "WARRANTY_EXPIRED" : "WARRANTY_NOT_AVAILABLE",
           );
         const activeCount = detail.serviceRequestItems.length;
-        if (activeCount + 1 > detail.quantity)
+        if (activeCount + (requestedByDetail.get(detail.id) ?? 0) > detail.quantity)
           throw new AppError(
             "Active after-sales request limit reached",
             409,

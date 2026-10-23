@@ -35,8 +35,8 @@ export const sendQuote = async (
   requestId: number,
   itemId: number,
   input: SendQuoteInput,
-) =>
-  prisma.$transaction(async (tx) => {
+) => {
+  const result = await prisma.$transaction(async (tx) => {
     const item = await tx.serviceRequestItem.findFirst({
       where: { id: itemId, serviceRequestId: requestId },
       include: {
@@ -118,6 +118,8 @@ export const sendQuote = async (
     });
     return toAdminServiceRequestDto(row);
   });
+  return result;
+};
 
 export const decideQuote = async (
   userId: number,
@@ -125,8 +127,8 @@ export const decideQuote = async (
   itemId: number,
   quoteId: number,
   decision: "ACCEPT" | "DECLINE",
-) =>
-  prisma.$transaction(async (tx) => {
+) => {
+  const result = await prisma.$transaction(async (tx) => {
     const quote = await tx.serviceQuote.findFirst({
       where: {
         id: quoteId,
@@ -142,7 +144,7 @@ export const decideQuote = async (
         where: { id: quote.id, status: "SENT" },
         data: { status: "EXPIRED" },
       });
-      throw new AppError("Quote has expired", 409, "QUOTE_EXPIRED");
+      return { expired: true as const };
     }
     const target = decision === "ACCEPT" ? "ACCEPTED" : "DECLINED";
     if (quote.status === target) {
@@ -177,3 +179,6 @@ export const decideQuote = async (
     });
     return toCustomerServiceRequestDto(row);
   });
+  if ("expired" in result) throw new AppError("Quote has expired", 409, "QUOTE_EXPIRED");
+  return result;
+};

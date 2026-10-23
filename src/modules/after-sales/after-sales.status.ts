@@ -45,8 +45,10 @@ export const canTransition = (
   context: TransitionContext = {},
 ) => {
   if (!commonTransitions[from]?.includes(to)) return false;
+  if (type === "WARRANTY" && from === "APPROVED" && to === "DIAGNOSING") return false;
   if (type === "WARRANTY" && from === "DIAGNOSING" && to === "AWAITING_QUOTE_DECISION")
     return false;
+  if (type === "TECHNICAL_SUPPORT" && from === "APPROVED" && to === "AWAITING_ITEM") return false;
   if (
     type === "TECHNICAL_SUPPORT" &&
     from === "AWAITING_QUOTE_DECISION" &&
