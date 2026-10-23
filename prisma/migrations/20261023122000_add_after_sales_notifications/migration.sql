@@ -1,6 +1,6 @@
 ALTER TABLE `notification_preferences`
-  ADD COLUMN `afterSalesEmailEnabled` BOOLEAN NOT NULL DEFAULT true,
-  ADD COLUMN `afterSalesWebPushEnabled` BOOLEAN NOT NULL DEFAULT true;
+  ADD COLUMN `afterSalesEmailEnabled` BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN `afterSalesWebPushEnabled` BOOLEAN NOT NULL DEFAULT false;
 
 ALTER TABLE `notifications`
   ADD COLUMN `serviceRequestId` INTEGER NULL,

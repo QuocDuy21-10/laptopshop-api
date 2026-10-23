@@ -21,8 +21,8 @@ describe("notification preferences", () => {
         inAppEnabled: true,
         emailEnabled: false,
         webPushEnabled: false,
-        afterSalesEmailEnabled: true,
-        afterSalesWebPushEnabled: true,
+        afterSalesEmailEnabled: false,
+        afterSalesWebPushEnabled: false,
       },
     });
     expect(prismaMock.notificationPreference.findUnique).toHaveBeenCalledWith({

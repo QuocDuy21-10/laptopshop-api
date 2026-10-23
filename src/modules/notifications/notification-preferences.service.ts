@@ -32,8 +32,8 @@ export const updateNotificationPreferences = async (
       userId,
       emailEnabled: input.emailEnabled ?? false,
       webPushEnabled: input.webPushEnabled ?? false,
-      afterSalesEmailEnabled: input.afterSalesEmailEnabled ?? true,
-      afterSalesWebPushEnabled: input.afterSalesWebPushEnabled ?? true,
+      afterSalesEmailEnabled: input.afterSalesEmailEnabled ?? false,
+      afterSalesWebPushEnabled: input.afterSalesWebPushEnabled ?? false,
     },
     update: {
       ...(input.emailEnabled !== undefined ? { emailEnabled: input.emailEnabled } : {}),
