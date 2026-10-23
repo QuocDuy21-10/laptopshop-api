@@ -1,5 +1,10 @@
 import { Prisma } from "@prisma/client";
-import { toPricedProductDto, type PricedProductDto } from "modules/products/products.mapper";
+import {
+  toPricedProductDto,
+  toProductDto,
+  type PricedProductDto,
+} from "modules/products/products.mapper";
+import type { PriceSnapshot } from "modules/pricing/alert-price-resolver";
 import type { ResolvedAutomaticPromotion } from "modules/promotions/promotion-resolver";
 
 export const wishlistItemInclude = {
@@ -13,13 +18,36 @@ export type WishlistItemRow = Prisma.WishlistItemGetPayload<{
 export const toWishlistItemDto = (
   row: WishlistItemRow,
   promotion: ResolvedAutomaticPromotion | null = null,
+  snapshot: PriceSnapshot | null = null,
 ) => ({
   id: row.id,
   productId: row.productId,
-  product: toPricedProductDto(row.product, promotion),
+  product: snapshot
+    ? {
+        ...toProductDto(row.product),
+        salePrice: snapshot.effectivePrice,
+        productDiscountAmount: row.product.price - snapshot.effectivePrice,
+        promotion: promotion
+          ? { id: promotion.id, name: promotion.name, endsAt: promotion.endsAt }
+          : null,
+      }
+    : toPricedProductDto(row.product, promotion),
   alertMode: row.alertMode,
   targetPrice: row.targetPrice,
   referencePrice: row.referencePrice,
+  includeFlashSale: row.includeFlashSale,
+  alertVersion: row.alertVersion,
+  priceSnapshot: snapshot ?? {
+    productId: row.productId,
+    listPrice: row.product.price,
+    stablePrice: row.product.price,
+    effectivePrice: row.product.price,
+    source: "LIST_PRICE" as const,
+    promotionId: null,
+    pricingVersion: null,
+    validUntil: null,
+    purchasable: row.product.isActive && row.product.quantity > 0,
+  },
   lastAlertMode: row.lastAlertMode,
   lastAlertedPrice: row.lastAlertedPrice,
   lastAlertedAt: row.lastAlertedAt,

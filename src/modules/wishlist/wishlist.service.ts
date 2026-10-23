@@ -9,7 +9,11 @@ import {
   type WishlistItemRow,
 } from "modules/wishlist/wishlist.mapper";
 import { type ConfigurePriceAlertBody, type WishlistQuery } from "modules/wishlist/wishlist.schema";
-import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
+import {
+  resolveAlertPriceSnapshots,
+  type AlertPriceRequest,
+  type PriceSnapshot,
+} from "modules/pricing/alert-price-resolver";
 
 const WISHLIST_LIMIT = 100;
 
@@ -19,12 +23,17 @@ const productUnavailable = (productId: number) =>
 const wishlistItemNotFound = () =>
   new AppError("Wishlist item not found", 404, "WISHLIST_ITEM_NOT_FOUND");
 
-const priceFor = (price: number, promotion: { unitDiscount: number } | null) =>
-  price - (promotion?.unitDiscount ?? 0);
-
 const mapItem = async (row: WishlistItemRow, now = new Date()): Promise<WishlistItemDto> => {
-  const promotions = await resolveAutomaticPromotions(prisma, [row.productId], now);
-  return toWishlistItemDto(row, promotions.get(row.productId) ?? null);
+  const requests: AlertPriceRequest[] = [
+    {
+      wishlistItemId: row.id,
+      userId: row.userId,
+      productId: row.productId,
+      includeFlashSale: row.includeFlashSale,
+    },
+  ];
+  const snapshots = await resolveAlertPriceSnapshots(prisma, requests, now);
+  return toWishlistItemDto(row, null, snapshots.get(row.id) ?? null);
 };
 
 export const listWishlist = async (userId: number, query: WishlistQuery) => {
@@ -38,13 +47,18 @@ export const listWishlist = async (userId: number, query: WishlistQuery) => {
       ...pageArgs(query),
     }),
   ]);
-  const promotions = await resolveAutomaticPromotions(
+  const snapshots = await resolveAlertPriceSnapshots(
     prisma,
-    rows.map((row) => row.productId),
+    rows.map((row) => ({
+      wishlistItemId: row.id,
+      userId: row.userId,
+      productId: row.productId,
+      includeFlashSale: row.includeFlashSale,
+    })),
     new Date(),
   );
   return {
-    items: rows.map((row) => toWishlistItemDto(row, promotions.get(row.productId) ?? null)),
+    items: rows.map((row) => toWishlistItemDto(row, null, snapshots.get(row.id) ?? null)),
     meta: pageMeta(query, total),
   };
 };
@@ -124,7 +138,13 @@ export const configureWishlistAlert = async (
   if (input.mode === null) {
     const updated = await prisma.wishlistItem.update({
       where: { id: existing.id },
-      data: { alertMode: null, targetPrice: null, referencePrice: null },
+      data: {
+        alertMode: null,
+        targetPrice: null,
+        referencePrice: null,
+        includeFlashSale: false,
+        alertVersion: { increment: 1 },
+      },
       include: wishlistItemInclude,
     });
     return mapItem(updated);
@@ -132,11 +152,29 @@ export const configureWishlistAlert = async (
 
   if (!existing.product.isActive) throw productUnavailable(productId);
   const now = new Date();
-  const promotions = await resolveAutomaticPromotions(prisma, [productId], now);
-  const currentPrice = priceFor(existing.product.price, promotions.get(productId) ?? null);
+  const includeFlashSale = "includeFlashSale" in input ? (input.includeFlashSale ?? false) : false;
+  const snapshot = (
+    await resolveAlertPriceSnapshots(
+      prisma,
+      [
+        {
+          wishlistItemId: existing.id,
+          userId,
+          productId,
+          includeFlashSale,
+        },
+      ],
+      now,
+    )
+  ).get(existing.id);
+  if (!snapshot) throw notFound("Product");
 
   const targetPrice = "targetPrice" in input ? input.targetPrice : null;
-  if (input.mode === "TARGET_PRICE" && targetPrice !== null && targetPrice >= currentPrice) {
+  if (
+    input.mode === "TARGET_PRICE" &&
+    targetPrice !== null &&
+    targetPrice >= snapshot.effectivePrice
+  ) {
     throw new AppError(
       "Target price must be lower than the current price",
       400,
@@ -149,11 +187,13 @@ export const configureWishlistAlert = async (
     data: {
       alertMode: input.mode,
       targetPrice: input.mode === "TARGET_PRICE" ? targetPrice : null,
-      referencePrice: currentPrice,
+      referencePrice: snapshot.stablePrice,
+      includeFlashSale,
+      alertVersion: { increment: 1 },
     },
     include: wishlistItemInclude,
   });
-  return toWishlistItemDto(updated, promotions.get(productId) ?? null);
+  return toWishlistItemDto(updated, null, snapshot);
 };
 
 export const deleteWishlistItem = async (userId: number, productId: number) => {

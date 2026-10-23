@@ -2,9 +2,13 @@ jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").pris
 jest.mock("modules/promotions/promotion-resolver", () => ({
   resolveAutomaticPromotions: jest.fn().mockResolvedValue(new Map()),
 }));
+jest.mock("modules/pricing/alert-price-resolver", () => ({
+  resolveAlertPriceSnapshots: jest.fn().mockResolvedValue(new Map()),
+}));
 
 import request from "supertest";
 import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
+import { resolveAlertPriceSnapshots } from "modules/pricing/alert-price-resolver";
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { USER, cookieFor } from "../../helpers/auth";
@@ -45,6 +49,8 @@ const row = {
   alertMode: null,
   targetPrice: null,
   referencePrice: null,
+  includeFlashSale: false,
+  alertVersion: 1,
   lastAlertMode: null,
   lastAlertedPrice: null,
   lastAlertedAt: null,
@@ -58,6 +64,7 @@ const auth = () => cookieFor(USER);
 beforeEach(() => {
   resetPrisma();
   (resolveAutomaticPromotions as jest.Mock).mockResolvedValue(new Map());
+  (resolveAlertPriceSnapshots as jest.Mock).mockResolvedValue(new Map());
 });
 
 describe("Wishlist authentication and reads", () => {
@@ -102,6 +109,24 @@ describe("Wishlist authentication and reads", () => {
         ],
       ]),
     );
+    (resolveAlertPriceSnapshots as jest.Mock).mockResolvedValue(
+      new Map([
+        [
+          row.id,
+          {
+            productId: product.id,
+            listPrice: product.price,
+            stablePrice: 900,
+            effectivePrice: 900,
+            source: "AUTOMATIC",
+            promotionId: 12,
+            pricingVersion: 1,
+            validUntil: new Date("2026-11-01T00:00:00.000Z"),
+            purchasable: true,
+          },
+        ],
+      ]),
+    );
 
     const res = await request(buildApp()).get("/api/v1/wishlist").set("Cookie", auth());
 
@@ -110,6 +135,9 @@ describe("Wishlist authentication and reads", () => {
       id: row.id,
       productId: product.id,
       product: { id: product.id, salePrice: 900, productDiscountAmount: 100 },
+      priceSnapshot: { stablePrice: 900, effectivePrice: 900, source: "AUTOMATIC" },
+      includeFlashSale: false,
+      alertVersion: 1,
     });
     expect(prismaMock.wishlistItem.findMany.mock.calls[0][0].where).toMatchObject({
       userId: USER.id,
@@ -208,7 +236,24 @@ describe("Wishlist mutations", () => {
   it("validates target price against the current effective price", async () => {
     prismaMock.wishlistItem.findFirst.mockResolvedValue(row);
     prismaMock.product.findUnique.mockResolvedValue(product);
-    (resolveAutomaticPromotions as jest.Mock).mockResolvedValue(new Map());
+    (resolveAlertPriceSnapshots as jest.Mock).mockResolvedValue(
+      new Map([
+        [
+          row.id,
+          {
+            productId: product.id,
+            listPrice: product.price,
+            stablePrice: product.price,
+            effectivePrice: product.price,
+            source: "LIST_PRICE",
+            promotionId: null,
+            pricingVersion: null,
+            validUntil: null,
+            purchasable: true,
+          },
+        ],
+      ]),
+    );
 
     const res = await request(buildApp())
       .patch(`/api/v1/wishlist/items/${product.id}`)
@@ -238,6 +283,51 @@ describe("Wishlist mutations", () => {
       alertMode: null,
       targetPrice: null,
       referencePrice: null,
+      includeFlashSale: false,
+      alertVersion: { increment: 1 },
+    });
+  });
+
+  it("stores Flash Sale opt-in and uses stable price as the reference baseline", async () => {
+    prismaMock.wishlistItem.findFirst.mockResolvedValue(row);
+    prismaMock.wishlistItem.update.mockResolvedValue({
+      ...row,
+      alertMode: "PERCENT_DROP",
+      includeFlashSale: true,
+      referencePrice: 900,
+      alertVersion: 2,
+    });
+    (resolveAlertPriceSnapshots as jest.Mock).mockResolvedValue(
+      new Map([
+        [
+          row.id,
+          {
+            productId: product.id,
+            listPrice: product.price,
+            stablePrice: 900,
+            effectivePrice: 500,
+            source: "FLASH_SALE",
+            promotionId: 20,
+            pricingVersion: 7,
+            validUntil: new Date("2026-10-23T00:00:00.000Z"),
+            purchasable: true,
+          },
+        ],
+      ]),
+    );
+    const path = "/api/v1/wishlist/items/" + product.id;
+
+    const res = await request(buildApp())
+      .patch(path)
+      .set("Cookie", auth())
+      .send({ mode: "PERCENT_DROP", includeFlashSale: true });
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.wishlistItem.update.mock.calls[0][0].data).toMatchObject({
+      alertMode: "PERCENT_DROP",
+      includeFlashSale: true,
+      referencePrice: 900,
+      alertVersion: { increment: 1 },
     });
   });
 });

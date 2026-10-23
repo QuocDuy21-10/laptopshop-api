@@ -1,11 +1,28 @@
 import { prisma } from "config/client";
-import { putWishlistItem } from "modules/wishlist/wishlist.service";
+import { configureWishlistAlert, putWishlistItem } from "modules/wishlist/wishlist.service";
 import { createProduct, createUser, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
 
 describe("wishlist concurrency", () => {
+  it("uses the stable price when configuring a target alert", async () => {
+    const user = await createUser();
+    const product = await createProduct(2, 1_000);
+    await putWishlistItem(user.id, product.id);
+
+    const item = await configureWishlistAlert(user.id, product.id, {
+      mode: "TARGET_PRICE",
+      targetPrice: 900,
+    });
+
+    expect(item).toMatchObject({
+      referencePrice: 1_000,
+      alertVersion: 2,
+      includeFlashSale: false,
+    });
+  });
+
   it("does not exceed 100 items when two inserts race at the limit", async () => {
     const user = await createUser();
     const products = [];

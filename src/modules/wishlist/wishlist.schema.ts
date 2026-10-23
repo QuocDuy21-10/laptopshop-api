@@ -29,9 +29,13 @@ export const wishlistStatusQuery = z
 export type WishlistStatusQuery = z.infer<typeof wishlistStatusQuery>;
 
 export const configurePriceAlertBody = z.union([
-  z.object({ mode: z.literal("PERCENT_DROP") }).strict(),
+  z.object({ mode: z.literal("PERCENT_DROP"), includeFlashSale: z.boolean().optional() }).strict(),
   z
-    .object({ mode: z.literal("TARGET_PRICE"), targetPrice: z.coerce.number().int().positive() })
+    .object({
+      mode: z.literal("TARGET_PRICE"),
+      targetPrice: z.coerce.number().int().positive(),
+      includeFlashSale: z.boolean().optional(),
+    })
     .strict(),
   z.object({ mode: z.literal(null) }).strict(),
 ]);

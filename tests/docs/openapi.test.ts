@@ -120,6 +120,7 @@ describe("openapi document", () => {
     expect(doc.components?.schemas).toEqual(
       expect.objectContaining({
         PriceAlertMode: expect.anything(),
+        PriceSnapshot: expect.anything(),
         WishlistItem: expect.anything(),
         WishlistSummary: expect.anything(),
         WishlistStatus: expect.anything(),
@@ -128,6 +129,9 @@ describe("openapi document", () => {
     const patch = op("/api/v1/wishlist/items/{productId}", "patch");
     const body = patch.requestBody.content["application/json"].schema;
     expect(body.anyOf).toHaveLength(3);
+    expect(body.anyOf[0].properties.includeFlashSale).toBeDefined();
+    expect(body.anyOf[1].properties.includeFlashSale).toBeDefined();
+    expect((doc.components?.schemas?.WishlistItem as any).properties.priceSnapshot).toBeDefined();
     expect(op("/api/v1/wishlist/items/{productId}", "delete").responses[204]).toBeDefined();
   });
 
