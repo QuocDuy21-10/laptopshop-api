@@ -151,6 +151,11 @@ enum ServiceQuoteStatus {
 
 enum NotificationType {
   PRICE_DROP
+  AFTER_SALES_MESSAGE
+  AFTER_SALES_STATUS_CHANGED
+  AFTER_SALES_QUOTE_SENT
+  AFTER_SALES_CONFIRMATION_REQUIRED
+  AFTER_SALES_AUTO_CLOSED
 }
 
 enum NotificationPriceSource {
@@ -310,6 +315,7 @@ model Notification {
   id             Int                      @id @default(autoincrement())
   userId         Int
   productId      Int?
+  serviceRequestId Int?
   type           NotificationType
   title          String                   @db.VarChar(255)
   message        String                   @db.VarChar(500)
@@ -325,9 +331,11 @@ model Notification {
 
   user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   product    Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  serviceRequest ServiceRequest?    @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
   deliveries NotificationDelivery[]
 
   @@index([userId, readAt, createdAt])
+  @@index([serviceRequestId, createdAt])
   @@map("notifications")
 }
 
@@ -336,6 +344,8 @@ model NotificationPreference {
   userId         Int      @unique
   emailEnabled   Boolean  @default(false)
   webPushEnabled Boolean  @default(false)
+  afterSalesEmailEnabled Boolean @default(true)
+  afterSalesWebPushEnabled Boolean @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -584,6 +594,7 @@ model ServiceRequest {
   items           ServiceRequestItem[]
   events          ServiceRequestEvent[]
   attachments     ServiceRequestAttachment[]
+  notifications   Notification[]
 
   @@unique([userId, idempotencyKey])
   @@index([userId, createdAt])

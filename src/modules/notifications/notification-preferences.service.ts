@@ -32,10 +32,18 @@ export const updateNotificationPreferences = async (
       userId,
       emailEnabled: input.emailEnabled ?? false,
       webPushEnabled: input.webPushEnabled ?? false,
+      afterSalesEmailEnabled: input.afterSalesEmailEnabled ?? true,
+      afterSalesWebPushEnabled: input.afterSalesWebPushEnabled ?? true,
     },
     update: {
       ...(input.emailEnabled !== undefined ? { emailEnabled: input.emailEnabled } : {}),
       ...(input.webPushEnabled !== undefined ? { webPushEnabled: input.webPushEnabled } : {}),
+      ...(input.afterSalesEmailEnabled !== undefined
+        ? { afterSalesEmailEnabled: input.afterSalesEmailEnabled }
+        : {}),
+      ...(input.afterSalesWebPushEnabled !== undefined
+        ? { afterSalesWebPushEnabled: input.afterSalesWebPushEnabled }
+        : {}),
     },
   });
   return toNotificationPreferencesDto(row);

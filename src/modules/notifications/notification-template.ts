@@ -54,3 +54,13 @@ export const renderPriceAlertEmail = (input: {
       '">Quản lý thông báo</a></p>',
   };
 };
+
+export const renderAfterSalesEmail = (input: {
+  title: string;
+  message: string;
+  requestId: number;
+}) => ({
+  subject: input.title,
+  text: `${input.message}. Xem yêu cầu: /account/after-sales/${input.requestId}`,
+  html: `<p>${input.message}</p><p><a href="/account/after-sales/${input.requestId}">Xem yêu cầu hậu mãi</a></p>`,
+});

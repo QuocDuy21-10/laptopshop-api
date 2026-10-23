@@ -17,7 +17,13 @@ describe("notification preferences", () => {
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
-      data: { inAppEnabled: true, emailEnabled: false, webPushEnabled: false },
+      data: {
+        inAppEnabled: true,
+        emailEnabled: false,
+        webPushEnabled: false,
+        afterSalesEmailEnabled: true,
+        afterSalesWebPushEnabled: true,
+      },
     });
     expect(prismaMock.notificationPreference.findUnique).toHaveBeenCalledWith({
       where: { userId: USER.id },

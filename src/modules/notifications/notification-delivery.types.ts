@@ -34,6 +34,8 @@ export type DeliveryRecord = {
     id: number;
     title: string;
     message: string;
+    type: string;
+    serviceRequestId: number | null;
     productId: number | null;
     oldPrice: number | null;
     newPrice: number | null;
@@ -42,7 +44,12 @@ export type DeliveryRecord = {
     user?: {
       username: string;
       emailVerifiedAt: Date | null;
-      notificationPreference?: { emailEnabled: boolean; webPushEnabled: boolean } | null;
+      notificationPreference?: {
+        emailEnabled: boolean;
+        webPushEnabled: boolean;
+        afterSalesEmailEnabled: boolean;
+        afterSalesWebPushEnabled: boolean;
+      } | null;
     } | null;
   } | null;
   preference?: { emailEnabled: boolean; webPushEnabled: boolean } | null;

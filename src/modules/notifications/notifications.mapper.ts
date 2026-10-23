@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 export const notificationSelect = {
   id: true,
   productId: true,
+  serviceRequestId: true,
   type: true,
   title: true,
   message: true,
@@ -21,6 +22,7 @@ export type NotificationRow = Prisma.NotificationGetPayload<{ select: typeof not
 export const toNotificationDto = (row: NotificationRow) => ({
   id: row.id,
   productId: row.productId,
+  serviceRequestId: row.serviceRequestId,
   type: row.type,
   title: row.title,
   message: row.message,
