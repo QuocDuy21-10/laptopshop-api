@@ -136,6 +136,11 @@ const schema = z
       .default("false")
       .transform((v) => v === "true"),
     AFTER_SALES_IMAGE_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+    AFTER_SALES_WORKER_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    AFTER_SALES_QUEUE_PREFIX: z.string().default("bull"),
     GIT_SHA: z.preprocess(emptyToUndefined, z.string().optional()),
   })
   .superRefine((e, ctx) => {

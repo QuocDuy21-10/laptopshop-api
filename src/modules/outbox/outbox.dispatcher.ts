@@ -25,18 +25,23 @@ type DispatcherDeps = {
 const jobIdFor = (event: OutboxEventRecord) =>
   event.eventType === "NOTIFICATION_DELIVERY_REQUESTED"
     ? "notification-delivery-" + event.aggregateId + "-" + event.id
-    : "pricing-evaluation-" +
-      String(
-        (event.payload && typeof event.payload === "object"
-          ? (event.payload as Record<string, unknown>).scopeHash
-          : undefined) ?? event.aggregateId,
-      ) +
-      "-" +
-      String(
-        (event.payload && typeof event.payload === "object"
-          ? (event.payload as Record<string, unknown>).eventVersion
-          : undefined) ?? event.id,
-      );
+    : event.eventType === "AFTER_SALES_MILESTONE_REQUESTED"
+      ? "after-sales-milestone-" +
+        event.aggregateId +
+        "-" +
+        String((event.payload as Record<string, unknown>)?.milestone ?? event.id)
+      : "pricing-evaluation-" +
+        String(
+          (event.payload && typeof event.payload === "object"
+            ? (event.payload as Record<string, unknown>).scopeHash
+            : undefined) ?? event.aggregateId,
+        ) +
+        "-" +
+        String(
+          (event.payload && typeof event.payload === "object"
+            ? (event.payload as Record<string, unknown>).eventVersion
+            : undefined) ?? event.id,
+        );
 
 export const dispatchOutboxBatch = async (deps: DispatcherDeps) => {
   const events = await deps.claim();

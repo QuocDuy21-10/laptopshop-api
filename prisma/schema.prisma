@@ -188,6 +188,7 @@ enum NotificationDeliveryStatus {
 enum OutboxEventType {
   PRICE_REEVALUATION_REQUESTED
   NOTIFICATION_DELIVERY_REQUESTED
+  AFTER_SALES_MILESTONE_REQUESTED
 }
 
 model User {
