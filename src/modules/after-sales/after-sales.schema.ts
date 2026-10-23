@@ -49,6 +49,10 @@ export const serviceItemParams = z.object({
   id: z.coerce.number().int().positive(),
   itemId: z.coerce.number().int().positive(),
 });
+export const serviceAttachmentParams = z.object({
+  id: z.coerce.number().int().positive(),
+  attachmentId: z.coerce.number().int().positive(),
+});
 
 export const transitionItemBody = z.object({
   to: z.enum([

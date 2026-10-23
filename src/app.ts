@@ -22,6 +22,8 @@ import {
 } from "modules/advisor/advisor.service";
 import { createReviewImageStorage } from "lib/storage/s3-review-image-storage";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
+import { createS3ObjectStorage } from "lib/storage/s3-object-storage";
+import type { AttachmentDeps } from "modules/after-sales/after-sales.attachments";
 
 export interface AppDeps {
   limitStores?: {
@@ -30,9 +32,11 @@ export interface AppDeps {
     advisor?: Store;
     reviewImages?: Store;
     reviewHelpful?: Store;
+    afterSalesImages?: Store;
   };
   advisor?: { service: AdvisorService; identitySecret: string };
   reviewImages?: ReviewImageDeps | null;
+  afterSalesAttachments?: AttachmentDeps | null;
   readyChecks?: Array<() => Promise<unknown>>;
   // hook for optional features that must register before the final 404/error handlers
   registerExtras?: (app: Express) => void;
@@ -57,8 +61,14 @@ export const createApp = (deps: AppDeps = {}): Express => {
   app.use(express.urlencoded({ extended: true, limit: "100kb" }));
   app.use(hpp());
 
-  const { globalLimiter, authLimiter, advisorLimiter, reviewImagesLimiter, reviewHelpfulLimiter } =
-    createLimiters(deps.limitStores);
+  const {
+    globalLimiter,
+    authLimiter,
+    advisorLimiter,
+    reviewImagesLimiter,
+    reviewHelpfulLimiter,
+    afterSalesImagesLimiter,
+  } = createLimiters(deps.limitStores);
   app.use(globalLimiter);
   app.post(["/api/v1/auth/login", "/api/v1/auth/register"], authLimiter);
 
@@ -78,6 +88,22 @@ export const createApp = (deps: AppDeps = {}): Express => {
           const storage = createReviewImageStorage(env);
           return storage ? { storage } : null;
         })();
+  const afterSalesAttachments =
+    deps.afterSalesAttachments !== undefined
+      ? deps.afterSalesAttachments
+      : (() => {
+          const storage = createS3ObjectStorage({
+            enabled: env.AFTER_SALES_IMAGES_ENABLED,
+            endpoint: env.AFTER_SALES_IMAGE_S3_ENDPOINT,
+            region: env.AFTER_SALES_IMAGE_S3_REGION,
+            bucket: env.AFTER_SALES_IMAGE_S3_BUCKET,
+            accessKeyId: env.AFTER_SALES_IMAGE_S3_ACCESS_KEY_ID,
+            secretAccessKey: env.AFTER_SALES_IMAGE_S3_SECRET_ACCESS_KEY,
+            forcePathStyle: env.AFTER_SALES_IMAGE_S3_FORCE_PATH_STYLE,
+            prefix: "after-sales",
+          });
+          return storage ? { storage } : null;
+        })();
   app.use(
     "/api/v1",
     createApiV1Router(
@@ -85,6 +111,8 @@ export const createApp = (deps: AppDeps = {}): Express => {
       reviewImages,
       reviewImagesLimiter,
       reviewHelpfulLimiter,
+      afterSalesAttachments,
+      afterSalesImagesLimiter,
     ),
   );
   deps.registerExtras?.(app);

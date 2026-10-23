@@ -1674,6 +1674,62 @@ op({
   errors: { 404: "Not found", 409: "Conversation unavailable" },
 });
 op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/items/{itemId}/attachments`,
+  summary: "Upload after-sales images",
+  tag: "after-sales",
+  auth: "user",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: multipart(z.object({ images: z.array(binary).min(1).max(3) })),
+  },
+  ok: [201, "Created", data(z.array(z.unknown()))],
+  errors: {
+    404: "Not found",
+    409: "Limit or invalid state",
+    413: "Image too large",
+    503: "Storage unavailable",
+  },
+});
+op({
+  method: "delete",
+  path: `${v1}/after-sales/{id}/attachments/{attachmentId}`,
+  summary: "Redact an after-sales image",
+  tag: "after-sales",
+  auth: "user",
+  request: { params: z.object({ id: z.number(), attachmentId: z.number() }) },
+  ok: [204, "Deleted"],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/after-sales/{id}/items/{itemId}/attachments`,
+  summary: "Upload an admin after-sales image",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: multipart(z.object({ images: z.array(binary).min(1).max(3) })),
+  },
+  ok: [201, "Created", data(z.array(z.unknown()))],
+  errors: {
+    404: "Not found",
+    409: "Limit or invalid state",
+    413: "Image too large",
+    503: "Storage unavailable",
+  },
+});
+op({
+  method: "delete",
+  path: `${v1}/admin/after-sales/{id}/attachments/{attachmentId}`,
+  summary: "Redact an admin after-sales image",
+  tag: "admin",
+  auth: "admin",
+  request: { params: z.object({ id: z.number(), attachmentId: z.number() }) },
+  ok: [204, "Deleted"],
+  errors: { 404: "Not found" },
+});
+op({
   method: "get",
   path: `${v1}/admin/after-sales`,
   summary: "List after-sales requests",
