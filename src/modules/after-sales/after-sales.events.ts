@@ -1,5 +1,6 @@
 import { prisma } from "config/client";
 import { AppError } from "lib/errors";
+import { createAfterSalesNotification } from "modules/after-sales/after-sales.notifications";
 
 type EventActor = { id: number; role: "USER" | "ADMIN" };
 type MessageInput = { itemId?: number; body: string };
@@ -49,6 +50,7 @@ export const addPublicMessage = async (
       id: true,
       status: true,
       userId: true,
+      assignedToId: true,
       items: { select: { id: true, status: true } },
     },
   });
@@ -69,6 +71,16 @@ export const addPublicMessage = async (
       visibility: "PUBLIC",
       body,
     },
+  });
+  await createAfterSalesNotification(prisma, {
+    event: actor.role === "USER" ? "CUSTOMER_MESSAGE" : "ADMIN_STATUS",
+    requestId,
+    customerId: request.userId,
+    assigneeId: request.assignedToId,
+    type: "AFTER_SALES_MESSAGE",
+    title: "Tin nhắn yêu cầu hậu mãi",
+    message: body,
+    dedupeKey: `after-sales-message:${event.id}`,
   });
   return eventDto(event);
 };

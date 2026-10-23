@@ -6,6 +6,7 @@ import { deriveRequestStatus } from "modules/after-sales/after-sales.aggregate";
 import { customerServiceRequestInclude } from "modules/after-sales/after-sales.repository";
 import { assertTransition, type TransitionContext } from "modules/after-sales/after-sales.status";
 import { scheduleConfirmationMilestones } from "modules/after-sales/after-sales-maintenance";
+import { createAfterSalesNotification } from "modules/after-sales/after-sales.notifications";
 import type {
   ServiceRequestItemStatus,
   ServiceRequestType,
@@ -144,6 +145,17 @@ export const transitionItem = async (
         visibility: "PUBLIC",
         body: input.note?.trim() || input.resolution?.trim(),
       },
+    });
+    await createAfterSalesNotification(tx, {
+      event: "ADMIN_STATUS",
+      requestId,
+      customerId: item.request.userId,
+      assigneeId: null,
+      type: input.to === "CLOSED" ? "AFTER_SALES_AUTO_CLOSED" : "AFTER_SALES_STATUS_CHANGED",
+      title: input.to === "CLOSED" ? "Yêu cầu hậu mãi đã đóng" : "Cập nhật yêu cầu hậu mãi",
+      message:
+        input.note?.trim() || input.resolution?.trim() || `Thiết bị đã chuyển sang ${input.to}`,
+      dedupeKey: `after-sales-status:${requestId}:${itemId}:${input.expectedVersion + 1}`,
     });
     return refreshRequest(tx, requestId);
   });

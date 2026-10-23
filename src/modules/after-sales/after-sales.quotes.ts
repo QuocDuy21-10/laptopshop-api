@@ -9,6 +9,7 @@ import {
   customerServiceRequestInclude,
   adminServiceRequestInclude,
 } from "modules/after-sales/after-sales.repository";
+import { createAfterSalesNotification } from "modules/after-sales/after-sales.notifications";
 
 export type QuoteLineInput = { description: string; quantity: number; unitPrice: number };
 export type SendQuoteInput = {
@@ -40,7 +41,7 @@ export const sendQuote = async (
     const item = await tx.serviceRequestItem.findFirst({
       where: { id: itemId, serviceRequestId: requestId },
       include: {
-        request: { select: { id: true, type: true } },
+        request: { select: { id: true, type: true, userId: true } },
         quotes: { select: { id: true, version: true, status: true } },
       },
     });
@@ -100,6 +101,16 @@ export const sendQuote = async (
         visibility: "PUBLIC",
         body: `Đã gửi báo giá phiên bản ${version}`,
       },
+    });
+    await createAfterSalesNotification(tx, {
+      event: "QUOTE_SENT",
+      requestId,
+      customerId: item.request.userId,
+      assigneeId: null,
+      type: "AFTER_SALES_QUOTE_SENT",
+      title: "Có báo giá mới",
+      message: `Báo giá phiên bản ${version} đang chờ bạn quyết định`,
+      dedupeKey: `after-sales-quote:${itemId}:${version}`,
     });
     const statuses = await tx.serviceRequestItem.findMany({
       where: { serviceRequestId: requestId },
