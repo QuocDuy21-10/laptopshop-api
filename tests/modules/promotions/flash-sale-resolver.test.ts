@@ -31,6 +31,32 @@ const row = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe("Flash Sale promotion resolver", () => {
+  it("keeps checkout quota errors available when the Flash Sale cannot cover the requested quantity", async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      row({
+        flashSalePolicy: {
+          priority: 10,
+          stackableWithCoupon: true,
+          showRemainingQuota: true,
+          quotas: [
+            {
+              productId: 1,
+              totalQuota: 2,
+              claimedUnits: 1,
+              maxUnitsPerUser: 2,
+              product: { price: 1_000 },
+              usages: [{ userId: 7, claimedUnits: 0 }],
+            },
+          ],
+        },
+      }),
+    ]);
+
+    const result = await resolveProductPromotions({ promotion: { findMany } }, [1], now, 7);
+
+    expect(result.get(1)).toMatchObject({ kind: "FLASH_SALE", remainingQuota: 1 });
+  });
+
   it("selects the winner by priority, discount and id regardless of database row order", async () => {
     const findMany = jest.fn().mockResolvedValue([
       row({
