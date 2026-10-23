@@ -7,6 +7,12 @@ import {
   listMyEligibleDevices,
   listMyServiceRequests,
 } from "modules/after-sales/after-sales.service";
+import {
+  cancelMyItem,
+  confirmMyItem,
+  disputeMyItem,
+  transitionItem,
+} from "modules/after-sales/after-sales.actions";
 import type {
   CreateServiceRequestBody,
   DeviceEligibilityQuery,
@@ -42,4 +48,24 @@ export const listMyServiceRequestsHandler: RequestHandler = async (req, res) => 
 export const getMyServiceRequestHandler: RequestHandler = async (req, res) => {
   const id = Number((res.locals.params as { id: number }).id);
   res.json({ data: await getMyServiceRequest(req.auth!.id, id) });
+};
+
+export const cancelMyItemHandler: RequestHandler = async (req, res) => {
+  const { id, itemId } = res.locals.params as { id: number; itemId: number };
+  res.json({ data: await cancelMyItem(req.auth!.id, id, itemId) });
+};
+
+export const confirmMyItemHandler: RequestHandler = async (req, res) => {
+  const { id, itemId } = res.locals.params as { id: number; itemId: number };
+  res.json({ data: await confirmMyItem(req.auth!.id, id, itemId) });
+};
+
+export const disputeMyItemHandler: RequestHandler = async (req, res) => {
+  const { id, itemId } = res.locals.params as { id: number; itemId: number };
+  res.json({ data: await disputeMyItem(req.auth!.id, id, itemId, req.body) });
+};
+
+export const transitionItemHandler: RequestHandler = async (req, res) => {
+  const { id, itemId } = res.locals.params as { id: number; itemId: number };
+  res.json({ data: await transitionItem({ id: req.auth!.id }, id, itemId, req.body) });
 };

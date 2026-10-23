@@ -28,7 +28,7 @@ import { notificationPreferencesRoutes } from "modules/notifications/notificatio
 import { webPushRoutes } from "modules/notifications/web-push.routes";
 import { emailVerificationRoutes } from "modules/email-verification/email-verification.routes";
 import { adminNotificationRoutes } from "modules/notifications/admin-notifications.routes";
-import { afterSalesRoutes } from "modules/after-sales/after-sales.routes";
+import { adminAfterSalesRoutes, afterSalesRoutes } from "modules/after-sales/after-sales.routes";
 
 export const createApiV1Router = (
   advisor: AdvisorRouteDeps,
@@ -69,6 +69,7 @@ export const createApiV1Router = (
   admin.use("/inventory", adminInventoryRoutes);
   admin.use("/payment-events", adminPaymentRoutes);
   admin.use("/reviews", adminReviewRoutes);
+  admin.use("/after-sales", adminAfterSalesRoutes);
   admin.use("/promotions", adminPromotionRoutes);
   admin.use("/", adminNotificationRoutes);
   router.use("/admin", admin);

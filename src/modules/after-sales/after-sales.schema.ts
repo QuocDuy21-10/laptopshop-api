@@ -44,3 +44,36 @@ export type CreateServiceRequestBody = z.infer<typeof createServiceRequestBody>;
 export const serviceRequestQuery = pageQuery;
 export type ServiceRequestQuery = z.infer<typeof serviceRequestQuery>;
 export const serviceRequestParams = idParams;
+
+export const serviceItemParams = z.object({
+  id: z.coerce.number().int().positive(),
+  itemId: z.coerce.number().int().positive(),
+});
+
+export const transitionItemBody = z.object({
+  to: z.enum([
+    "SUBMITTED",
+    "REVIEWING",
+    "APPROVED",
+    "AWAITING_ITEM",
+    "RECEIVED",
+    "DIAGNOSING",
+    "AWAITING_QUOTE_DECISION",
+    "IN_SERVICE",
+    "READY_FOR_RETURN",
+    "RETURNED",
+    "RESOLVED",
+    "CLOSED",
+    "REJECTED",
+    "CANCELLED",
+  ]),
+  expectedVersion: z.number().int().positive(),
+  note: z.string().trim().max(1000).optional(),
+  resolution: z.string().trim().max(5000).optional(),
+  closeMode: z.enum(["ADMINISTRATIVE", "TIMEOUT"]).optional(),
+});
+
+export const completionDisputeBody = z.object({
+  reason: z.enum(["DEVICE_NOT_RECEIVED", "ISSUE_PERSISTS"]),
+  note: z.string().trim().min(1).max(2000),
+});

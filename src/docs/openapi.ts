@@ -1587,6 +1587,54 @@ op({
   errors: { 404: "Service request not found" },
 });
 op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/items/{itemId}/cancel`,
+  summary: "Cancel an eligible after-sales device",
+  tag: "after-sales",
+  auth: "user",
+  request: { params: z.object({ id: z.number(), itemId: z.number() }) },
+  ok: [200, "Cancelled", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Invalid transition" },
+});
+op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/items/{itemId}/confirm`,
+  summary: "Confirm an after-sales device completion",
+  tag: "after-sales",
+  auth: "user",
+  request: { params: z.object({ id: z.number(), itemId: z.number() }) },
+  ok: [200, "Confirmed", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Confirmation unavailable" },
+});
+op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/items/{itemId}/dispute-completion`,
+  summary: "Dispute an after-sales completion",
+  tag: "after-sales",
+  auth: "user",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: json(
+      z.object({ reason: z.enum(["DEVICE_NOT_RECEIVED", "ISSUE_PERSISTS"]), note: z.string() }),
+    ),
+  },
+  ok: [200, "Disputed", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Invalid transition" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/after-sales/{id}/items/{itemId}/status`,
+  summary: "Transition an after-sales device",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: json(z.record(z.unknown())),
+  },
+  ok: [200, "Updated", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Invalid transition or version conflict" },
+});
+op({
   method: "get",
   path: `${v1}/orders/me/{id}/payment`,
   summary: "Payment instructions and status",
