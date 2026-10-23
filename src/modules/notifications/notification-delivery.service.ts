@@ -2,6 +2,7 @@ import { env } from "config/env";
 import { decryptEmailOtp } from "modules/email-verification/email-otp.crypto";
 import {
   renderEmailVerification,
+  renderAfterSalesEmail,
   renderPriceAlertEmail,
 } from "modules/notifications/notification-template";
 import type {
@@ -58,10 +59,14 @@ const providerInput = (d: DeliveryRecord) => {
         notificationId: d.notification.id,
         title: d.notification.title,
         body: d.notification.message,
-        url: d.notification.productId
-          ? `/products/${d.notification.productId}`
-          : "/account/notifications",
-        tag: `price-alert-${d.notification.id}`,
+        url: d.notification.serviceRequestId
+          ? `/account/after-sales/${d.notification.serviceRequestId}`
+          : d.notification.productId
+            ? `/products/${d.notification.productId}`
+            : "/account/notifications",
+        tag: d.notification.serviceRequestId
+          ? `after-sales-${d.notification.id}`
+          : `price-alert-${d.notification.id}`,
         renotify: false,
         validUntil: d.notification.validUntil,
       },
@@ -90,6 +95,16 @@ const providerInput = (d: DeliveryRecord) => {
   }
   if (d.channel === "EMAIL" && d.notification) {
     const n = d.notification;
+    if (n.serviceRequestId)
+      return {
+        to: d.destinationKey,
+        ...renderAfterSalesEmail({
+          title: n.title,
+          message: n.message,
+          requestId: n.serviceRequestId,
+        }),
+        idempotencyKey: `delivery-${d.id}`,
+      };
     return {
       to: d.destinationKey,
       ...renderPriceAlertEmail({

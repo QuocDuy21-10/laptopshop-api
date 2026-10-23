@@ -28,12 +28,17 @@ import { notificationPreferencesRoutes } from "modules/notifications/notificatio
 import { webPushRoutes } from "modules/notifications/web-push.routes";
 import { emailVerificationRoutes } from "modules/email-verification/email-verification.routes";
 import { adminNotificationRoutes } from "modules/notifications/admin-notifications.routes";
+import { adminAfterSalesRoutes, afterSalesRoutes } from "modules/after-sales/after-sales.routes";
+import { createAfterSalesAttachmentRoutes } from "modules/after-sales/after-sales-attachments.routes";
+import type { AttachmentDeps } from "modules/after-sales/after-sales.attachments";
 
 export const createApiV1Router = (
   advisor: AdvisorRouteDeps,
   reviewImages: ReviewImageDeps | null = null,
   reviewImagesLimiter?: RequestHandler,
   reviewHelpfulLimiter?: RequestHandler,
+  afterSalesAttachments: AttachmentDeps | null = null,
+  afterSalesImagesLimiter?: RequestHandler,
 ) => {
   const router = express.Router();
   router.use(originCheck(env.CORS_ORIGINS));
@@ -56,6 +61,12 @@ export const createApiV1Router = (
   router.use("/notification-preferences", notificationPreferencesRoutes);
   router.use("/web-push", webPushRoutes);
   router.use("/me/email-verification", emailVerificationRoutes);
+  router.use("/after-sales", afterSalesRoutes);
+  if (afterSalesAttachments)
+    router.use(
+      "/after-sales",
+      createAfterSalesAttachmentRoutes(afterSalesAttachments, afterSalesImagesLimiter),
+    );
 
   const admin = express.Router();
   admin.use(authenticate, requireRole("ADMIN"));
@@ -67,6 +78,12 @@ export const createApiV1Router = (
   admin.use("/inventory", adminInventoryRoutes);
   admin.use("/payment-events", adminPaymentRoutes);
   admin.use("/reviews", adminReviewRoutes);
+  admin.use("/after-sales", adminAfterSalesRoutes);
+  if (afterSalesAttachments)
+    admin.use(
+      "/after-sales",
+      createAfterSalesAttachmentRoutes(afterSalesAttachments, afterSalesImagesLimiter),
+    );
   admin.use("/promotions", adminPromotionRoutes);
   admin.use("/", adminNotificationRoutes);
   router.use("/admin", admin);

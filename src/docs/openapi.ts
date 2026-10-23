@@ -82,6 +82,7 @@ import {
 } from "modules/wishlist/wishlist.schema";
 import { notificationsQuery } from "modules/notifications/notifications.schema";
 import { updateNotificationPreferencesBody } from "modules/notifications/notification-preferences.schema";
+import { deviceEligibilityQuery } from "modules/after-sales/after-sales.schema";
 import { webPushSubscriptionBody } from "modules/notifications/web-push.schema";
 import { confirmEmailVerificationBody } from "modules/email-verification/email-verification.schema";
 import {
@@ -389,11 +390,22 @@ const orderShape = {
   createdAt: z.string().datetime(),
   items: z.array(
     z.object({
+      orderDetailId: z.number(),
       productId: z.number(),
       name: z.string(),
       image: z.string().nullable(),
       price: z.number(),
       quantity: z.number(),
+      warrantyMonthsSnapshot: z.number().nullable(),
+      warrantyStartAt: z.string().datetime().nullable(),
+      warrantyEndAt: z.string().datetime().nullable(),
+      warrantyPolicySource: z.enum([
+        "CHECKOUT_SNAPSHOT",
+        "CURRENT_PRODUCT_POLICY_BACKFILL",
+        "UNAVAILABLE",
+      ]),
+      coverage: z.enum(["IN_WARRANTY", "OUT_OF_WARRANTY", "NO_WARRANTY", "REQUIRES_VERIFICATION"]),
+      allowedRequestTypes: z.array(z.enum(["WARRANTY", "TECHNICAL_SUPPORT"])),
       productDiscountAmount: z.number(),
       couponDiscountAmount: z.number(),
       netLineTotal: z.number(),
@@ -412,6 +424,48 @@ const orderShape = {
   ),
 };
 const Order = registry.register("Order", z.object(orderShape));
+const EligibleDevice = registry.register(
+  "EligibleAfterSalesDevice",
+  z.object({
+    orderDetailId: z.number(),
+    orderId: z.number(),
+    product: z.object({ id: z.number(), name: z.string(), image: z.string().nullable() }),
+    quantity: z.number().int(),
+    activeCount: z.number().int(),
+    availableCount: z.number().int(),
+    warrantyMonthsSnapshot: z.number().int().nullable(),
+    warrantyStartAt: z.string().datetime().nullable(),
+    warrantyEndAt: z.string().datetime().nullable(),
+    warrantyPolicySource: z.enum([
+      "CHECKOUT_SNAPSHOT",
+      "CURRENT_PRODUCT_POLICY_BACKFILL",
+      "UNAVAILABLE",
+    ]),
+    coverage: z.enum(["IN_WARRANTY", "OUT_OF_WARRANTY", "NO_WARRANTY", "REQUIRES_VERIFICATION"]),
+    allowed: z.boolean(),
+    reason: z.string().nullable(),
+    allowedRequestTypes: z.array(z.enum(["WARRANTY", "TECHNICAL_SUPPORT"])),
+  }),
+);
+const CreateServiceRequest = registry.register(
+  "CreateServiceRequest",
+  z.object({
+    type: z.enum(["WARRANTY", "TECHNICAL_SUPPORT"]),
+    subject: z.string().min(1).max(200),
+    previousRequestId: z.number().int().positive().optional(),
+    items: z
+      .array(
+        z.object({
+          orderDetailId: z.number().int().positive(),
+          deviceLabel: z.string().min(1).max(100),
+          serialNumber: z.string().min(1).max(100).optional(),
+          issueDescription: z.string().min(1).max(5000),
+        }),
+      )
+      .min(1)
+      .max(50),
+  }),
+);
 const PaymentInstructions = z.object({
   qrImageUrl: z.string().url(),
   bankCode: z.string(),
@@ -1485,6 +1539,269 @@ op({
   request: id,
   ok: [200, "Cancelled", data(Order)],
   errors: { 404: "Not found", 409: "Not cancellable" },
+});
+op({
+  method: "get",
+  path: `${v1}/after-sales/devices`,
+  summary: "List my eligible after-sales devices",
+  tag: "after-sales",
+  auth: "user",
+  request: { query: deviceEligibilityQuery },
+  ok: [200, "OK", page(EligibleDevice)],
+  errors: { 401: "Unauthenticated" },
+});
+op({
+  method: "post",
+  path: `${v1}/after-sales`,
+  summary: "Create an after-sales request",
+  tag: "after-sales",
+  auth: "user",
+  request: {
+    headers: z.object({ "Idempotency-Key": z.string().min(1).max(64) }),
+    body: json(CreateServiceRequest),
+  },
+  ok: [201, "Created (200 when the key was already used)", data(z.unknown())],
+  errors: {
+    404: "Order detail not found",
+    409: "Order detail ineligible, warranty unavailable, duplicate serial, or idempotency conflict",
+  },
+});
+op({
+  method: "get",
+  path: `${v1}/after-sales`,
+  summary: "List my after-sales requests",
+  tag: "after-sales",
+  auth: "user",
+  request: { query: pageQuery },
+  ok: [200, "OK", page(z.unknown())],
+  errors: { 401: "Unauthenticated" },
+});
+op({
+  method: "get",
+  path: `${v1}/after-sales/{id}`,
+  summary: "Get my after-sales request",
+  tag: "after-sales",
+  auth: "user",
+  request: { params: idParams },
+  ok: [200, "OK", data(z.unknown())],
+  errors: { 404: "Service request not found" },
+});
+op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/items/{itemId}/cancel`,
+  summary: "Cancel an eligible after-sales device",
+  tag: "after-sales",
+  auth: "user",
+  request: { params: z.object({ id: z.number(), itemId: z.number() }) },
+  ok: [200, "Cancelled", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Invalid transition" },
+});
+op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/items/{itemId}/confirm`,
+  summary: "Confirm an after-sales device completion",
+  tag: "after-sales",
+  auth: "user",
+  request: { params: z.object({ id: z.number(), itemId: z.number() }) },
+  ok: [200, "Confirmed", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Confirmation unavailable" },
+});
+op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/items/{itemId}/dispute-completion`,
+  summary: "Dispute an after-sales completion",
+  tag: "after-sales",
+  auth: "user",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: json(
+      z.object({ reason: z.enum(["DEVICE_NOT_RECEIVED", "ISSUE_PERSISTS"]), note: z.string() }),
+    ),
+  },
+  ok: [200, "Disputed", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Invalid transition" },
+});
+op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/messages`,
+  summary: "Send a public after-sales message",
+  tag: "after-sales",
+  auth: "user",
+  request: {
+    params: idParams,
+    body: json(z.object({ itemId: z.number().optional(), body: z.string().min(1) })),
+  },
+  ok: [201, "Created", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Conversation unavailable" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/after-sales/{id}/items/{itemId}/status`,
+  summary: "Transition an after-sales device",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: json(z.record(z.unknown())),
+  },
+  ok: [200, "Updated", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Invalid transition or version conflict" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/after-sales/{id}/messages`,
+  summary: "Send a public admin after-sales message",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: idParams,
+    body: json(z.object({ itemId: z.number().optional(), body: z.string().min(1) })),
+  },
+  ok: [201, "Created", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Conversation unavailable" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/after-sales/{id}/notes`,
+  summary: "Add an internal after-sales note",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: idParams,
+    body: json(z.object({ itemId: z.number().optional(), body: z.string().min(1) })),
+  },
+  ok: [201, "Created", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Conversation unavailable" },
+});
+op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/items/{itemId}/quotes/{quoteId}/decision`,
+  summary: "Decide an after-sales quote",
+  tag: "after-sales",
+  auth: "user",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number(), quoteId: z.number() }),
+    body: json(z.object({ decision: z.enum(["ACCEPT", "DECLINE"]) })),
+  },
+  ok: [200, "Updated", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Quote expired or already decided" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/after-sales/{id}/items/{itemId}/quotes`,
+  summary: "Send an after-sales quote",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: json(z.record(z.unknown())),
+  },
+  ok: [201, "Created", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Quote or version conflict" },
+});
+op({
+  method: "post",
+  path: `${v1}/after-sales/{id}/items/{itemId}/attachments`,
+  summary: "Upload after-sales images",
+  tag: "after-sales",
+  auth: "user",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: multipart(z.object({ images: z.array(binary).min(1).max(3) })),
+  },
+  ok: [201, "Created", data(z.array(z.unknown()))],
+  errors: {
+    404: "Not found",
+    409: "Limit or invalid state",
+    413: "Image too large",
+    503: "Storage unavailable",
+  },
+});
+op({
+  method: "delete",
+  path: `${v1}/after-sales/{id}/attachments/{attachmentId}`,
+  summary: "Redact an after-sales image",
+  tag: "after-sales",
+  auth: "user",
+  request: { params: z.object({ id: z.number(), attachmentId: z.number() }) },
+  ok: [204, "Deleted"],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/after-sales/{id}/items/{itemId}/attachments`,
+  summary: "Upload an admin after-sales image",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: multipart(z.object({ images: z.array(binary).min(1).max(3) })),
+  },
+  ok: [201, "Created", data(z.array(z.unknown()))],
+  errors: {
+    404: "Not found",
+    409: "Limit or invalid state",
+    413: "Image too large",
+    503: "Storage unavailable",
+  },
+});
+op({
+  method: "delete",
+  path: `${v1}/admin/after-sales/{id}/attachments/{attachmentId}`,
+  summary: "Redact an admin after-sales image",
+  tag: "admin",
+  auth: "admin",
+  request: { params: z.object({ id: z.number(), attachmentId: z.number() }) },
+  ok: [204, "Deleted"],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/after-sales`,
+  summary: "List after-sales requests",
+  tag: "admin",
+  auth: "admin",
+  request: { query: z.object({}).passthrough() },
+  ok: [200, "OK", page(z.unknown())],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/after-sales/summary`,
+  summary: "Summarize after-sales requests",
+  tag: "admin",
+  auth: "admin",
+  ok: [200, "OK", data(z.unknown())],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/after-sales/assignees`,
+  summary: "List after-sales assignees",
+  tag: "admin",
+  auth: "admin",
+  ok: [200, "OK", data(z.array(z.object({ id: z.number(), name: z.string() })))],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/after-sales/{id}`,
+  summary: "Get an after-sales request",
+  tag: "admin",
+  auth: "admin",
+  request: { params: idParams },
+  ok: [200, "OK", data(z.unknown())],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/after-sales/{id}/assign`,
+  summary: "Assign an after-sales request",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: idParams,
+    body: json(z.object({ assignedToId: z.number().nullable(), expectedVersion: z.number() })),
+  },
+  ok: [200, "Updated", data(z.unknown())],
+  errors: { 404: "Not found", 409: "Assignee or version conflict" },
 });
 op({
   method: "get",

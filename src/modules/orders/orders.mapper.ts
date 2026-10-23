@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { productImage } from "modules/products/products.mapper";
+import {
+  allowedRequestTypesForCoverage,
+  classifyCoverage,
+} from "modules/after-sales/after-sales.eligibility";
 
 export const orderInclude = {
   orderDetails: {
@@ -32,11 +36,29 @@ export const toOrderDto = (o: OrderRow) => ({
   receiverPhone: o.receiverPhone,
   createdAt: o.createdAt,
   items: o.orderDetails.map((d) => ({
+    orderDetailId: d.id,
     productId: d.productId,
     name: d.product.name,
     image: productImage(d.product.image),
     price: d.price,
     quantity: d.quantity,
+    warrantyMonthsSnapshot: d.warrantyMonthsSnapshot,
+    warrantyStartAt: d.warrantyStartAt,
+    warrantyEndAt: d.warrantyEndAt,
+    warrantyPolicySource: d.warrantyPolicySource,
+    coverage: classifyCoverage({
+      months: d.warrantyMonthsSnapshot,
+      startAt: d.warrantyStartAt,
+      endAt: d.warrantyEndAt,
+    }),
+    allowedRequestTypes: allowedRequestTypesForCoverage(
+      classifyCoverage({
+        months: d.warrantyMonthsSnapshot,
+        startAt: d.warrantyStartAt,
+        endAt: d.warrantyEndAt,
+      }),
+      d.quantity,
+    ),
     productDiscountAmount: d.productDiscountAmount,
     couponDiscountAmount: d.couponDiscountAmount,
     netLineTotal: d.price * d.quantity - d.productDiscountAmount - d.couponDiscountAmount,

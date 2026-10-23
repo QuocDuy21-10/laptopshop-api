@@ -62,8 +62,100 @@ enum PriceAlertMode {
   TARGET_PRICE
 }
 
+enum WarrantyPolicySource {
+  CHECKOUT_SNAPSHOT
+  CURRENT_PRODUCT_POLICY_BACKFILL
+  UNAVAILABLE
+}
+
+enum WarrantyCoverage {
+  IN_WARRANTY
+  OUT_OF_WARRANTY
+  NO_WARRANTY
+  REQUIRES_VERIFICATION
+}
+
+enum ServiceRequestType {
+  WARRANTY
+  TECHNICAL_SUPPORT
+}
+
+enum ServiceRequestStatus {
+  SUBMITTED
+  REVIEWING
+  IN_PROGRESS
+  AWAITING_CUSTOMER
+  PARTIALLY_COMPLETED
+  CLOSED
+}
+
+enum ServiceRequestItemStatus {
+  SUBMITTED
+  REVIEWING
+  APPROVED
+  AWAITING_ITEM
+  RECEIVED
+  DIAGNOSING
+  AWAITING_QUOTE_DECISION
+  IN_SERVICE
+  READY_FOR_RETURN
+  RETURNED
+  RESOLVED
+  CLOSED
+  REJECTED
+  CANCELLED
+}
+
+enum ServiceItemCloseReason {
+  CUSTOMER_CONFIRMED
+  CUSTOMER_CONFIRMATION_TIMEOUT
+  ADMINISTRATIVE
+  REJECTED
+  CUSTOMER_CANCELLED
+}
+
+enum ServiceEventKind {
+  REQUEST_CREATED
+  STATUS_CHANGED
+  PUBLIC_MESSAGE
+  INTERNAL_NOTE
+  ASSIGNED
+  QUOTE_SENT
+  QUOTE_DECIDED
+  DEVICE_RETURNED
+  CUSTOMER_CONFIRMED
+  COMPLETION_DISPUTED
+  AUTO_CLOSED
+  ADMIN_CLOSED
+  FOLLOW_UP_CREATED
+}
+
+enum ServiceEventVisibility {
+  PUBLIC
+  INTERNAL
+}
+
+enum ServiceAttachmentStatus {
+  PENDING
+  READY
+  DELETING
+}
+
+enum ServiceQuoteStatus {
+  SENT
+  ACCEPTED
+  DECLINED
+  EXPIRED
+  SUPERSEDED
+}
+
 enum NotificationType {
   PRICE_DROP
+  AFTER_SALES_MESSAGE
+  AFTER_SALES_STATUS_CHANGED
+  AFTER_SALES_QUOTE_SENT
+  AFTER_SALES_CONFIRMATION_REQUIRED
+  AFTER_SALES_AUTO_CLOSED
 }
 
 enum NotificationPriceSource {
@@ -96,6 +188,7 @@ enum NotificationDeliveryStatus {
 enum OutboxEventType {
   PRICE_REEVALUATION_REQUESTED
   NOTIFICATION_DELIVERY_REQUESTED
+  AFTER_SALES_MILESTONE_REQUESTED
 }
 
 model User {
@@ -136,6 +229,11 @@ model User {
   emailVerificationChallenges EmailVerificationChallenge[]
   pushSubscriptions           PushSubscription[]
   deliveryAudits              NotificationDeliveryAudit[]  @relation("DeliveryAuditActor")
+  afterSalesRequests          ServiceRequest[]             @relation("AfterSalesCustomer")
+  assignedAfterSalesRequests  ServiceRequest[]             @relation("AfterSalesAssignee")
+  afterSalesEvents            ServiceRequestEvent[]        @relation("AfterSalesEventActor")
+  afterSalesAttachments       ServiceRequestAttachment[]   @relation("AfterSalesAttachmentUploader")
+  afterSalesQuotes            ServiceQuote[]               @relation("AfterSalesQuoteCreator")
 
   @@map("users")
 }
@@ -218,6 +316,7 @@ model Notification {
   id             Int                      @id @default(autoincrement())
   userId         Int
   productId      Int?
+  serviceRequestId Int?
   type           NotificationType
   title          String                   @db.VarChar(255)
   message        String                   @db.VarChar(500)
@@ -233,9 +332,11 @@ model Notification {
 
   user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   product    Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  serviceRequest ServiceRequest?    @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
   deliveries NotificationDelivery[]
 
   @@index([userId, readAt, createdAt])
+  @@index([serviceRequestId, createdAt])
   @@map("notifications")
 }
 
@@ -244,6 +345,8 @@ model NotificationPreference {
   userId         Int      @unique
   emailEnabled   Boolean  @default(false)
   webPushEnabled Boolean  @default(false)
+  afterSalesEmailEnabled Boolean @default(true)
+  afterSalesWebPushEnabled Boolean @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -443,13 +546,17 @@ model Order {
 }
 
 model OrderDetail {
-  id                     Int     @id @default(autoincrement())
+  id                     Int                  @id @default(autoincrement())
   price                  Int
   quantity               Int
-  productDiscountAmount  Int     @default(0)
-  couponDiscountAmount   Int     @default(0)
+  productDiscountAmount  Int                  @default(0)
+  couponDiscountAmount   Int                  @default(0)
   automaticPromotionId   Int?
-  automaticPromotionName String? @db.VarChar(150)
+  automaticPromotionName String?              @db.VarChar(150)
+  warrantyMonthsSnapshot Int?
+  warrantyStartAt        DateTime?
+  warrantyEndAt          DateTime?
+  warrantyPolicySource   WarrantyPolicySource @default(UNAVAILABLE)
 
   order   Order @relation(fields: [orderId], references: [id])
   orderId Int
@@ -458,10 +565,169 @@ model OrderDetail {
   productId Int
 
   review              Review?
+  serviceRequestItems ServiceRequestItem[]
   automaticPromotion  Promotion?           @relation("OrderDetailAutomaticPromotion", fields: [automaticPromotionId], references: [id], onDelete: Restrict)
   flashSaleAllocation FlashSaleAllocation?
 
   @@map("order_detail")
+}
+
+model ServiceRequest {
+  id                Int                  @id @default(autoincrement())
+  code              String               @unique @db.VarChar(32)
+  userId            Int
+  type              ServiceRequestType
+  status            ServiceRequestStatus @default(SUBMITTED)
+  subject           String               @db.VarChar(200)
+  assignedToId      Int?
+  previousRequestId Int?
+  idempotencyKey    String               @db.VarChar(64)
+  requestHash       String               @db.Char(64)
+  version           Int                  @default(1)
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  closedAt          DateTime?
+
+  customer        User                       @relation("AfterSalesCustomer", fields: [userId], references: [id], onDelete: Restrict)
+  assignee        User?                      @relation("AfterSalesAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  previousRequest ServiceRequest?            @relation("AfterSalesFollowUp", fields: [previousRequestId], references: [id], onDelete: SetNull)
+  followUps       ServiceRequest[]           @relation("AfterSalesFollowUp")
+  items           ServiceRequestItem[]
+  events          ServiceRequestEvent[]
+  attachments     ServiceRequestAttachment[]
+  notifications   Notification[]
+
+  @@unique([userId, idempotencyKey])
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([assignedToId, status])
+  @@index([previousRequestId])
+  @@map("service_requests")
+}
+
+model ServiceRequestItem {
+  id                     Int                      @id @default(autoincrement())
+  serviceRequestId       Int
+  orderDetailId          Int
+  position               Int                      @db.UnsignedSmallInt
+  productNameSnapshot    String                   @db.VarChar(255)
+  deviceLabel            String                   @db.VarChar(100)
+  serialNumber           String?                  @db.VarChar(100)
+  serialNumberNormalized String?                  @db.VarChar(100)
+  issueDescription       String                   @db.Text
+  coverageAtCreation     WarrantyCoverage
+  status                 ServiceRequestItemStatus @default(SUBMITTED)
+  resolution             String?                  @db.Text
+  version                Int                      @default(1)
+  resolvedAt             DateTime?
+  returnedAt             DateTime?
+  confirmationDueAt      DateTime?
+  customerConfirmedAt    DateTime?
+  closedAt               DateTime?
+  closeReason            ServiceItemCloseReason?
+  createdAt              DateTime                 @default(now())
+  updatedAt              DateTime                 @updatedAt
+
+  request     ServiceRequest             @relation(fields: [serviceRequestId], references: [id], onDelete: Restrict)
+  orderDetail OrderDetail                @relation(fields: [orderDetailId], references: [id], onDelete: Restrict)
+  events      ServiceRequestEvent[]
+  attachments ServiceRequestAttachment[]
+  quotes      ServiceQuote[]
+
+  @@unique([serviceRequestId, position])
+  @@index([orderDetailId, status])
+  @@index([serviceRequestId, status])
+  @@index([confirmationDueAt, status])
+  @@map("service_request_items")
+}
+
+model ServiceRequestEvent {
+  id                   Int                       @id @default(autoincrement())
+  serviceRequestId     Int
+  serviceRequestItemId Int?
+  actorId              Int?
+  kind                 ServiceEventKind
+  visibility           ServiceEventVisibility    @default(PUBLIC)
+  fromStatus           ServiceRequestItemStatus?
+  toStatus             ServiceRequestItemStatus?
+  body                 String?                   @db.Text
+  metadata             Json?
+  createdAt            DateTime                  @default(now())
+
+  request ServiceRequest      @relation(fields: [serviceRequestId], references: [id], onDelete: Restrict)
+  item    ServiceRequestItem? @relation(fields: [serviceRequestItemId], references: [id], onDelete: SetNull)
+  actor   User?               @relation("AfterSalesEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([serviceRequestId, createdAt, id])
+  @@index([serviceRequestItemId, createdAt, id])
+  @@map("service_request_events")
+}
+
+model ServiceRequestAttachment {
+  id                   Int                     @id @default(autoincrement())
+  serviceRequestId     Int
+  serviceRequestItemId Int?
+  eventId              Int?
+  uploadedById         Int
+  objectKey            String                  @unique @db.VarChar(512)
+  mimeType             String                  @db.VarChar(50)
+  byteSize             Int
+  width                Int
+  height               Int
+  visibility           ServiceEventVisibility  @default(PUBLIC)
+  status               ServiceAttachmentStatus @default(PENDING)
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+  deletedAt            DateTime?
+  storageDeletedAt     DateTime?
+
+  request  ServiceRequest      @relation(fields: [serviceRequestId], references: [id], onDelete: Restrict)
+  item     ServiceRequestItem? @relation(fields: [serviceRequestItemId], references: [id], onDelete: SetNull)
+  uploader User                @relation("AfterSalesAttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([serviceRequestId, createdAt])
+  @@index([serviceRequestItemId, status, createdAt])
+  @@index([status, updatedAt])
+  @@map("service_request_attachments")
+}
+
+model ServiceQuote {
+  id                   Int                @id @default(autoincrement())
+  serviceRequestItemId Int
+  version              Int
+  status               ServiceQuoteStatus @default(SENT)
+  currency             String             @default("VND") @db.Char(3)
+  subtotal             Int
+  total                Int
+  note                 String?            @db.VarChar(1000)
+  validUntil           DateTime
+  createdById          Int
+  respondedAt          DateTime?
+  createdAt            DateTime           @default(now())
+
+  item      ServiceRequestItem @relation(fields: [serviceRequestItemId], references: [id], onDelete: Restrict)
+  createdBy User               @relation("AfterSalesQuoteCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  lines     ServiceQuoteLine[]
+
+  @@unique([serviceRequestItemId, version])
+  @@index([serviceRequestItemId, status])
+  @@index([validUntil, status])
+  @@map("service_quotes")
+}
+
+model ServiceQuoteLine {
+  id          Int    @id @default(autoincrement())
+  quoteId     Int
+  description String @db.VarChar(255)
+  quantity    Int
+  unitPrice   Int
+  lineTotal   Int
+  position    Int    @db.UnsignedSmallInt
+
+  quote ServiceQuote @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@unique([quoteId, position])
+  @@map("service_quote_lines")
 }
 
 model Promotion {

@@ -1,4 +1,7 @@
-export type OutboxEventType = "PRICE_REEVALUATION_REQUESTED" | "NOTIFICATION_DELIVERY_REQUESTED";
+export type OutboxEventType =
+  | "PRICE_REEVALUATION_REQUESTED"
+  | "NOTIFICATION_DELIVERY_REQUESTED"
+  | "AFTER_SALES_MILESTONE_REQUESTED";
 
 export type OutboxEventInput = {
   eventType: OutboxEventType;

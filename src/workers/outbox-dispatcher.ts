@@ -3,6 +3,7 @@ import { prisma } from "config/client";
 import { env } from "config/env";
 import { createBullMqRedisClient, createQueue } from "queues/queue.factory";
 import { NOTIFICATION_QUEUE_NAME } from "queues/notification.queue";
+import { AFTER_SALES_QUEUE_NAME } from "queues/after-sales.queue";
 import { PRICING_QUEUE_NAME } from "queues/pricing.queue";
 import {
   claimOutboxBatch,
@@ -21,6 +22,11 @@ export const runOutboxDispatcherOnce = async (
     env.NOTIFICATION_QUEUE_PREFIX,
   );
   const pricingQueue = createQueue(PRICING_QUEUE_NAME, connection, env.NOTIFICATION_QUEUE_PREFIX);
+  const afterSalesQueue = createQueue(
+    AFTER_SALES_QUEUE_NAME,
+    connection,
+    env.AFTER_SALES_QUEUE_PREFIX,
+  );
   const leaseOwner = randomUUID();
   return dispatchOutboxBatch({
     claim: () =>
@@ -31,7 +37,11 @@ export const runOutboxDispatcherOnce = async (
         limit: env.OUTBOX_BATCH_SIZE,
       }),
     queueFor: (eventType) =>
-      eventType === "NOTIFICATION_DELIVERY_REQUESTED" ? notificationQueue : pricingQueue,
+      eventType === "NOTIFICATION_DELIVERY_REQUESTED"
+        ? notificationQueue
+        : eventType === "AFTER_SALES_MILESTONE_REQUESTED"
+          ? afterSalesQueue
+          : pricingQueue,
     markPublished: (id, owner) => markOutboxPublished(prisma, id, owner),
     markFailed: (id, owner, error) => markOutboxFailed(prisma, id, owner, error),
     now: new Date(),

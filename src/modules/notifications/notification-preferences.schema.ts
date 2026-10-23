@@ -4,6 +4,8 @@ export const updateNotificationPreferencesBody = z
   .object({
     emailEnabled: z.boolean().optional(),
     webPushEnabled: z.boolean().optional(),
+    afterSalesEmailEnabled: z.boolean().optional(),
+    afterSalesWebPushEnabled: z.boolean().optional(),
   })
   .strict()
   .refine((value) => value.emailEnabled !== undefined || value.webPushEnabled !== undefined, {

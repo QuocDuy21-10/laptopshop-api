@@ -55,6 +55,10 @@ const orderRow = (over: Record<string, unknown> = {}) => ({
       productId: 1,
       price: 50,
       quantity: 2,
+      warrantyMonthsSnapshot: 24,
+      warrantyStartAt: null,
+      warrantyEndAt: null,
+      warrantyPolicySource: "CHECKOUT_SNAPSHOT",
       product: { name: "A", image: null },
     },
     {
@@ -69,7 +73,7 @@ const orderRow = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 const lines = [
-  { productId: 1, quantity: 2, product: { price: 50, isActive: true } },
+  { productId: 1, quantity: 2, product: { price: 50, isActive: true, warrantyMonths: 24 } },
   { productId: 2, quantity: 1, product: { price: 100, isActive: true } },
 ];
 const post = () =>
@@ -148,6 +152,8 @@ describe("POST /api/v1/orders", () => {
         productId: 1,
         quantity: 2,
         price: 50,
+        warrantyMonthsSnapshot: 24,
+        warrantyPolicySource: "CHECKOUT_SNAPSHOT",
         productDiscountAmount: 0,
         couponDiscountAmount: 0,
       }),
