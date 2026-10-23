@@ -3,6 +3,24 @@ import { prisma } from "config/client";
 import { pageArgs, pageMeta } from "lib/http";
 import type { DeviceEligibilityQuery } from "modules/after-sales/after-sales.schema";
 
+export const customerServiceRequestInclude = {
+  items: {
+    include: {
+      orderDetail: { select: { id: true, orderId: true } },
+      quotes: { include: { lines: true }, orderBy: { version: "desc" } },
+    },
+    orderBy: { position: "asc" },
+  },
+  events: {
+    where: { visibility: "PUBLIC" },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  },
+} satisfies Prisma.ServiceRequestInclude;
+
+export type CustomerServiceRequestRow = Prisma.ServiceRequestGetPayload<{
+  include: typeof customerServiceRequestInclude;
+}>;
+
 export const eligibleDeviceInclude = {
   order: {
     select: { id: true, userId: true, status: true, paymentStatus: true, completedAt: true },
@@ -32,4 +50,26 @@ export const listEligibleDeviceRows = async (userId: number, query: DeviceEligib
     }),
   ]);
   return { rows, meta: pageMeta(query, total) };
+};
+
+export const lockOrderDetails = async (tx: Prisma.TransactionClient, ids: number[]) => {
+  const sortedIds = [...new Set(ids)].sort((a, b) => a - b);
+  await tx.$queryRaw<Array<{ id: number }>>`
+    SELECT id FROM order_detail
+    WHERE id IN (${Prisma.join(sortedIds)})
+    ORDER BY id
+    FOR UPDATE
+  `;
+  return tx.orderDetail.findMany({
+    where: { id: { in: sortedIds } },
+    include: {
+      order: { select: { id: true, userId: true, status: true, paymentStatus: true } },
+      product: { select: { name: true } },
+      serviceRequestItems: {
+        where: { status: { notIn: ["CLOSED", "REJECTED", "CANCELLED"] } },
+        select: { id: true, serialNumberNormalized: true },
+      },
+    },
+    orderBy: { id: "asc" },
+  });
 };

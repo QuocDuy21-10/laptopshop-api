@@ -4,6 +4,7 @@ import {
   classifyCoverage,
 } from "modules/after-sales/after-sales.eligibility";
 import type { EligibleDeviceRow } from "modules/after-sales/after-sales.repository";
+import type { CustomerServiceRequestRow } from "modules/after-sales/after-sales.repository";
 import type { ServiceRequestType } from "modules/after-sales/after-sales.types";
 
 export type EligibleDeviceDto = {
@@ -71,3 +72,64 @@ export const toEligibleDeviceDto = (
     allowedRequestTypes,
   };
 };
+
+export const toCustomerServiceRequestDto = (row: CustomerServiceRequestRow) => ({
+  id: row.id,
+  code: row.code,
+  type: row.type,
+  status: row.status,
+  subject: row.subject,
+  previousRequestId: row.previousRequestId,
+  createdAt: row.createdAt,
+  updatedAt: row.updatedAt,
+  closedAt: row.closedAt,
+  items: row.items.map((item) => ({
+    id: item.id,
+    orderDetailId: item.orderDetailId,
+    orderId: item.orderDetail.orderId,
+    position: item.position,
+    productNameSnapshot: item.productNameSnapshot,
+    deviceLabel: item.deviceLabel,
+    serialNumber: item.serialNumber,
+    issueDescription: item.issueDescription,
+    coverageAtCreation: item.coverageAtCreation,
+    status: item.status,
+    resolution: item.resolution,
+    version: item.version,
+    resolvedAt: item.resolvedAt,
+    returnedAt: item.returnedAt,
+    confirmationDueAt: item.confirmationDueAt,
+    customerConfirmedAt: item.customerConfirmedAt,
+    closedAt: item.closedAt,
+    closeReason: item.closeReason,
+    quotes: item.quotes.map((quote) => ({
+      id: quote.id,
+      version: quote.version,
+      status: quote.status,
+      currency: quote.currency,
+      subtotal: quote.subtotal,
+      total: quote.total,
+      note: quote.note,
+      validUntil: quote.validUntil,
+      respondedAt: quote.respondedAt,
+      createdAt: quote.createdAt,
+      lines: quote.lines.map((line) => ({
+        id: line.id,
+        description: line.description,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        lineTotal: line.lineTotal,
+        position: line.position,
+      })),
+    })),
+  })),
+  events: row.events.map((event) => ({
+    id: event.id,
+    itemId: event.serviceRequestItemId,
+    kind: event.kind,
+    fromStatus: event.fromStatus,
+    toStatus: event.toStatus,
+    body: event.body,
+    createdAt: event.createdAt,
+  })),
+});

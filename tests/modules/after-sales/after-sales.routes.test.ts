@@ -1,5 +1,6 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
 
+import { createHash } from "node:crypto";
 import request from "supertest";
 import { buildApp } from "../../helpers/app";
 import { USER, cookieFor } from "../../helpers/auth";
@@ -83,5 +84,148 @@ describe("GET /api/v1/after-sales/devices", () => {
     expect(res.status).toBe(200);
     expect(res.body.data[0]).toMatchObject({ coverage: "OUT_OF_WARRANTY", allowed: true });
     expect(res.body.data[0].allowedRequestTypes).toEqual(["TECHNICAL_SUPPORT"]);
+  });
+});
+
+describe("POST /api/v1/after-sales", () => {
+  const input = {
+    type: "TECHNICAL_SUPPORT",
+    subject: "Cần hỗ trợ driver",
+    items: [
+      { orderDetailId: 12, deviceLabel: "Thiết bị 1", issueDescription: "Thiếu driver" },
+      { orderDetailId: 13, deviceLabel: "Thiết bị 2", issueDescription: "Không nhận wifi" },
+    ],
+  };
+
+  it("creates one request containing devices from different paid orders", async () => {
+    prismaMock.serviceRequest.findUnique.mockResolvedValue(null);
+    prismaMock.$queryRaw.mockResolvedValue([{ id: 12 }, { id: 13 }]);
+    prismaMock.orderDetail.findMany.mockResolvedValue([
+      {
+        id: 12,
+        orderId: 50,
+        productId: 7,
+        quantity: 1,
+        warrantyMonthsSnapshot: null,
+        warrantyStartAt: null,
+        warrantyEndAt: null,
+        warrantyPolicySource: "UNAVAILABLE",
+        order: { id: 50, userId: USER.id, status: "COMPLETED", paymentStatus: "PAYMENT_SUCCESS" },
+        product: { name: "Laptop A" },
+        serviceRequestItems: [],
+      },
+      {
+        id: 13,
+        orderId: 51,
+        productId: 8,
+        quantity: 1,
+        warrantyMonthsSnapshot: null,
+        warrantyStartAt: null,
+        warrantyEndAt: null,
+        warrantyPolicySource: "UNAVAILABLE",
+        order: { id: 51, userId: USER.id, status: "COMPLETED", paymentStatus: "PAYMENT_SUCCESS" },
+        product: { name: "Laptop B" },
+        serviceRequestItems: [],
+      },
+    ]);
+    prismaMock.serviceRequest.create.mockResolvedValue({ id: 90 });
+    prismaMock.serviceRequest.findUniqueOrThrow.mockResolvedValue({
+      id: 90,
+      code: "AS-TEST-90",
+      userId: USER.id,
+      type: "TECHNICAL_SUPPORT",
+      status: "SUBMITTED",
+      subject: input.subject,
+      previousRequestId: null,
+      createdAt: new Date("2026-10-23T00:00:00.000Z"),
+      updatedAt: new Date("2026-10-23T00:00:00.000Z"),
+      closedAt: null,
+      items: [
+        {
+          id: 1,
+          orderDetailId: 12,
+          orderDetail: { orderId: 50 },
+          position: 0,
+          productNameSnapshot: "Laptop A",
+          deviceLabel: "Thiết bị 1",
+          serialNumber: null,
+          issueDescription: "Thiếu driver",
+          coverageAtCreation: "REQUIRES_VERIFICATION",
+          status: "SUBMITTED",
+          resolution: null,
+          version: 1,
+          resolvedAt: null,
+          returnedAt: null,
+          confirmationDueAt: null,
+          customerConfirmedAt: null,
+          closedAt: null,
+          closeReason: null,
+          quotes: [],
+        },
+        {
+          id: 2,
+          orderDetailId: 13,
+          orderDetail: { orderId: 51 },
+          position: 1,
+          productNameSnapshot: "Laptop B",
+          deviceLabel: "Thiết bị 2",
+          serialNumber: null,
+          issueDescription: "Không nhận wifi",
+          coverageAtCreation: "REQUIRES_VERIFICATION",
+          status: "SUBMITTED",
+          resolution: null,
+          version: 1,
+          resolvedAt: null,
+          returnedAt: null,
+          confirmationDueAt: null,
+          customerConfirmedAt: null,
+          closedAt: null,
+          closeReason: null,
+          quotes: [],
+        },
+      ],
+      events: [],
+    });
+
+    const res = await request(buildApp())
+      .post("/api/v1/after-sales")
+      .set("Cookie", cookieFor(USER))
+      .set("Idempotency-Key", "after-sales-create-1")
+      .send(input);
+
+    expect(res.status).toBe(201);
+    expect(
+      res.body.data.items.map((item: { orderDetailId: number }) => item.orderDetailId),
+    ).toEqual([12, 13]);
+  });
+
+  it("replays an idempotent request without creating another row", async () => {
+    prismaMock.serviceRequest.findUnique.mockResolvedValue({
+      id: 90,
+      requestHash: createHash("sha256").update(JSON.stringify(input)).digest("hex"),
+    } as never);
+    prismaMock.serviceRequest.findUniqueOrThrow.mockResolvedValue({
+      id: 90,
+      code: "AS-TEST-90",
+      userId: USER.id,
+      type: "TECHNICAL_SUPPORT",
+      status: "SUBMITTED",
+      subject: input.subject,
+      previousRequestId: null,
+      createdAt: new Date("2026-10-23T00:00:00.000Z"),
+      updatedAt: new Date("2026-10-23T00:00:00.000Z"),
+      closedAt: null,
+      items: [],
+      events: [],
+    });
+
+    const res = await request(buildApp())
+      .post("/api/v1/after-sales")
+      .set("Cookie", cookieFor(USER))
+      .set("Idempotency-Key", "after-sales-create-1")
+      .send(input);
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.serviceRequest.create).not.toHaveBeenCalled();
   });
 });

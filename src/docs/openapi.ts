@@ -447,6 +447,25 @@ const EligibleDevice = registry.register(
     allowedRequestTypes: z.array(z.enum(["WARRANTY", "TECHNICAL_SUPPORT"])),
   }),
 );
+const CreateServiceRequest = registry.register(
+  "CreateServiceRequest",
+  z.object({
+    type: z.enum(["WARRANTY", "TECHNICAL_SUPPORT"]),
+    subject: z.string().min(1).max(200),
+    previousRequestId: z.number().int().positive().optional(),
+    items: z
+      .array(
+        z.object({
+          orderDetailId: z.number().int().positive(),
+          deviceLabel: z.string().min(1).max(100),
+          serialNumber: z.string().min(1).max(100).optional(),
+          issueDescription: z.string().min(1).max(5000),
+        }),
+      )
+      .min(1)
+      .max(50),
+  }),
+);
 const PaymentInstructions = z.object({
   qrImageUrl: z.string().url(),
   bankCode: z.string(),
@@ -1530,6 +1549,22 @@ op({
   request: { query: deviceEligibilityQuery },
   ok: [200, "OK", page(EligibleDevice)],
   errors: { 401: "Unauthenticated" },
+});
+op({
+  method: "post",
+  path: `${v1}/after-sales`,
+  summary: "Create an after-sales request",
+  tag: "after-sales",
+  auth: "user",
+  request: {
+    headers: z.object({ "Idempotency-Key": z.string().min(1).max(64) }),
+    body: json(CreateServiceRequest),
+  },
+  ok: [201, "Created (200 when the key was already used)", data(z.unknown())],
+  errors: {
+    404: "Order detail not found",
+    409: "Order detail ineligible, warranty unavailable, duplicate serial, or idempotency conflict",
+  },
 });
 op({
   method: "get",
