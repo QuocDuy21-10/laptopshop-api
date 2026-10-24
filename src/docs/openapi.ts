@@ -394,6 +394,7 @@ const orderShape = {
   paymentRequired: z.boolean(),
   paymentMethod: z.string(),
   paymentStatus: z.string(),
+  paymentCancellationBlockedReason: z.enum(["PAID", "VERIFYING"]).nullable(),
   receiverName: z.string(),
   receiverAddress: z.string(),
   receiverPhone: z.string(),
