@@ -1088,6 +1088,43 @@ const multipart = (schema: z.ZodTypeAny) => ({
 });
 const userData = data(z.object({ user: User }));
 
+const PriceAlertSweepStats = z.object({
+  productsScanned: z.number().int(),
+  itemsEvaluated: z.number().int(),
+  notificationsCreated: z.number().int(),
+  duplicatesSkipped: z.number().int(),
+  invalidStatesSkipped: z.number().int(),
+  errors: z.number().int(),
+});
+const PriceAlertSweepCheckpoint = z.object({
+  checkpointProductId: z.number().int().nonnegative(),
+  cycleStartedAt: z.string().datetime().nullable(),
+  lastStartedAt: z.string().datetime().nullable(),
+  lastCompletedAt: z.string().datetime().nullable(),
+  lastSucceededAt: z.string().datetime().nullable(),
+  lastDurationMs: z.number().int().nullable(),
+  consecutiveFailures: z.number().int().nonnegative(),
+  lastErrorCode: z.string().nullable(),
+  lastStats: PriceAlertSweepStats.nullable(),
+  updatedAt: z.string().datetime(),
+});
+const NotificationOperations = z.object({
+  activeAlerts: z.number().int(),
+  notifications: z.number().int(),
+  deadDeliveries: z.number().int(),
+  pendingOutbox: z.number().int(),
+  workers: z.array(
+    z.object({
+      workerName: z.string(),
+      instanceId: z.string(),
+      status: z.string(),
+      lastSeenAt: z.string().datetime(),
+      isStale: z.boolean(),
+    }),
+  ),
+  priceAlertSweep: PriceAlertSweepCheckpoint.nullable(),
+});
+
 type Op = {
   method: RouteConfig["method"];
   path: string;
@@ -1328,7 +1365,7 @@ op({
   summary: "Notification operations",
   tag: "admin",
   auth: "admin",
-  ok: [200, "OK", data(z.record(z.unknown()))],
+  ok: [200, "OK", data(NotificationOperations)],
 });
 op({
   method: "get",

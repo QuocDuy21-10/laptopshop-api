@@ -1,9 +1,18 @@
+import type { PriceAlertCheckpointSnapshot } from "modules/price-alerts/price-alert.checkpoint";
+
 export const toNotificationOperationsDto = (input: {
   activeAlerts: number;
   notifications: number;
   deadDeliveries: number;
   pendingOutbox: number;
-  workers: Array<{ workerName: string; instanceId: string; status: string; lastSeenAt: Date }>;
+  workers: Array<{
+    workerName: string;
+    instanceId: string;
+    status: string;
+    lastSeenAt: Date;
+    isStale: boolean;
+  }>;
+  priceAlertSweep: PriceAlertCheckpointSnapshot | null;
 }) => input;
 
 export const toAdminDeliveryDto = (row: {

@@ -15,6 +15,7 @@ const schema = z
     REDIS_URL: z.string().min(1).default("redis://localhost:6379"),
     PRICE_ALERT_INTERVAL_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(300_000),
     PRICE_ALERT_PRODUCT_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
+    PRICE_ALERT_ITEM_BATCH_SIZE: z.coerce.number().int().min(1).max(5_000).default(500),
     PRICE_ALERT_LOCK_TTL_MS: z.coerce.number().int().min(10_000).max(900_000).default(240_000),
     NOTIFICATION_OUTBOX_ENABLED: z
       .enum(["true", "false"])

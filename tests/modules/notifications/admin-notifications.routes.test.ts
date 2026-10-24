@@ -40,6 +40,68 @@ describe("admin notification operations", () => {
     expect(JSON.stringify(response.body)).not.toMatch(/otp|p256dh|endpoint|password/i);
   });
 
+  it("returns stale-aware worker health and sanitized price alert checkpoint metrics", async () => {
+    const now = new Date();
+    prismaMock.wishlistItem.count.mockResolvedValue(4);
+    prismaMock.notification.count.mockResolvedValue(8);
+    prismaMock.notificationDelivery.count.mockResolvedValue(2);
+    prismaMock.outboxEvent.count.mockResolvedValue(3);
+    prismaMock.workerHeartbeat.findMany.mockResolvedValue([
+      {
+        workerName: "price-alert-worker",
+        instanceId: "fresh",
+        status: "HEALTHY",
+        lastSeenAt: new Date(now.getTime() - 60_000),
+      },
+      {
+        workerName: "price-alert-worker",
+        instanceId: "old",
+        status: "HEALTHY",
+        lastSeenAt: new Date(now.getTime() - 180_000),
+      },
+    ]);
+    prismaMock.workerCheckpoint.findUnique.mockResolvedValue({
+      workerName: "price-alert-worker",
+      ownerToken: "must-not-leak",
+      cursor: { version: 1, lastProductId: 42 },
+      cycleStartedAt: now,
+      lastStartedAt: now,
+      lastCompletedAt: now,
+      lastSucceededAt: now,
+      lastDurationMs: 1200,
+      consecutiveFailures: 0,
+      lastErrorCode: null,
+      lastStats: {
+        productsScanned: 4,
+        itemsEvaluated: 8,
+        notificationsCreated: 2,
+        duplicatesSkipped: 1,
+        invalidStatesSkipped: 0,
+        errors: 0,
+      },
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const response = await request(buildApp())
+      .get("/api/v1/admin/notifications/operations")
+      .set("Cookie", cookieFor(ADMIN));
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.workers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ instanceId: "fresh", isStale: false }),
+        expect.objectContaining({ instanceId: "old", isStale: true }),
+      ]),
+    );
+    expect(response.body.data.priceAlertSweep).toMatchObject({
+      checkpointProductId: 42,
+      lastDurationMs: 1200,
+      lastStats: { notificationsCreated: 2 },
+    });
+    expect(JSON.stringify(response.body)).not.toMatch(/ownerToken|"cursor"/i);
+  });
+
   it("retries a dead delivery with an audit and a new outbox event", async () => {
     prismaMock.notificationDelivery.findUnique.mockResolvedValue({
       id: 9,

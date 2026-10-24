@@ -170,6 +170,15 @@ describe("openapi document", () => {
     expect(op("/api/v1/wishlist/items/{productId}", "delete").responses[204]).toBeDefined();
   });
 
+  it("documents sanitized notification operations metrics", () => {
+    const operations = op("/api/v1/admin/notifications/operations", "get");
+    const schema = operations.responses[200].content["application/json"].schema;
+    expect(schema.properties.data.properties.priceAlertSweep).toBeDefined();
+    expect(schema.properties.data.properties.workers.items.properties.isStale).toBeDefined();
+    expect(schema.properties.data.properties.priceAlertSweep.properties.ownerToken).toBeUndefined();
+    expect(schema.properties.data.properties.priceAlertSweep.properties.cursor).toBeUndefined();
+  });
+
   it("documents the advisor request and response contract", () => {
     const advisor = op("/api/v1/advisor/recommend", "post");
     expect(advisor.requestBody.required).toBe(true);

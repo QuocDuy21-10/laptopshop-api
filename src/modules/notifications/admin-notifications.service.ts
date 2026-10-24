@@ -2,6 +2,7 @@ import { prisma } from "config/client";
 import { AppError } from "lib/errors";
 import { pageArgs, pageMeta } from "lib/http";
 import { createOutboxEvent } from "modules/outbox/outbox.repository";
+import { getPriceAlertCheckpointSnapshot } from "modules/price-alerts/price-alert.checkpoint";
 import {
   toAdminDeliveryDto,
   toNotificationOperationsDto,
@@ -9,22 +10,35 @@ import {
 import type { NotificationDeliveryQuery } from "modules/notifications/admin-notifications.schema";
 
 export const getNotificationOperations = async () => {
-  const [activeAlerts, notifications, deadDeliveries, pendingOutbox, workers] = await Promise.all([
-    prisma.wishlistItem.count({ where: { alertMode: { not: null } } }),
-    prisma.notification.count(),
-    prisma.notificationDelivery.count({ where: { status: "DEAD" } }),
-    prisma.outboxEvent.count({ where: { publishedAt: null } }),
-    prisma.workerHeartbeat.findMany({
-      select: { workerName: true, instanceId: true, status: true, lastSeenAt: true },
-      orderBy: { lastSeenAt: "desc" },
-    }),
-  ]);
+  const now = new Date();
+  const [activeAlerts, notifications, deadDeliveries, pendingOutbox, workers, priceAlertSweep] =
+    await Promise.all([
+      prisma.wishlistItem.count({ where: { alertMode: { not: null } } }),
+      prisma.notification.count(),
+      prisma.notificationDelivery.count({ where: { status: "DEAD" } }),
+      prisma.outboxEvent.count({ where: { publishedAt: null } }),
+      prisma.workerHeartbeat.findMany({
+        select: { workerName: true, instanceId: true, status: true, lastSeenAt: true },
+        orderBy: { lastSeenAt: "desc" },
+      }),
+      getPriceAlertCheckpointSnapshot(prisma),
+    ]);
   return toNotificationOperationsDto({
     activeAlerts,
     notifications,
     deadDeliveries,
     pendingOutbox,
-    workers,
+    workers: workers
+      .map((worker) => ({
+        ...worker,
+        isStale: now.getTime() - worker.lastSeenAt.getTime() > 120_000,
+      }))
+      .sort((a, b) =>
+        a.workerName === b.workerName
+          ? b.lastSeenAt.getTime() - a.lastSeenAt.getTime()
+          : a.workerName.localeCompare(b.workerName),
+      ),
+    priceAlertSweep,
   });
 };
 

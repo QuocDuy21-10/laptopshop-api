@@ -58,6 +58,7 @@ services:
       RUN_MIGRATIONS: "false"
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       REDIS_URL: redis://redis:6379
+      PRICE_ALERT_ITEM_BATCH_SIZE: ${PRICE_ALERT_ITEM_BATCH_SIZE:-500}
     depends_on:
       app:
         condition: service_healthy

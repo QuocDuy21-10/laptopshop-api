@@ -37,6 +37,7 @@ describe("parseEnv", () => {
     expect(e.REVIEW_IMAGE_URL_TTL_SECONDS).toBe(900);
     expect(e.PRICE_ALERT_INTERVAL_MS).toBe(300_000);
     expect(e.PRICE_ALERT_PRODUCT_BATCH_SIZE).toBe(100);
+    expect(e.PRICE_ALERT_ITEM_BATCH_SIZE).toBe(500);
     expect(e.PRICE_ALERT_LOCK_TTL_MS).toBe(240_000);
     expect(e.NOTIFICATION_OUTBOX_ENABLED).toBe(false);
     expect(e.NOTIFICATION_WORKER_ENABLED).toBe(false);
@@ -230,6 +231,8 @@ describe("parseEnv", () => {
     ["PRICE_ALERT_INTERVAL_MS", "3600001"],
     ["PRICE_ALERT_PRODUCT_BATCH_SIZE", "0"],
     ["PRICE_ALERT_PRODUCT_BATCH_SIZE", "501"],
+    ["PRICE_ALERT_ITEM_BATCH_SIZE", "0"],
+    ["PRICE_ALERT_ITEM_BATCH_SIZE", "5001"],
     ["PRICE_ALERT_LOCK_TTL_MS", "9999"],
     ["PRICE_ALERT_LOCK_TTL_MS", "900001"],
   ])("rejects invalid price alert configuration %s=%s", (key, value) => {
