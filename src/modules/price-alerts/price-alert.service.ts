@@ -18,15 +18,28 @@ export type PriceAlertSweepStats = {
   errors: number;
 };
 
+export type PriceAlertSweepStopReason =
+  "COMPLETED" | "LEASE_LOST" | "BATCH_ERROR" | "CHECKPOINT_REJECTED";
+
+export type PriceAlertSweepResult = {
+  stats: PriceAlertSweepStats;
+  lastProductId: number;
+  completed: boolean;
+  stopReason: PriceAlertSweepStopReason;
+};
+
 export type RunPriceAlertSweepInput = {
   client: typeof prisma;
   now: Date;
   productBatchSize: number;
+  itemBatchSize?: number;
+  startAfterProductId?: number;
   logger?: {
     warn: (fields: unknown, message: string) => void;
     error: (fields: unknown, message: string) => void;
   };
   shouldContinue?: () => boolean;
+  onProductBatchComplete?: (lastProductId: number, stats: PriceAlertSweepStats) => Promise<boolean>;
 };
 
 export type PriceAlertCandidate = {
@@ -165,70 +178,95 @@ type WatchedItem = {
 };
 
 type ScanProduct = Pick<Product, "id" | "name" | "price" | "quantity" | "isActive">;
+type ProductPageResult = "COMPLETED" | "LEASE_LOST" | "BATCH_ERROR";
 
-export const runPriceAlertSweep = async (input: RunPriceAlertSweepInput) => {
-  const { client, now, productBatchSize } = input;
-  const stats: PriceAlertSweepStats = {
-    productsScanned: 0,
-    itemsEvaluated: 0,
-    notificationsCreated: 0,
-    duplicatesSkipped: 0,
-    invalidStatesSkipped: 0,
-    errors: 0,
-  };
-  const watched = await client.wishlistItem.findMany({
-    where: { alertMode: { not: null } },
-    select: { productId: true },
-    distinct: ["productId"],
-    orderBy: { productId: "asc" },
-  });
-  const productIds = [...new Set(watched.map((row) => row.productId))].sort((a, b) => a - b);
+const emptyStats = (): PriceAlertSweepStats => ({
+  productsScanned: 0,
+  itemsEvaluated: 0,
+  notificationsCreated: 0,
+  duplicatesSkipped: 0,
+  invalidStatesSkipped: 0,
+  errors: 0,
+});
 
-  for (const ids of chunk(productIds, productBatchSize)) {
-    if (input.shouldContinue && !input.shouldContinue()) break;
+const evaluateProductPage = async (input: {
+  client: typeof prisma;
+  productIds: number[];
+  itemBatchSize: number;
+  now: Date;
+  stats: PriceAlertSweepStats;
+  shouldContinue?: () => boolean;
+  logger?: RunPriceAlertSweepInput["logger"];
+}): Promise<ProductPageResult> => {
+  let products: ScanProduct[];
+  try {
+    products = (await input.client.product.findMany({
+      where: { id: { in: input.productIds } },
+      select: { id: true, name: true, price: true, quantity: true, isActive: true },
+    })) as ScanProduct[];
+  } catch (error) {
+    input.stats.errors += 1;
+    input.logger?.error({ error, productIds: input.productIds }, "price alert product page failed");
+    return "BATCH_ERROR";
+  }
+
+  input.stats.productsScanned += input.productIds.length;
+  const productById = new Map(products.map((product) => [product.id, product]));
+  let lastItemId = 0;
+
+  while (true) {
+    if (input.shouldContinue && !input.shouldContinue()) return "LEASE_LOST";
+    let watchedItems: WatchedItem[];
     try {
-      const [products, items] = await Promise.all([
-        client.product.findMany({
-          where: { id: { in: ids } },
-          select: { id: true, name: true, price: true, quantity: true, isActive: true },
-        }),
-        client.wishlistItem.findMany({
-          where: { productId: { in: ids }, alertMode: { not: null } },
-          select: {
-            id: true,
-            userId: true,
-            productId: true,
-            alertMode: true,
-            targetPrice: true,
-            referencePrice: true,
-            includeFlashSale: true,
-            alertVersion: true,
-          },
-        }),
-      ]);
-      stats.productsScanned += ids.length;
-      const productById = new Map(
-        (products as ScanProduct[]).map((product) => [product.id, product]),
+      watchedItems = (await input.client.wishlistItem.findMany({
+        where: {
+          productId: { in: input.productIds },
+          alertMode: { not: null },
+          id: { gt: lastItemId },
+        },
+        orderBy: { id: "asc" },
+        take: input.itemBatchSize,
+        select: {
+          id: true,
+          userId: true,
+          productId: true,
+          alertMode: true,
+          targetPrice: true,
+          referencePrice: true,
+          includeFlashSale: true,
+          alertVersion: true,
+        },
+      })) as WatchedItem[];
+    } catch (error) {
+      input.stats.errors += 1;
+      input.logger?.error(
+        { error, productIds: input.productIds, lastItemId },
+        "price alert item page failed",
       );
-      const watchedItems = items as WatchedItem[];
+      return "BATCH_ERROR";
+    }
+    if (watchedItems.length === 0) return "COMPLETED";
+    lastItemId = watchedItems[watchedItems.length - 1].id;
+
+    try {
       const snapshots = await resolveAlertPriceSnapshots(
-        client,
+        input.client,
         watchedItems.map((item) => ({
           wishlistItemId: item.id,
           userId: item.userId,
           productId: item.productId,
           includeFlashSale: env.FLASH_SALE_PRICE_ALERT_ENABLED && item.includeFlashSale,
         })),
-        now,
+        input.now,
       );
 
       for (const item of watchedItems) {
-        stats.itemsEvaluated += 1;
+        input.stats.itemsEvaluated += 1;
         const product = productById.get(item.productId);
         const snapshot = snapshots.get(item.id);
         if (!product || !item.alertMode) continue;
         if (!snapshot) {
-          stats.invalidStatesSkipped += 1;
+          input.stats.invalidStatesSkipped += 1;
           continue;
         }
         if (!snapshot.purchasable) continue;
@@ -239,16 +277,16 @@ export const runPriceAlertSweep = async (input: RunPriceAlertSweepInput) => {
           currentPrice: snapshot.effectivePrice,
         });
         if (!decision.triggered) {
-          if (decision.reason === "INVALID_STATE") stats.invalidStatesSkipped += 1;
+          if (decision.reason === "INVALID_STATE") input.stats.invalidStatesSkipped += 1;
           continue;
         }
         if (item.referencePrice === null) {
-          stats.invalidStatesSkipped += 1;
+          input.stats.invalidStatesSkipped += 1;
           continue;
         }
         try {
           const result = await commitPriceAlertCandidate(
-            client,
+            input.client,
             {
               wishlistItemId: item.id,
               userId: item.userId,
@@ -266,12 +304,12 @@ export const runPriceAlertSweep = async (input: RunPriceAlertSweepInput) => {
               alertVersion: item.alertVersion,
               includeFlashSale: item.includeFlashSale,
             },
-            now,
+            input.now,
           );
-          if (result === "created") stats.notificationsCreated += 1;
-          if (result === "duplicate") stats.duplicatesSkipped += 1;
+          if (result === "created") input.stats.notificationsCreated += 1;
+          if (result === "duplicate") input.stats.duplicatesSkipped += 1;
         } catch (error) {
-          stats.errors += 1;
+          input.stats.errors += 1;
           input.logger?.error(
             { error, wishlistItemId: item.id, productId: item.productId },
             "price alert candidate failed",
@@ -279,21 +317,100 @@ export const runPriceAlertSweep = async (input: RunPriceAlertSweepInput) => {
         }
       }
     } catch (error) {
-      stats.errors += 1;
-      input.logger?.error({ error, productIds: ids }, "price alert batch failed");
+      input.stats.errors += 1;
+      input.logger?.error(
+        { error, productIds: input.productIds, lastItemId },
+        "price alert snapshot page failed",
+      );
+      return "BATCH_ERROR";
     }
   }
-  return stats;
+};
+
+export const runPriceAlertSweep = async (
+  input: RunPriceAlertSweepInput,
+): Promise<PriceAlertSweepResult> => {
+  const stats = emptyStats();
+  const itemBatchSize = input.itemBatchSize ?? input.productBatchSize;
+  let cursor = input.startAfterProductId ?? 0;
+
+  while (true) {
+    if (input.shouldContinue && !input.shouldContinue()) {
+      return { stats, lastProductId: cursor, completed: false, stopReason: "LEASE_LOST" };
+    }
+
+    let rows: Array<{ productId: number }>;
+    try {
+      rows = await input.client.wishlistItem.groupBy({
+        by: ["productId"],
+        where: { alertMode: { not: null }, productId: { gt: cursor } },
+        orderBy: { productId: "asc" },
+        take: input.productBatchSize,
+      });
+    } catch (error) {
+      stats.errors += 1;
+      input.logger?.error({ error, cursor }, "price alert product discovery failed");
+      return { stats, lastProductId: cursor, completed: false, stopReason: "BATCH_ERROR" };
+    }
+
+    const productIds = rows.map((row) => row.productId);
+    if (productIds.length === 0) {
+      return { stats, lastProductId: cursor, completed: true, stopReason: "COMPLETED" };
+    }
+
+    const pageResult = await evaluateProductPage({
+      client: input.client,
+      productIds,
+      itemBatchSize,
+      now: input.now,
+      stats,
+      shouldContinue: input.shouldContinue,
+      logger: input.logger,
+    });
+    const lastProductId = productIds[productIds.length - 1];
+    if (pageResult === "LEASE_LOST") {
+      return { stats, lastProductId: cursor, completed: false, stopReason: "LEASE_LOST" };
+    }
+    if (pageResult === "BATCH_ERROR") {
+      return { stats, lastProductId: cursor, completed: false, stopReason: "BATCH_ERROR" };
+    }
+
+    if (input.onProductBatchComplete) {
+      try {
+        const accepted = await input.onProductBatchComplete(lastProductId, stats);
+        if (!accepted) {
+          return { stats, lastProductId, completed: false, stopReason: "CHECKPOINT_REJECTED" };
+        }
+      } catch (error) {
+        stats.errors += 1;
+        input.logger?.error({ error, lastProductId }, "price alert checkpoint callback failed");
+        return { stats, lastProductId: cursor, completed: false, stopReason: "BATCH_ERROR" };
+      }
+    }
+    cursor = lastProductId;
+  }
 };
 
 export const evaluatePricingEvent = async (
   client: typeof prisma,
-  _event: { productIds?: number[] },
+  event: { productIds?: number[] },
   now: Date,
   productBatchSize: number,
-) =>
-  runPriceAlertSweep({
-    client,
-    now,
-    productBatchSize,
-  });
+  itemBatchSize = productBatchSize,
+): Promise<PriceAlertSweepStats> => {
+  const productIds = [
+    ...new Set((event.productIds ?? []).filter((id) => Number.isInteger(id) && id > 0)),
+  ].sort((a, b) => a - b);
+  const stats = emptyStats();
+  for (const ids of chunk(productIds, productBatchSize)) {
+    const result = await evaluateProductPage({
+      client,
+      productIds: ids,
+      itemBatchSize,
+      now,
+      stats,
+    });
+    if (result !== "COMPLETED") break;
+  }
+  return stats;
+};

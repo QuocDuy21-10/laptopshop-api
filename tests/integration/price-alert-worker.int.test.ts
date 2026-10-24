@@ -17,6 +17,55 @@ const sweep = () =>
   });
 
 describe("price alert worker persistence", () => {
+  it("replays a product page with bounded item pages without duplicating notifications", async () => {
+    const firstUser = await createUser();
+    const secondUser = await createUser();
+    const product = await createProduct(3, 900);
+    await prisma.wishlistItem.createMany({
+      data: [
+        {
+          userId: firstUser.id,
+          productId: product.id,
+          alertMode: "PERCENT_DROP",
+          referencePrice: 1_000,
+        },
+        {
+          userId: secondUser.id,
+          productId: product.id,
+          alertMode: "PERCENT_DROP",
+          referencePrice: 1_000,
+        },
+      ],
+    });
+
+    const completedPages: number[] = [];
+    const run = () =>
+      runPriceAlertSweep({
+        client: prisma,
+        now: new Date("2026-10-22T04:00:00.000Z"),
+        productBatchSize: 1,
+        itemBatchSize: 1,
+        onProductBatchComplete: async (lastProductId) => {
+          completedPages.push(lastProductId);
+          return true;
+        },
+      });
+
+    const first = await run();
+    const second = await run();
+
+    expect(first).toMatchObject({
+      completed: true,
+      stats: { itemsEvaluated: 2, notificationsCreated: 2 },
+    });
+    expect(second).toMatchObject({
+      completed: true,
+      stats: { itemsEvaluated: 2, notificationsCreated: 0 },
+    });
+    expect(completedPages).toEqual([product.id, product.id]);
+    await expect(prisma.notification.count()).resolves.toBe(2);
+  });
+
   it("creates one notification when two sweeps process the same price drop", async () => {
     const user = await createUser();
     const product = await createProduct(3, 900);
@@ -78,6 +127,49 @@ describe("price alert worker persistence", () => {
 
     await expect(commitPriceAlertCandidate(prisma, candidate, new Date())).resolves.toBe("stale");
     await expect(prisma.notification.count({ where: { userId: user.id } })).resolves.toBe(0);
+  });
+
+  it("rejects an old worker candidate after a newer alert version is configured", async () => {
+    const user = await createUser();
+    const product = await createProduct(3, 900);
+    const item = await prisma.wishlistItem.create({
+      data: {
+        userId: user.id,
+        productId: product.id,
+        alertMode: "PERCENT_DROP",
+        referencePrice: 1_000,
+      },
+    });
+    const candidate: PriceAlertCandidate = {
+      wishlistItemId: item.id,
+      userId: user.id,
+      productId: product.id,
+      productName: product.name,
+      mode: "PERCENT_DROP",
+      referencePrice: 1_000,
+      targetPrice: null,
+      stablePrice: 900,
+      currentPrice: 900,
+      source: "AUTOMATIC",
+      promotionId: null,
+      pricingVersion: null,
+      validUntil: null,
+      alertVersion: 1,
+      includeFlashSale: false,
+    };
+    await prisma.wishlistItem.update({
+      where: { id: item.id },
+      data: { alertVersion: 2, referencePrice: 950 },
+    });
+
+    await expect(commitPriceAlertCandidate(prisma, candidate, new Date())).resolves.toBe("stale");
+    await expect(prisma.notification.count()).resolves.toBe(0);
+    await expect(prisma.wishlistItem.findUnique({ where: { id: item.id } })).resolves.toMatchObject(
+      {
+        alertVersion: 2,
+        referencePrice: 950,
+      },
+    );
   });
 
   it("rejects a stale target candidate when only the target is reconfigured", async () => {
