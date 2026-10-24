@@ -2,12 +2,19 @@ import type { RedisClientType } from "redis";
 import { prisma } from "config/client";
 import { logger } from "lib/logger";
 import {
+  advancePriceAlertCheckpoint,
+  claimPriceAlertCheckpoint,
+  completePriceAlertCheckpoint,
+  failPriceAlertCheckpoint,
+} from "modules/price-alerts/price-alert.checkpoint";
+import {
   acquirePriceAlertLock,
   renewPriceAlertLock,
   releasePriceAlertLock,
 } from "modules/price-alerts/price-alert.lock";
 import {
   runPriceAlertSweep,
+  type PriceAlertSweepResult,
   type PriceAlertSweepStats,
 } from "modules/price-alerts/price-alert.service";
 
@@ -16,6 +23,7 @@ export type PriceAlertRunnerDeps = {
   client: typeof prisma;
   now: () => Date;
   productBatchSize: number;
+  itemBatchSize?: number;
   lockTtlMs: number;
   token: () => string;
   logger: Pick<typeof logger, "info" | "warn" | "error">;
@@ -23,20 +31,34 @@ export type PriceAlertRunnerDeps = {
 
 const LOCK_KEY = "worker:price-alert:sweep";
 
+export type LockedPriceAlertSweepResult =
+  | { kind: "RAN"; sweep: PriceAlertSweepResult }
+  | { kind: "SKIPPED"; reason: "LOCK_HELD" }
+  | { kind: "FAILED"; reason: "LOCK_UNAVAILABLE" };
+
+const zeroStats = (): PriceAlertSweepStats => ({
+  productsScanned: 0,
+  itemsEvaluated: 0,
+  notificationsCreated: 0,
+  duplicatesSkipped: 0,
+  invalidStatesSkipped: 0,
+  errors: 0,
+});
+
 export const runLockedPriceAlertSweep = async (
   deps: PriceAlertRunnerDeps,
-): Promise<PriceAlertSweepStats | null> => {
+): Promise<LockedPriceAlertSweepResult> => {
   const token = deps.token();
   let acquired: boolean;
   try {
     acquired = await acquirePriceAlertLock(deps.redis, LOCK_KEY, token, deps.lockTtlMs);
   } catch (error) {
     deps.logger.error({ error }, "price alert lock unavailable");
-    return null;
+    return { kind: "FAILED", reason: "LOCK_UNAVAILABLE" };
   }
   if (!acquired) {
     deps.logger.info({ key: LOCK_KEY }, "price alert sweep already locked");
-    return null;
+    return { kind: "SKIPPED", reason: "LOCK_HELD" };
   }
 
   const heartbeatEveryMs = Math.max(1_000, Math.floor(deps.lockTtlMs / 3));
@@ -56,20 +78,72 @@ export const runLockedPriceAlertSweep = async (
   }, heartbeatEveryMs);
   heartbeat.unref();
 
+  const startedAt = Date.now();
+  const now = deps.now();
+  let checkpointOwner = false;
   try {
-    const startedAt = Date.now();
-    const stats = await runPriceAlertSweep({
+    const checkpoint = await claimPriceAlertCheckpoint(deps.client, {
+      ownerToken: token,
+      now,
+    });
+    checkpointOwner = true;
+    const sweep = await runPriceAlertSweep({
       client: deps.client,
-      now: deps.now(),
+      now,
       productBatchSize: deps.productBatchSize,
+      itemBatchSize: deps.itemBatchSize ?? deps.productBatchSize,
+      startAfterProductId: checkpoint.checkpointProductId,
       logger: deps.logger,
       shouldContinue: () => !leaseLost,
+      onProductBatchComplete: async (lastProductId, stats) => {
+        if (leaseLost) return false;
+        return advancePriceAlertCheckpoint(deps.client, {
+          ownerToken: token,
+          lastProductId,
+          stats,
+        });
+      },
     });
+    const durationMs = Date.now() - startedAt;
+    if (
+      !leaseLost &&
+      sweep.stopReason !== "LEASE_LOST" &&
+      sweep.stopReason !== "CHECKPOINT_REJECTED"
+    ) {
+      if (sweep.completed) {
+        await completePriceAlertCheckpoint(deps.client, {
+          ownerToken: token,
+          now: deps.now(),
+          durationMs,
+          stats: sweep.stats,
+          successful: sweep.stats.errors === 0,
+        });
+      } else {
+        await failPriceAlertCheckpoint(deps.client, {
+          ownerToken: token,
+          now: deps.now(),
+          durationMs,
+          errorCode: "BATCH_ERROR",
+          stats: sweep.stats,
+        });
+      }
+    }
     deps.logger.info(
-      { ...stats, durationMs: Date.now() - startedAt, leaseLost },
+      { ...sweep.stats, durationMs, leaseLost, stopReason: sweep.stopReason },
       "price alert sweep completed",
     );
-    return stats;
+    return { kind: "RAN", sweep };
+  } catch (error) {
+    if (checkpointOwner && !leaseLost) {
+      await failPriceAlertCheckpoint(deps.client, {
+        ownerToken: token,
+        now: deps.now(),
+        durationMs: Date.now() - startedAt,
+        errorCode: "SWEEP_FAILED",
+        stats: zeroStats(),
+      });
+    }
+    throw error;
   } finally {
     clearInterval(heartbeat);
     try {
