@@ -48,8 +48,12 @@ import {
 } from "modules/inventory/inventory-receipts.schema";
 import { ORDER_STATUSES } from "modules/orders/order-status";
 import {
+  extendPaymentReviewCaseBody,
   paymentEventQuery,
   paymentProviderParam,
+  paymentReviewCaseIdParams,
+  paymentReviewCaseQuery,
+  releasePaymentReviewCaseBody,
   resolvePaymentEventBody,
 } from "modules/payments/payments.schema";
 import {
@@ -664,7 +668,14 @@ const Payment = registry.register(
     orderId: z.number(),
     provider: z.string(),
     method: z.string(),
-    status: z.enum(["PENDING", "SUCCEEDED", "EXPIRED", "CANCELLED"]),
+    status: z.enum([
+      "PENDING",
+      "VERIFYING",
+      "SUCCEEDED",
+      "EXPIRED",
+      "CANCELLED",
+      "REVIEW_REQUIRED",
+    ]),
     amount: z.number(),
     currency: z.string(),
     expiresAt: z.string().datetime(),
@@ -695,6 +706,30 @@ const PaymentEvent = registry.register(
     receivedAt: z.string().datetime(),
     resolvedAt: z.string().datetime().nullable(),
     resolvedById: z.number().nullable(),
+  }),
+);
+const PaymentReviewCase = registry.register(
+  "PaymentReviewCase",
+  z.object({
+    id: z.string(),
+    paymentId: z.string(),
+    reason: z.string(),
+    status: z.enum(["OPEN", "RESOLVED"]),
+    version: z.number().int(),
+    openedAt: z.string().datetime(),
+    nextReviewAt: z.string().datetime().nullable(),
+    resolvedAt: z.string().datetime().nullable(),
+    resolution: z.string().nullable(),
+    payment: z.object({
+      id: z.string(),
+      orderId: z.number(),
+      status: z.string(),
+      amount: z.number(),
+      transferCode: z.string(),
+      expiresAt: z.string().datetime(),
+      reviewAfter: z.string().datetime(),
+      order: z.object({ status: z.string(), paymentMethod: z.string(), paymentStatus: z.string() }),
+    }),
   }),
 );
 const ReviewAuthor = registry.register(
@@ -2411,6 +2446,45 @@ op({
   request: { params: z.object({ id: z.string().uuid() }), body: json(resolvePaymentEventBody) },
   ok: [200, "Resolved", data(PaymentEvent)],
   errors: { 404: "Not found", 409: "Event is not reviewable" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/payment-review-cases`,
+  summary: "List payment review cases",
+  tag: "admin",
+  auth: "admin",
+  request: { query: paymentReviewCaseQuery },
+  ok: [200, "OK", page(PaymentReviewCase)],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/payment-review-cases/{id}`,
+  summary: "Payment review case detail",
+  tag: "admin",
+  auth: "admin",
+  request: { params: paymentReviewCaseIdParams },
+  ok: [200, "OK", data(PaymentReviewCase)],
+  errors: { 404: "Not found" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/payment-review-cases/{id}/extend`,
+  summary: "Extend a payment review hold",
+  tag: "admin",
+  auth: "admin",
+  request: { params: paymentReviewCaseIdParams, body: json(extendPaymentReviewCaseBody) },
+  ok: [200, "Extended", data(PaymentReviewCase)],
+  errors: { 400: "Invalid hold", 404: "Not found", 409: "Case version conflict" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/payment-review-cases/{id}/release`,
+  summary: "Release stock for an inconclusive payment",
+  tag: "admin",
+  auth: "admin",
+  request: { params: paymentReviewCaseIdParams, body: json(releasePaymentReviewCaseBody) },
+  ok: [200, "Released", data(PaymentReviewCase)],
+  errors: { 404: "Not found", 409: "Case version conflict or payment already succeeded" },
 });
 op({
   method: "get",

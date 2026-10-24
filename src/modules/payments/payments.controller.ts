@@ -16,7 +16,16 @@ import {
   paymentProviderParam,
   PaymentEventQuery,
   resolvePaymentEventBody,
+  PaymentReviewCaseQuery,
+  extendPaymentReviewCaseBody,
+  releasePaymentReviewCaseBody,
 } from "modules/payments/payments.schema";
+import {
+  extendPaymentReviewCase,
+  getPaymentReviewCase,
+  listPaymentReviewCases,
+  releasePaymentReviewCase,
+} from "modules/payments/payment-review.service";
 import { AppError } from "lib/errors";
 
 export const paymentMethodsHandler: RequestHandler = (_req, res) => {
@@ -65,6 +74,33 @@ export const getPaymentEventHandler: RequestHandler = async (req, res) => {
 export const resolvePaymentEventHandler: RequestHandler = async (req, res) => {
   const body = resolvePaymentEventBody.parse(req.body);
   res.json({ data: await resolvePaymentEvent(req.params.id, req.auth!.id, body.note) });
+};
+
+export const listPaymentReviewCasesHandler: RequestHandler = async (_req, res) => {
+  const { items, meta } = await listPaymentReviewCases(res.locals.query as PaymentReviewCaseQuery);
+  res.json({ data: items, meta });
+};
+
+export const getPaymentReviewCaseHandler: RequestHandler = async (req, res) => {
+  res.json({ data: await getPaymentReviewCase(req.params.id) });
+};
+
+export const extendPaymentReviewCaseHandler: RequestHandler = async (req, res) => {
+  const body = extendPaymentReviewCaseBody.parse(req.body) as {
+    note: string;
+    holdUntil: string;
+    version: number;
+  };
+  res.json({ data: await extendPaymentReviewCase(req.params.id, req.auth!.id, body) });
+};
+
+export const releasePaymentReviewCaseHandler: RequestHandler = async (req, res) => {
+  const body = releasePaymentReviewCaseBody.parse(req.body) as {
+    note: string;
+    confirmation: "RELEASE_STOCK";
+    version: number;
+  };
+  res.json({ data: await releasePaymentReviewCase(req.params.id, req.auth!.id, body) });
 };
 
 export const parseOrderId = (params: unknown) => idParams.parse(params).id;

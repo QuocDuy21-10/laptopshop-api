@@ -21,6 +21,7 @@ export const cancelOrder = async (
     from: OrderStatus[];
     reason?: string;
     paymentDisposition: "CANCEL" | "EXPIRE";
+    allowVerificationCancel?: boolean;
     now: Date;
   },
 ): Promise<OrderDto> => {
@@ -45,6 +46,7 @@ export const cancelOrder = async (
   }
   if (
     input.paymentDisposition === "CANCEL" &&
+    !input.allowVerificationCancel &&
     order.paymentMethod === "BANK_TRANSFER" &&
     (order.payment?.status === "VERIFYING" || order.payment?.status === "REVIEW_REQUIRED")
   ) {
@@ -67,7 +69,9 @@ export const cancelOrder = async (
       where: {
         orderId: input.orderId,
         status:
-          input.paymentDisposition === "EXPIRE" ? { in: ["PENDING", "VERIFYING"] } : "PENDING",
+          input.paymentDisposition === "EXPIRE" || input.allowVerificationCancel
+            ? { in: ["PENDING", "VERIFYING", "REVIEW_REQUIRED"] }
+            : "PENDING",
       },
       data: {
         status: input.paymentDisposition === "EXPIRE" ? "EXPIRED" : "CANCELLED",
