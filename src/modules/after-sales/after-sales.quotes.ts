@@ -64,6 +64,16 @@ export const sendQuote = async (
     const totals = calculateQuote(input.lines);
     const now = new Date();
     const version = Math.max(0, ...item.quotes.map((quote) => quote.version)) + 1;
+    const itemUpdated = await tx.serviceRequestItem.updateMany({
+      where: {
+        id: itemId,
+        version: input.expectedVersion,
+        status: { in: ["DIAGNOSING", "AWAITING_QUOTE_DECISION"] },
+      },
+      data: { status: "AWAITING_QUOTE_DECISION", version: { increment: 1 } },
+    });
+    if (itemUpdated.count !== 1)
+      throw new AppError("Service request item changed", 409, "SERVICE_ITEM_VERSION_CONFLICT");
     await tx.serviceQuote.updateMany({
       where: { serviceRequestItemId: itemId, status: "SENT" },
       data: { status: "SUPERSEDED" },
@@ -87,10 +97,6 @@ export const sendQuote = async (
           })),
         },
       },
-    });
-    await tx.serviceRequestItem.updateMany({
-      where: { id: itemId, version: input.expectedVersion },
-      data: { status: "AWAITING_QUOTE_DECISION", version: { increment: 1 } },
     });
     await tx.serviceRequestEvent.create({
       data: {

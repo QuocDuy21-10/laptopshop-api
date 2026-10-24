@@ -3,19 +3,7 @@ import { prisma } from "config/client";
 import { applyNotificationRetention } from "modules/notifications/notification-retention.service";
 import { env } from "config/env";
 import { logger } from "lib/logger";
-
-export const recordWorkerHeartbeat = async (
-  client: typeof prisma,
-  workerName: string,
-  instanceId: string,
-  status: string,
-  metadata: Record<string, unknown> = {},
-) =>
-  client.workerHeartbeat.upsert({
-    where: { workerName_instanceId: { workerName, instanceId } },
-    create: { workerName, instanceId, status, metadata: metadata as never },
-    update: { status, metadata: metadata as never, lastSeenAt: new Date() },
-  });
+import { recordWorkerHeartbeat } from "modules/workers/worker-heartbeat.service";
 
 export const runNotificationMaintenanceOnce = async (
   now = new Date(),

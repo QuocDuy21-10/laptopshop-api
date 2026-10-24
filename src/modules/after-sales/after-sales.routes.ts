@@ -19,6 +19,7 @@ import {
   listAfterSalesAssigneesHandler,
   decideQuoteHandler,
   sendQuoteHandler,
+  createWarrantyVerificationHandler,
   transitionItemHandler,
 } from "modules/after-sales/after-sales.controller";
 import {
@@ -35,6 +36,7 @@ import {
   quoteDecisionBody,
   quoteParams,
   sendQuoteBody,
+  warrantyVerificationBody,
 } from "modules/after-sales/after-sales.schema";
 
 export const afterSalesRoutes = Router();
@@ -119,4 +121,9 @@ adminAfterSalesRoutes.post(
   "/:id/items/:itemId/quotes",
   validate({ params: serviceItemParams, body: sendQuoteBody }),
   sendQuoteHandler,
+);
+adminAfterSalesRoutes.post(
+  "/:id/items/:itemId/warranty-verifications",
+  validate({ params: serviceItemParams, body: warrantyVerificationBody }),
+  createWarrantyVerificationHandler,
 );

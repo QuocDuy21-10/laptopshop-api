@@ -1,4 +1,7 @@
-import type { Prisma } from "@prisma/client";
+import {
+  publishNotification,
+  type NotificationPublishTx,
+} from "modules/notifications/notification-publish.service";
 
 export type AfterSalesNotificationEvent =
   | "CUSTOMER_MESSAGE"
@@ -35,21 +38,20 @@ export const recipientsFor = (
 };
 
 export const createAfterSalesNotification = async (
-  tx: Pick<Prisma.TransactionClient, "notification">,
+  tx: NotificationPublishTx,
   input: AfterSalesNotificationInput,
 ) => {
   const recipients = recipientsFor(input);
   await Promise.all(
     recipients.map((userId) =>
-      tx.notification.create({
-        data: {
-          userId,
-          serviceRequestId: input.requestId,
-          type: input.type,
-          title: input.title,
-          message: input.message,
-          dedupeKey: `${input.dedupeKey}:${userId}`,
-        },
+      publishNotification(tx, {
+        category: "AFTER_SALES",
+        userId,
+        serviceRequestId: input.requestId,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        dedupeKey: `${input.dedupeKey}:${userId}`,
       }),
     ),
   );

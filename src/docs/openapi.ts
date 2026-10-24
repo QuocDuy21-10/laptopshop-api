@@ -82,7 +82,13 @@ import {
 } from "modules/wishlist/wishlist.schema";
 import { notificationsQuery } from "modules/notifications/notifications.schema";
 import { updateNotificationPreferencesBody } from "modules/notifications/notification-preferences.schema";
-import { deviceEligibilityQuery } from "modules/after-sales/after-sales.schema";
+import {
+  deviceEligibilityQuery,
+  transitionItemBody,
+  sendQuoteBody,
+  warrantyVerificationBody,
+  adminServiceRequestQuery,
+} from "modules/after-sales/after-sales.schema";
 import { webPushSubscriptionBody } from "modules/notifications/web-push.schema";
 import { confirmEmailVerificationBody } from "modules/email-verification/email-verification.schema";
 import {
@@ -424,6 +430,16 @@ const orderShape = {
   ),
 };
 const Order = registry.register("Order", z.object(orderShape));
+const CustomerWarrantyVerification = registry.register(
+  "CustomerWarrantyVerification",
+  z.object({
+    id: z.number(),
+    decision: z.enum(["IN_WARRANTY", "OUT_OF_WARRANTY", "NO_WARRANTY", "UNVERIFIABLE"]),
+    warrantyStartAt: z.string().datetime().nullable(),
+    warrantyEndAt: z.string().datetime().nullable(),
+    verifiedAt: z.string().datetime(),
+  }),
+);
 const EligibleDevice = registry.register(
   "EligibleAfterSalesDevice",
   z.object({
@@ -442,6 +458,7 @@ const EligibleDevice = registry.register(
       "UNAVAILABLE",
     ]),
     coverage: z.enum(["IN_WARRANTY", "OUT_OF_WARRANTY", "NO_WARRANTY", "REQUIRES_VERIFICATION"]),
+    warrantyVerification: z.union([CustomerWarrantyVerification, z.null()]),
     allowed: z.boolean(),
     reason: z.string().nullable(),
     allowedRequestTypes: z.array(z.enum(["WARRANTY", "TECHNICAL_SUPPORT"])),
@@ -464,6 +481,173 @@ const CreateServiceRequest = registry.register(
       )
       .min(1)
       .max(50),
+  }),
+);
+const AfterSalesRequestLink = z.object({
+  id: z.number(),
+  code: z.string(),
+  type: z.enum(["WARRANTY", "TECHNICAL_SUPPORT"]),
+  status: z.string(),
+  subject: z.string(),
+  createdAt: z.string().datetime(),
+});
+const AdminWarrantyVerification = registry.register(
+  "AdminWarrantyVerification",
+  z.object({
+    ...CustomerWarrantyVerification.shape,
+    verifiedBy: z
+      .object({ id: z.number(), username: z.string(), fullName: z.string().nullable() })
+      .nullable(),
+    internalNote: z.string().nullable(),
+  }),
+);
+const ServiceQuoteLine = registry.register(
+  "ServiceQuoteLine",
+  z.object({
+    id: z.number(),
+    description: z.string(),
+    quantity: z.number().int(),
+    unitPrice: z.number().int(),
+    lineTotal: z.number().int(),
+    position: z.number().int(),
+  }),
+);
+const ServiceQuote = registry.register(
+  "ServiceQuote",
+  z.object({
+    id: z.number(),
+    version: z.number().int(),
+    status: z.enum(["SENT", "ACCEPTED", "DECLINED", "EXPIRED", "SUPERSEDED"]),
+    currency: z.string(),
+    subtotal: z.number().int(),
+    total: z.number().int(),
+    note: z.string().nullable(),
+    validUntil: z.string().datetime(),
+    respondedAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+    lines: z.array(ServiceQuoteLine),
+  }),
+);
+const ServiceAttachment = registry.register(
+  "ServiceAttachment",
+  z.object({
+    id: z.number(),
+    itemId: z.number().nullable(),
+    url: z.string().url(),
+    mimeType: z.string(),
+    byteSize: z.number().int(),
+    width: z.number().int(),
+    height: z.number().int(),
+    createdAt: z.string().datetime(),
+  }),
+);
+const AfterSalesEvent = registry.register(
+  "AfterSalesEvent",
+  z.object({
+    id: z.number(),
+    itemId: z.number().nullable(),
+    kind: z.string(),
+    visibility: z.enum(["PUBLIC", "INTERNAL"]),
+    fromStatus: z.string().nullable(),
+    toStatus: z.string().nullable(),
+    body: z.string().nullable(),
+    createdAt: z.string().datetime(),
+  }),
+);
+const AdminAfterSalesEvent = registry.register(
+  "AdminAfterSalesEvent",
+  z.object({
+    ...AfterSalesEvent.shape,
+    actor: z
+      .object({ id: z.number(), username: z.string(), fullName: z.string().nullable() })
+      .nullable(),
+  }),
+);
+const AfterSalesItem = registry.register(
+  "AfterSalesItem",
+  z.object({
+    id: z.number(),
+    orderDetailId: z.number(),
+    orderId: z.number(),
+    position: z.number().int(),
+    productNameSnapshot: z.string(),
+    deviceLabel: z.string(),
+    serialNumber: z.string().nullable(),
+    issueDescription: z.string(),
+    coverageAtCreation: z.enum([
+      "IN_WARRANTY",
+      "OUT_OF_WARRANTY",
+      "NO_WARRANTY",
+      "REQUIRES_VERIFICATION",
+    ]),
+    status: z.string(),
+    resolution: z.string().nullable(),
+    version: z.number().int(),
+    resolvedAt: z.string().datetime().nullable(),
+    returnedAt: z.string().datetime().nullable(),
+    confirmationDueAt: z.string().datetime().nullable(),
+    customerConfirmedAt: z.string().datetime().nullable(),
+    closedAt: z.string().datetime().nullable(),
+    closeReason: z.string().nullable(),
+    warrantyVerification: z.union([CustomerWarrantyVerification, z.null()]),
+    allowedActions: z.array(z.string()),
+    quotes: z.array(ServiceQuote),
+  }),
+);
+const AdminAfterSalesItem = registry.register(
+  "AdminAfterSalesItem",
+  z.object({
+    ...AfterSalesItem.shape,
+    warrantyVerification: z.union([AdminWarrantyVerification, z.null()]),
+    allowedTransitions: z.array(z.string()),
+  }),
+);
+const AfterSalesRequest = registry.register(
+  "AfterSalesRequest",
+  z.object({
+    id: z.number(),
+    code: z.string(),
+    type: z.enum(["WARRANTY", "TECHNICAL_SUPPORT"]),
+    status: z.string(),
+    version: z.number().int(),
+    subject: z.string(),
+    previousRequestId: z.number().nullable(),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+    closedAt: z.string().datetime().nullable(),
+    items: z.array(AfterSalesItem),
+    previousRequest: AfterSalesRequestLink.nullable(),
+    followUps: z.array(AfterSalesRequestLink),
+    events: z.array(AfterSalesEvent),
+  }),
+);
+const AdminAfterSalesRequest = registry.register(
+  "AdminAfterSalesRequest",
+  z.object({
+    ...AfterSalesRequest.shape,
+    items: z.array(AdminAfterSalesItem),
+    events: z.array(AdminAfterSalesEvent),
+    customer: z.object({
+      id: z.number(),
+      username: z.string(),
+      fullName: z.string().nullable(),
+      phone: z.string().nullable(),
+      address: z.string().nullable(),
+    }),
+    assignee: z
+      .object({ id: z.number(), username: z.string(), fullName: z.string().nullable() })
+      .nullable(),
+  }),
+);
+const AfterSalesSummary = registry.register(
+  "AfterSalesSummary",
+  z.object({
+    total: z.number(),
+    submitted: z.number(),
+    reviewing: z.number(),
+    inProgress: z.number(),
+    awaitingCustomer: z.number(),
+    closed: z.number(),
   }),
 );
 const PaymentInstructions = z.object({
@@ -1560,7 +1744,7 @@ op({
     headers: z.object({ "Idempotency-Key": z.string().min(1).max(64) }),
     body: json(CreateServiceRequest),
   },
-  ok: [201, "Created (200 when the key was already used)", data(z.unknown())],
+  ok: [201, "Created (200 when the key was already used)", data(AfterSalesRequest)],
   errors: {
     404: "Order detail not found",
     409: "Order detail ineligible, warranty unavailable, duplicate serial, or idempotency conflict",
@@ -1573,7 +1757,7 @@ op({
   tag: "after-sales",
   auth: "user",
   request: { query: pageQuery },
-  ok: [200, "OK", page(z.unknown())],
+  ok: [200, "OK", page(AfterSalesRequest)],
   errors: { 401: "Unauthenticated" },
 });
 op({
@@ -1583,7 +1767,7 @@ op({
   tag: "after-sales",
   auth: "user",
   request: { params: idParams },
-  ok: [200, "OK", data(z.unknown())],
+  ok: [200, "OK", data(AfterSalesRequest)],
   errors: { 404: "Service request not found" },
 });
 op({
@@ -1593,7 +1777,7 @@ op({
   tag: "after-sales",
   auth: "user",
   request: { params: z.object({ id: z.number(), itemId: z.number() }) },
-  ok: [200, "Cancelled", data(z.unknown())],
+  ok: [200, "Cancelled", data(AfterSalesRequest)],
   errors: { 404: "Not found", 409: "Invalid transition" },
 });
 op({
@@ -1603,7 +1787,7 @@ op({
   tag: "after-sales",
   auth: "user",
   request: { params: z.object({ id: z.number(), itemId: z.number() }) },
-  ok: [200, "Confirmed", data(z.unknown())],
+  ok: [200, "Confirmed", data(AfterSalesRequest)],
   errors: { 404: "Not found", 409: "Confirmation unavailable" },
 });
 op({
@@ -1618,7 +1802,7 @@ op({
       z.object({ reason: z.enum(["DEVICE_NOT_RECEIVED", "ISSUE_PERSISTS"]), note: z.string() }),
     ),
   },
-  ok: [200, "Disputed", data(z.unknown())],
+  ok: [200, "Disputed", data(AfterSalesRequest)],
   errors: { 404: "Not found", 409: "Invalid transition" },
 });
 op({
@@ -1631,7 +1815,7 @@ op({
     params: idParams,
     body: json(z.object({ itemId: z.number().optional(), body: z.string().min(1) })),
   },
-  ok: [201, "Created", data(z.unknown())],
+  ok: [201, "Created", data(AfterSalesEvent)],
   errors: { 404: "Not found", 409: "Conversation unavailable" },
 });
 op({
@@ -1642,10 +1826,23 @@ op({
   auth: "admin",
   request: {
     params: z.object({ id: z.number(), itemId: z.number() }),
-    body: json(z.record(z.unknown())),
+    body: json(transitionItemBody),
   },
-  ok: [200, "Updated", data(z.unknown())],
+  ok: [200, "Updated", data(AdminAfterSalesRequest)],
   errors: { 404: "Not found", 409: "Invalid transition or version conflict" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/after-sales/{id}/items/{itemId}/warranty-verifications`,
+  summary: "Record an admin warranty verification",
+  tag: "admin",
+  auth: "admin",
+  request: {
+    params: z.object({ id: z.number(), itemId: z.number() }),
+    body: json(warrantyVerificationBody),
+  },
+  ok: [200, "Verified", data(AdminAfterSalesRequest)],
+  errors: { 404: "Not found", 409: "Type, date or version conflict" },
 });
 op({
   method: "post",
@@ -1657,7 +1854,7 @@ op({
     params: idParams,
     body: json(z.object({ itemId: z.number().optional(), body: z.string().min(1) })),
   },
-  ok: [201, "Created", data(z.unknown())],
+  ok: [201, "Created", data(AfterSalesEvent)],
   errors: { 404: "Not found", 409: "Conversation unavailable" },
 });
 op({
@@ -1670,7 +1867,7 @@ op({
     params: idParams,
     body: json(z.object({ itemId: z.number().optional(), body: z.string().min(1) })),
   },
-  ok: [201, "Created", data(z.unknown())],
+  ok: [201, "Created", data(AfterSalesEvent)],
   errors: { 404: "Not found", 409: "Conversation unavailable" },
 });
 op({
@@ -1683,7 +1880,7 @@ op({
     params: z.object({ id: z.number(), itemId: z.number(), quoteId: z.number() }),
     body: json(z.object({ decision: z.enum(["ACCEPT", "DECLINE"]) })),
   },
-  ok: [200, "Updated", data(z.unknown())],
+  ok: [200, "Updated", data(AfterSalesRequest)],
   errors: { 404: "Not found", 409: "Quote expired or already decided" },
 });
 op({
@@ -1694,9 +1891,9 @@ op({
   auth: "admin",
   request: {
     params: z.object({ id: z.number(), itemId: z.number() }),
-    body: json(z.record(z.unknown())),
+    body: json(sendQuoteBody),
   },
-  ok: [201, "Created", data(z.unknown())],
+  ok: [201, "Created", data(AdminAfterSalesRequest)],
   errors: { 404: "Not found", 409: "Quote or version conflict" },
 });
 op({
@@ -1707,15 +1904,26 @@ op({
   auth: "user",
   request: {
     params: z.object({ id: z.number(), itemId: z.number() }),
+    headers: z.object({ "Upload-Key": z.string().regex(/^[A-Za-z0-9_-]{1,64}$/) }),
     body: multipart(z.object({ images: z.array(binary).min(1).max(3) })),
   },
-  ok: [201, "Created", data(z.array(z.unknown()))],
+  ok: [201, "Created", data(z.array(ServiceAttachment))],
   errors: {
     404: "Not found",
     409: "Limit or invalid state",
     413: "Image too large",
     503: "Storage unavailable",
   },
+});
+op({
+  method: "get",
+  path: `${v1}/after-sales/{id}/items/{itemId}/attachments`,
+  summary: "List my ready after-sales images",
+  tag: "after-sales",
+  auth: "user",
+  request: { params: z.object({ id: z.number(), itemId: z.number() }) },
+  ok: [200, "OK", data(z.array(ServiceAttachment))],
+  errors: { 404: "Not found" },
 });
 op({
   method: "delete",
@@ -1735,15 +1943,26 @@ op({
   auth: "admin",
   request: {
     params: z.object({ id: z.number(), itemId: z.number() }),
+    headers: z.object({ "Upload-Key": z.string().regex(/^[A-Za-z0-9_-]{1,64}$/) }),
     body: multipart(z.object({ images: z.array(binary).min(1).max(3) })),
   },
-  ok: [201, "Created", data(z.array(z.unknown()))],
+  ok: [201, "Created", data(z.array(ServiceAttachment))],
   errors: {
     404: "Not found",
     409: "Limit or invalid state",
     413: "Image too large",
     503: "Storage unavailable",
   },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/after-sales/{id}/items/{itemId}/attachments`,
+  summary: "List ready admin after-sales images",
+  tag: "admin",
+  auth: "admin",
+  request: { params: z.object({ id: z.number(), itemId: z.number() }) },
+  ok: [200, "OK", data(z.array(ServiceAttachment))],
+  errors: { 404: "Not found" },
 });
 op({
   method: "delete",
@@ -1761,8 +1980,8 @@ op({
   summary: "List after-sales requests",
   tag: "admin",
   auth: "admin",
-  request: { query: z.object({}).passthrough() },
-  ok: [200, "OK", page(z.unknown())],
+  request: { query: adminServiceRequestQuery },
+  ok: [200, "OK", page(AdminAfterSalesRequest)],
 });
 op({
   method: "get",
@@ -1770,7 +1989,7 @@ op({
   summary: "Summarize after-sales requests",
   tag: "admin",
   auth: "admin",
-  ok: [200, "OK", data(z.unknown())],
+  ok: [200, "OK", data(AfterSalesSummary)],
 });
 op({
   method: "get",
@@ -1787,7 +2006,7 @@ op({
   tag: "admin",
   auth: "admin",
   request: { params: idParams },
-  ok: [200, "OK", data(z.unknown())],
+  ok: [200, "OK", data(AdminAfterSalesRequest)],
   errors: { 404: "Not found" },
 });
 op({
@@ -1800,7 +2019,7 @@ op({
     params: idParams,
     body: json(z.object({ assignedToId: z.number().nullable(), expectedVersion: z.number() })),
   },
-  ok: [200, "Updated", data(z.unknown())],
+  ok: [200, "Updated", data(AdminAfterSalesRequest)],
   errors: { 404: "Not found", 409: "Assignee or version conflict" },
 });
 op({

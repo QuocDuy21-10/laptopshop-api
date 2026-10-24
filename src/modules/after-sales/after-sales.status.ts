@@ -1,7 +1,8 @@
 import { AppError } from "lib/errors";
-import type {
-  ServiceRequestItemStatus,
-  ServiceRequestType,
+import {
+  SERVICE_REQUEST_ITEM_STATUSES,
+  type ServiceRequestItemStatus,
+  type ServiceRequestType,
 } from "modules/after-sales/after-sales.types";
 
 export type TransitionContext = {
@@ -48,7 +49,7 @@ export const canTransition = (
   if (type === "WARRANTY" && from === "APPROVED" && to === "DIAGNOSING") return false;
   if (type === "WARRANTY" && from === "DIAGNOSING" && to === "AWAITING_QUOTE_DECISION")
     return false;
-  if (type === "TECHNICAL_SUPPORT" && from === "APPROVED" && to === "AWAITING_ITEM") return false;
+  if (type === "TECHNICAL_SUPPORT" && to === "AWAITING_ITEM") return false;
   if (
     type === "TECHNICAL_SUPPORT" &&
     from === "AWAITING_QUOTE_DECISION" &&
@@ -72,6 +73,12 @@ export const canTransition = (
   }
   return true;
 };
+
+export const allowedAdminTransitionsFor = (
+  type: ServiceRequestType,
+  from: ServiceRequestItemStatus,
+  context: TransitionContext = {},
+) => SERVICE_REQUEST_ITEM_STATUSES.filter((to) => canTransition(type, from, to, context));
 
 export const assertTransition = (
   type: ServiceRequestType,

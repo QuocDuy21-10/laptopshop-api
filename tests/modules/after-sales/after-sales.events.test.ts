@@ -1,9 +1,15 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
+jest.mock("modules/after-sales/after-sales.notifications", () => ({
+  createAfterSalesNotification: jest.fn().mockResolvedValue(undefined),
+}));
 
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
 import { addInternalNote, addPublicMessage } from "modules/after-sales/after-sales.events";
 
-beforeEach(resetPrisma);
+beforeEach(() => {
+  resetPrisma();
+  jest.clearAllMocks();
+});
 
 describe("after-sales events", () => {
   it("rejects customer messages after the request is closed", async () => {
@@ -65,5 +71,25 @@ describe("after-sales events", () => {
     const result = await addInternalNote(2, 9, { body: "  Gọi lại khách  " });
     expect(result.visibility).toBe("INTERNAL");
     expect(result.body).toBe("Gọi lại khách");
+  });
+
+  it("creates a public message inside one transaction", async () => {
+    prismaMock.serviceRequest.findFirst.mockResolvedValue({
+      id: 9,
+      userId: 11,
+      status: "IN_PROGRESS",
+      items: [],
+    });
+    prismaMock.serviceRequestEvent.create.mockResolvedValue({
+      id: 22,
+      serviceRequestId: 9,
+      serviceRequestItemId: null,
+      kind: "PUBLIC_MESSAGE",
+      visibility: "PUBLIC",
+      body: "Xin chào",
+      createdAt: new Date("2026-10-23T00:00:00.000Z"),
+    });
+    await addPublicMessage({ id: 11, role: "USER" }, 9, { body: "Xin chào" });
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(expect.any(Function));
   });
 });

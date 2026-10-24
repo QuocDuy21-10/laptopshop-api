@@ -1,8 +1,12 @@
 import { productImage } from "modules/products/products.mapper";
 import {
   allowedRequestTypesForCoverage,
-  classifyCoverage,
+  effectiveCoverage,
 } from "modules/after-sales/after-sales.eligibility";
+import {
+  toAdminWarrantyVerificationDto,
+  toCustomerWarrantyVerificationDto,
+} from "modules/after-sales/after-sales.warranty-verifications";
 import type {
   AdminServiceRequestRow,
   CustomerServiceRequestRow,
@@ -21,7 +25,8 @@ export type EligibleDeviceDto = {
   warrantyStartAt: Date | null;
   warrantyEndAt: Date | null;
   warrantyPolicySource: string;
-  coverage: ReturnType<typeof classifyCoverage>;
+  coverage: ReturnType<typeof effectiveCoverage>;
+  warrantyVerification: ReturnType<typeof toCustomerWarrantyVerificationDto>;
   allowed: boolean;
   reason: string | null;
   allowedRequestTypes: ServiceRequestType[];
@@ -53,12 +58,21 @@ export const toEligibleDeviceDto = (
 ): EligibleDeviceDto => {
   const activeCount = row.serviceRequestItems.length;
   const availableCount = Math.max(0, row.quantity - activeCount);
-  const coverage = classifyCoverage(
+  const latestVerification = row.warrantyVerifications?.[0] ?? null;
+  const coverage = effectiveCoverage(
     {
       months: row.warrantyMonthsSnapshot,
       startAt: row.warrantyStartAt,
       endAt: row.warrantyEndAt,
+      policySource: row.warrantyPolicySource,
     },
+    latestVerification
+      ? {
+          decision: latestVerification.decision,
+          warrantyStartAt: latestVerification.warrantyStartAt,
+          warrantyEndAt: latestVerification.warrantyEndAt,
+        }
+      : null,
     now,
   );
   const allowedRequestTypes = allowedRequestTypesForCoverage(coverage, availableCount);
@@ -89,6 +103,7 @@ export const toEligibleDeviceDto = (
     warrantyEndAt: row.warrantyEndAt,
     warrantyPolicySource: row.warrantyPolicySource,
     coverage,
+    warrantyVerification: toCustomerWarrantyVerificationDto(latestVerification),
     allowed,
     reason,
     allowedRequestTypes,
@@ -100,6 +115,7 @@ export const toCustomerServiceRequestDto = (row: CustomerServiceRequestRow) => (
   code: row.code,
   type: row.type,
   status: row.status,
+  version: row.version,
   subject: row.subject,
   previousRequestId: row.previousRequestId,
   createdAt: row.createdAt,
@@ -124,6 +140,9 @@ export const toCustomerServiceRequestDto = (row: CustomerServiceRequestRow) => (
     customerConfirmedAt: item.customerConfirmedAt,
     closedAt: item.closedAt,
     closeReason: item.closeReason,
+    warrantyVerification: toCustomerWarrantyVerificationDto(
+      item.warrantyVerifications?.[0] ?? null,
+    ),
     allowedActions: customerActionsFor(item, item.quotes, new Date()),
     quotes: item.quotes.map((quote) => ({
       id: quote.id,
@@ -160,19 +179,26 @@ export const toCustomerServiceRequestDto = (row: CustomerServiceRequestRow) => (
   })),
 });
 
-export const toAdminServiceRequestDto = (row: AdminServiceRequestRow) => ({
-  ...toCustomerServiceRequestDto(row as unknown as CustomerServiceRequestRow),
-  customer: row.customer,
-  assignee: row.assignee,
-  events: row.events.map((event) => ({
-    id: event.id,
-    itemId: event.serviceRequestItemId,
-    kind: event.kind,
-    visibility: event.visibility,
-    fromStatus: event.fromStatus,
-    toStatus: event.toStatus,
-    body: event.body,
-    actor: event.actor,
-    createdAt: event.createdAt,
-  })),
-});
+export const toAdminServiceRequestDto = (row: AdminServiceRequestRow) => {
+  const customerDto = toCustomerServiceRequestDto(row as unknown as CustomerServiceRequestRow);
+  return {
+    ...customerDto,
+    customer: row.customer,
+    assignee: row.assignee,
+    items: row.items.map((item, index) => ({
+      ...customerDto.items[index],
+      warrantyVerification: toAdminWarrantyVerificationDto(item.warrantyVerifications?.[0] ?? null),
+    })),
+    events: row.events.map((event) => ({
+      id: event.id,
+      itemId: event.serviceRequestItemId,
+      kind: event.kind,
+      visibility: event.visibility,
+      fromStatus: event.fromStatus,
+      toStatus: event.toStatus,
+      body: event.body,
+      actor: event.actor,
+      createdAt: event.createdAt,
+    })),
+  };
+};

@@ -15,6 +15,8 @@ describe("notification preference persistence", () => {
       inAppEnabled: true,
       emailEnabled: false,
       webPushEnabled: false,
+      afterSalesEmailEnabled: false,
+      afterSalesWebPushEnabled: false,
     });
 
     await expect(updateNotificationPreferences(user.id, { webPushEnabled: true })).resolves.toEqual(
@@ -22,6 +24,8 @@ describe("notification preference persistence", () => {
         inAppEnabled: true,
         emailEnabled: false,
         webPushEnabled: true,
+        afterSalesEmailEnabled: false,
+        afterSalesWebPushEnabled: false,
       },
     );
   });

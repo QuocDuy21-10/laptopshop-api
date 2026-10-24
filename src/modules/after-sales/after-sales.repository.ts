@@ -9,6 +9,17 @@ export const customerServiceRequestInclude = {
     include: {
       orderDetail: { select: { id: true, orderId: true } },
       quotes: { include: { lines: true }, orderBy: { version: "desc" } },
+      warrantyVerifications: {
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 1,
+        select: {
+          id: true,
+          decision: true,
+          warrantyStartAt: true,
+          warrantyEndAt: true,
+          createdAt: true,
+        },
+      },
     },
     orderBy: { position: "asc" },
   },
@@ -34,6 +45,11 @@ export const adminServiceRequestInclude = {
     include: {
       orderDetail: { select: { id: true, orderId: true } },
       quotes: { include: { lines: true }, orderBy: { version: "desc" } },
+      warrantyVerifications: {
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 1,
+        include: { verifiedBy: { select: { id: true, username: true, fullName: true } } },
+      },
     },
     orderBy: { position: "asc" },
   },
@@ -61,6 +77,17 @@ export const eligibleDeviceInclude = {
     select: { id: true, userId: true, status: true, paymentStatus: true, completedAt: true },
   },
   product: { select: { id: true, name: true, image: true } },
+  warrantyVerifications: {
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 1,
+    select: {
+      id: true,
+      decision: true,
+      warrantyStartAt: true,
+      warrantyEndAt: true,
+      createdAt: true,
+    },
+  },
   serviceRequestItems: {
     where: { status: { notIn: ["CLOSED", "REJECTED", "CANCELLED"] } },
     select: { id: true },
@@ -100,6 +127,17 @@ export const lockOrderDetails = async (tx: Prisma.TransactionClient, ids: number
     include: {
       order: { select: { id: true, userId: true, status: true, paymentStatus: true } },
       product: { select: { name: true } },
+      warrantyVerifications: {
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        take: 1,
+        select: {
+          id: true,
+          decision: true,
+          warrantyStartAt: true,
+          warrantyEndAt: true,
+          createdAt: true,
+        },
+      },
       serviceRequestItems: {
         where: { status: { notIn: ["CLOSED", "REJECTED", "CANCELLED"] } },
         select: { id: true, serialNumberNormalized: true },

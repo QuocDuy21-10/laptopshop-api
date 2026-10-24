@@ -5,6 +5,7 @@ import { authenticate } from "middlewares/authenticate";
 import { validate } from "middlewares/validate";
 import {
   addServiceAttachments,
+  listServiceAttachments,
   redactServiceAttachment,
   type AttachmentDeps,
 } from "modules/after-sales/after-sales.attachments";
@@ -20,6 +21,18 @@ export const createAfterSalesAttachmentRoutes = (
   limiter?: RequestHandler,
 ) => {
   const router = Router();
+  router.get(
+    "/:id/items/:itemId/attachments",
+    authenticate,
+    validate({ params: serviceItemParams }),
+    async (req, res) => {
+      const { id, itemId } = res.locals.params as { id: number; itemId: number };
+      const role = req.auth!.role === "ADMIN" ? "ADMIN" : "USER";
+      res.json({
+        data: await listServiceAttachments(deps, { id: req.auth!.id, role }, id, itemId),
+      });
+    },
+  );
   router.post(
     "/:id/items/:itemId/attachments",
     authenticate,
@@ -33,18 +46,16 @@ export const createAfterSalesAttachmentRoutes = (
         throw new AppError("Upload-Key header is required", 400, "UPLOAD_KEY_REQUIRED");
       const files = (req.files ?? []) as Express.Multer.File[];
       const role = req.auth!.role === "ADMIN" ? "ADMIN" : "USER";
-      res
-        .status(201)
-        .json({
-          data: await addServiceAttachments(
-            deps,
-            { id: req.auth!.id, role },
-            id,
-            itemId,
-            files,
-            uploadKey,
-          ),
-        });
+      res.status(201).json({
+        data: await addServiceAttachments(
+          deps,
+          { id: req.auth!.id, role },
+          id,
+          itemId,
+          files,
+          uploadKey,
+        ),
+      });
     },
   );
   router.delete(

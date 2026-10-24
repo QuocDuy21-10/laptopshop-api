@@ -104,6 +104,44 @@ export const assignServiceRequestBody = z.object({
   expectedVersion: z.number().int().positive(),
 });
 
+export const warrantyVerificationBody = z
+  .object({
+    expectedVersion: z.number().int().positive(),
+    decision: z.enum(["IN_WARRANTY", "OUT_OF_WARRANTY", "NO_WARRANTY", "UNVERIFIABLE"]),
+    warrantyStartAt: z.coerce.date().optional(),
+    warrantyEndAt: z.coerce.date().optional(),
+    note: z.string().trim().max(2000).optional(),
+  })
+  .superRefine((value, ctx) => {
+    const requiresDates = value.decision === "IN_WARRANTY" || value.decision === "OUT_OF_WARRANTY";
+    if (requiresDates && (!value.warrantyStartAt || !value.warrantyEndAt)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["warrantyStartAt"],
+        message: "Warranty dates are required",
+      });
+    }
+    if (!requiresDates && (value.warrantyStartAt || value.warrantyEndAt)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["warrantyStartAt"],
+        message: "Warranty dates are not allowed for this decision",
+      });
+    }
+    if (
+      value.warrantyStartAt &&
+      value.warrantyEndAt &&
+      value.warrantyStartAt > value.warrantyEndAt
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["warrantyEndAt"],
+        message: "Warranty end must be after start",
+      });
+    }
+  });
+export type WarrantyVerificationBody = z.infer<typeof warrantyVerificationBody>;
+
 export const quoteParams = z.object({
   id: z.coerce.number().int().positive(),
   itemId: z.coerce.number().int().positive(),

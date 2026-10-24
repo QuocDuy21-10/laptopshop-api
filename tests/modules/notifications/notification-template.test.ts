@@ -1,5 +1,6 @@
 import {
   renderEmailVerification,
+  renderAfterSalesEmail,
   renderPriceAlertEmail,
 } from "modules/notifications/notification-template";
 
@@ -25,5 +26,17 @@ describe("notification email templates", () => {
     expect(result.text).toContain("/products/7");
     expect(result.text).toContain("/account/notifications/settings");
     expect(result.html).toContain("FLASH_SALE");
+  });
+
+  it("escapes after-sales message HTML and uses an absolute request URL", () => {
+    const result = renderAfterSalesEmail({
+      title: "Cập nhật",
+      message: '<img src=x onerror="alert(1)">',
+      requestUrl: "https://shop.example/account/after-sales/9",
+    });
+    expect(result.html).not.toContain("<img");
+    expect(result.html).toContain("&lt;img");
+    expect(result.html).toContain("https://shop.example/account/after-sales/9");
+    expect(result.text).toContain('<img src=x onerror="alert(1)">');
   });
 });

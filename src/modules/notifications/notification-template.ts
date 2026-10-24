@@ -1,5 +1,13 @@
 const money = (value: number) => value.toLocaleString("vi-VN") + "đ";
 
+export const escapeHtml = (value: string) =>
+  value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 export const renderEmailVerification = (input: { code: string; expiresMinutes: number }) => ({
   subject: "Xác minh email LaptopShop",
   text:
@@ -58,9 +66,9 @@ export const renderPriceAlertEmail = (input: {
 export const renderAfterSalesEmail = (input: {
   title: string;
   message: string;
-  requestId: number;
+  requestUrl: string;
 }) => ({
   subject: input.title,
-  text: `${input.message}. Xem yêu cầu: /account/after-sales/${input.requestId}`,
-  html: `<p>${input.message}</p><p><a href="/account/after-sales/${input.requestId}">Xem yêu cầu hậu mãi</a></p>`,
+  text: `${input.message}. Xem yêu cầu: ${input.requestUrl}`,
+  html: `<p>${escapeHtml(input.message)}</p><p><a href="${escapeHtml(input.requestUrl)}">Xem yêu cầu hậu mãi</a></p>`,
 });

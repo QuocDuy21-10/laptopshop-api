@@ -29,6 +29,9 @@ const terminal = new Set(["DELIVERED", "CANCELLED", "SUPPRESSED"]);
 const preferenceFor = (d: DeliveryRecord) =>
   d.notification?.user?.notificationPreference ?? d.preference ?? null;
 const userFor = (d: DeliveryRecord) => d.notification?.user ?? d.user ?? null;
+const isAfterSales = (d: DeliveryRecord) =>
+  Boolean(d.notification?.serviceRequestId) ||
+  Boolean(d.notification?.type.startsWith("AFTER_SALES_"));
 const isConsented = (d: DeliveryRecord) => {
   if (d.emailVerificationChallengeId)
     return Boolean(
@@ -38,11 +41,20 @@ const isConsented = (d: DeliveryRecord) => {
     );
   if (d.channel === "EMAIL") {
     const u = userFor(d);
+    const afterSales = isAfterSales(d);
     return Boolean(
-      preferenceFor(d)?.emailEnabled && u?.emailVerifiedAt && u.username === d.destinationKey,
+      preferenceFor(d)?.emailEnabled &&
+      (!afterSales || preferenceFor(d)?.afterSalesEmailEnabled !== false) &&
+      u?.emailVerifiedAt &&
+      u.username === d.destinationKey,
     );
   }
-  return Boolean(preferenceFor(d)?.webPushEnabled && d.pushSubscription?.disabledAt === null);
+  const afterSales = isAfterSales(d);
+  return Boolean(
+    preferenceFor(d)?.webPushEnabled &&
+    (!afterSales || preferenceFor(d)?.afterSalesWebPushEnabled !== false) &&
+    d.pushSubscription?.disabledAt === null,
+  );
 };
 const errorCode = (e: unknown) =>
   e && typeof e === "object" && "code" in e && typeof e.code === "string"
@@ -101,7 +113,10 @@ const providerInput = (d: DeliveryRecord) => {
         ...renderAfterSalesEmail({
           title: n.title,
           message: n.message,
-          requestId: n.serviceRequestId,
+          requestUrl: new URL(
+            `/account/after-sales/${n.serviceRequestId}`,
+            env.STOREFRONT_ORIGIN,
+          ).toString(),
         }),
         idempotencyKey: `delivery-${d.id}`,
       };

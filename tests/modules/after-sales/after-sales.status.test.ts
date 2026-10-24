@@ -1,6 +1,7 @@
 import { AppError } from "lib/errors";
 import {
   assertTransition,
+  allowedAdminTransitionsFor,
   canTransition,
   type TransitionContext,
 } from "modules/after-sales/after-sales.status";
@@ -22,6 +23,19 @@ describe("after-sales item transitions", () => {
     expect(
       canTransition("TECHNICAL_SUPPORT", "AWAITING_QUOTE_DECISION", "IN_SERVICE", context),
     ).toBe(false);
+  });
+
+  it("keeps technical support remote-only after quote acceptance", () => {
+    const quoteAccepted = { ...context, quoteAccepted: true };
+    expect(canTransition("TECHNICAL_SUPPORT", "APPROVED", "AWAITING_ITEM", quoteAccepted)).toBe(
+      false,
+    );
+    expect(
+      canTransition("TECHNICAL_SUPPORT", "AWAITING_QUOTE_DECISION", "AWAITING_ITEM", quoteAccepted),
+    ).toBe(false);
+    expect(
+      allowedAdminTransitionsFor("TECHNICAL_SUPPORT", "AWAITING_QUOTE_DECISION", quoteAccepted),
+    ).toEqual(["DIAGNOSING", "IN_SERVICE"]);
   });
 
   it("allows customer cancellation only before the device is received", () => {

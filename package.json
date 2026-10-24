@@ -23,6 +23,7 @@
     "price-alerts:run-once": "ts-node -r tsconfig-paths/register src/scripts/run-price-alert-sweep.ts",
     "worker:price-alert": "ts-node -r tsconfig-paths/register src/workers/price-alert-worker.ts",
     "worker:after-sales": "ts-node -r tsconfig-paths/register src/workers/after-sales-worker.ts",
+    "after-sales:reconcile-attachments": "ts-node -r tsconfig-paths/register src/scripts/reconcile-after-sales-attachments.ts",
     "prisma:deploy": "prisma migrate deploy",
     "prepare": "husky"
   },

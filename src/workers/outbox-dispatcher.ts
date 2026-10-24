@@ -39,7 +39,8 @@ export const runOutboxDispatcherOnce = async (
     queueFor: (eventType) =>
       eventType === "NOTIFICATION_DELIVERY_REQUESTED"
         ? notificationQueue
-        : eventType === "AFTER_SALES_MILESTONE_REQUESTED"
+        : eventType === "AFTER_SALES_MILESTONE_REQUESTED" ||
+            eventType === "AFTER_SALES_ATTACHMENT_DELETE_REQUESTED"
           ? afterSalesQueue
           : pricingQueue,
     markPublished: (id, owner) => markOutboxPublished(prisma, id, owner),

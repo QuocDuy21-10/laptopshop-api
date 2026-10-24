@@ -8,6 +8,20 @@ import { USER, cookieFor } from "../../helpers/auth";
 beforeEach(resetPrisma);
 
 describe("notification preferences", () => {
+  it("accepts a category-only preference update", async () => {
+    prismaMock.notificationPreference.upsert.mockResolvedValue({
+      emailEnabled: false,
+      webPushEnabled: false,
+      afterSalesEmailEnabled: true,
+      afterSalesWebPushEnabled: false,
+    });
+    const response = await request(buildApp())
+      .patch("/api/v1/notification-preferences")
+      .set("Cookie", cookieFor(USER))
+      .send({ afterSalesEmailEnabled: true });
+    expect(response.status).toBe(200);
+  });
+
   it("returns In-App enabled and external channels disabled by default", async () => {
     prismaMock.notificationPreference.findUnique.mockResolvedValue(null);
 

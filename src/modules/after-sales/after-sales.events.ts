@@ -44,45 +44,50 @@ export const addPublicMessage = async (
   input: MessageInput,
 ) => {
   const body = validateMessage(input);
-  const request = await prisma.serviceRequest.findFirst({
-    where: { id: requestId, ...(actor.role === "USER" ? { userId: actor.id } : {}) },
-    select: {
-      id: true,
-      status: true,
-      userId: true,
-      assignedToId: true,
-      items: { select: { id: true, status: true } },
-    },
+  return prisma.$transaction(async (tx) => {
+    if (input.itemId !== undefined)
+      await tx.$queryRaw`SELECT id FROM service_request_items WHERE id = ${input.itemId} FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM service_requests WHERE id = ${requestId} FOR UPDATE`;
+    const request = await tx.serviceRequest.findFirst({
+      where: { id: requestId, ...(actor.role === "USER" ? { userId: actor.id } : {}) },
+      select: {
+        id: true,
+        status: true,
+        userId: true,
+        assignedToId: true,
+        items: { select: { id: true, status: true } },
+      },
+    });
+    if (!request) throw new AppError("Service request not found", 404, "SERVICE_REQUEST_NOT_FOUND");
+    if (request.status === "CLOSED") throw eventNotAllowed();
+    if (input.itemId !== undefined) {
+      const item = request.items.find((candidate) => candidate.id === input.itemId);
+      if (!item)
+        throw new AppError("Service request item not found", 404, "SERVICE_REQUEST_ITEM_NOT_FOUND");
+      if (["CLOSED", "REJECTED", "CANCELLED"].includes(item.status)) throw eventNotAllowed();
+    }
+    const event = await tx.serviceRequestEvent.create({
+      data: {
+        serviceRequestId: requestId,
+        serviceRequestItemId: input.itemId,
+        actorId: actor.id,
+        kind: "PUBLIC_MESSAGE",
+        visibility: "PUBLIC",
+        body,
+      },
+    });
+    await createAfterSalesNotification(tx, {
+      event: actor.role === "USER" ? "CUSTOMER_MESSAGE" : "ADMIN_STATUS",
+      requestId,
+      customerId: request.userId,
+      assigneeId: request.assignedToId,
+      type: "AFTER_SALES_MESSAGE",
+      title: "Tin nhắn yêu cầu hậu mãi",
+      message: body,
+      dedupeKey: `after-sales-message:${event.id}`,
+    });
+    return eventDto(event);
   });
-  if (!request) throw new AppError("Service request not found", 404, "SERVICE_REQUEST_NOT_FOUND");
-  if (request.status === "CLOSED") throw eventNotAllowed();
-  if (input.itemId !== undefined) {
-    const item = request.items.find((candidate) => candidate.id === input.itemId);
-    if (!item)
-      throw new AppError("Service request item not found", 404, "SERVICE_REQUEST_ITEM_NOT_FOUND");
-    if (["CLOSED", "REJECTED", "CANCELLED"].includes(item.status)) throw eventNotAllowed();
-  }
-  const event = await prisma.serviceRequestEvent.create({
-    data: {
-      serviceRequestId: requestId,
-      serviceRequestItemId: input.itemId,
-      actorId: actor.id,
-      kind: "PUBLIC_MESSAGE",
-      visibility: "PUBLIC",
-      body,
-    },
-  });
-  await createAfterSalesNotification(prisma, {
-    event: actor.role === "USER" ? "CUSTOMER_MESSAGE" : "ADMIN_STATUS",
-    requestId,
-    customerId: request.userId,
-    assigneeId: request.assignedToId,
-    type: "AFTER_SALES_MESSAGE",
-    title: "Tin nhắn yêu cầu hậu mãi",
-    message: body,
-    dedupeKey: `after-sales-message:${event.id}`,
-  });
-  return eventDto(event);
 };
 
 export const addInternalNote = async (adminId: number, requestId: number, input: MessageInput) => {

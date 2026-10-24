@@ -68,6 +68,7 @@ const schema = z
           .map((o) => o.trim())
           .filter(Boolean),
       ),
+    STOREFRONT_ORIGIN: z.string().url().default("http://localhost:3000"),
     ADMIN_PASSWORD: z.preprocess(emptyToUndefined, z.string().optional()),
     SENTRY_DSN: z.preprocess(emptyToUndefined, z.string().url().optional()),
     ENABLE_DOCS: z
@@ -136,6 +137,8 @@ const schema = z
       .default("false")
       .transform((v) => v === "true"),
     AFTER_SALES_IMAGE_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+    AFTER_SALES_ATTACHMENT_PENDING_TTL_MS: z.coerce.number().int().min(60_000).default(3_600_000),
+    AFTER_SALES_ATTACHMENT_CLEANUP_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(100),
     AFTER_SALES_WORKER_ENABLED: z
       .enum(["true", "false"])
       .default("false")

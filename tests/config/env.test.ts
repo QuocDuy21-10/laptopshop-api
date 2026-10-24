@@ -52,6 +52,7 @@ describe("parseEnv", () => {
     expect(e.EMAIL_PROVIDER).toBe("smtp");
     expect(e.SMTP_PORT).toBe(1025);
     expect(e.EMAIL_OTP_KEY_VERSION).toBe("v1");
+    expect(e.STOREFRONT_ORIGIN).toBe("http://localhost:3000");
   });
 
   it("parses REFRESH_TTL_DAYS and COOKIE_DOMAIN", () => {

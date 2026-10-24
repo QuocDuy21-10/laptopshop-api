@@ -46,6 +46,7 @@ const V1_PATHS = [
   "/api/v1/after-sales/{id}/items/{itemId}/dispute-completion",
   "/api/v1/after-sales/{id}/messages",
   "/api/v1/admin/after-sales/{id}/items/{itemId}/status",
+  "/api/v1/admin/after-sales/{id}/items/{itemId}/warranty-verifications",
   "/api/v1/admin/after-sales/{id}/messages",
   "/api/v1/admin/after-sales/{id}/notes",
   "/api/v1/after-sales/{id}/items/{itemId}/quotes/{quoteId}/decision",
@@ -368,6 +369,36 @@ describe("openapi document", () => {
     const detail = doc.components?.schemas?.AdminOrderDetail as any;
     expect(detail.properties).toHaveProperty("history");
     expect((doc.components?.schemas?.AdminOrder as any).properties).toHaveProperty("completedAt");
+  });
+
+  it("documents the concrete after-sales contract and protected operations", () => {
+    expect(doc.components?.schemas).toEqual(
+      expect.objectContaining({
+        AfterSalesRequest: expect.anything(),
+        AdminAfterSalesRequest: expect.anything(),
+        AfterSalesItem: expect.anything(),
+        ServiceQuote: expect.anything(),
+        ServiceAttachment: expect.anything(),
+        CustomerWarrantyVerification: expect.anything(),
+        AdminWarrantyVerification: expect.anything(),
+      }),
+    );
+    const upload = op("/api/v1/after-sales/{id}/items/{itemId}/attachments", "post");
+    expect(upload.parameters).toContainEqual(
+      expect.objectContaining({ in: "header", name: "Upload-Key", required: true }),
+    );
+    expect(
+      op("/api/v1/after-sales/{id}/items/{itemId}/attachments", "get").responses[200],
+    ).toBeDefined();
+    expect(
+      op("/api/v1/admin/after-sales/{id}/items/{itemId}/warranty-verifications", "post")
+        .responses[200],
+    ).toBeDefined();
+    expect(
+      op("/api/v1/admin/after-sales/{id}/items/{itemId}/status", "patch").requestBody.content[
+        "application/json"
+      ].schema.properties.expectedVersion,
+    ).toBeDefined();
   });
 
   it("documents the CSV exports as text/csv", () => {

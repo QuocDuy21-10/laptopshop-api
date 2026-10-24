@@ -63,4 +63,25 @@ describe("outbox dispatcher", () => {
     expect(deps.markPublished).not.toHaveBeenCalled();
     expect(deps.markFailed).toHaveBeenCalledWith(5, "dispatcher-1", expect.any(Error));
   });
+
+  it("routes attachment cleanup events to the after-sales queue", async () => {
+    const queue = { add: jest.fn().mockResolvedValue({ id: "job" }) };
+    const event = {
+      id: 18,
+      eventType: "AFTER_SALES_ATTACHMENT_DELETE_REQUESTED" as const,
+      aggregateType: "ServiceRequestAttachment",
+      aggregateId: 77,
+      payload: { jobType: "ATTACHMENT_DELETE", attachmentId: 77 },
+    };
+    const deps = {
+      queueFor: jest.fn().mockReturnValue(queue),
+      claim: jest.fn().mockResolvedValue([event]),
+      markPublished: jest.fn().mockResolvedValue(undefined),
+      markFailed: jest.fn().mockResolvedValue(undefined),
+      now: new Date(),
+      leaseOwner: "dispatcher-1",
+    };
+    await expect(dispatchOutboxBatch(deps)).resolves.toMatchObject({ published: 1, failed: 0 });
+    expect(queue.add.mock.calls[0][2]).toEqual({ jobId: "after-sales-attachment-delete-77-18" });
+  });
 });

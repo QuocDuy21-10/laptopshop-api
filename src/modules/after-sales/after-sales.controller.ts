@@ -20,6 +20,7 @@ import {
 } from "modules/after-sales/after-sales.actions";
 import { addInternalNote, addPublicMessage } from "modules/after-sales/after-sales.events";
 import { decideQuote, sendQuote } from "modules/after-sales/after-sales.quotes";
+import { createWarrantyVerification } from "modules/after-sales/after-sales.warranty-verifications";
 import type { SendQuoteInput } from "modules/after-sales/after-sales.quotes";
 import type {
   CreateServiceRequestBody,
@@ -27,6 +28,7 @@ import type {
   ServiceRequestQuery,
   AdminServiceRequestQuery,
   QuoteDecisionBody,
+  WarrantyVerificationBody,
 } from "modules/after-sales/after-sales.schema";
 
 export const listEligibleDevicesHandler: RequestHandler = async (req, res) => {
@@ -127,6 +129,18 @@ export const sendQuoteHandler: RequestHandler = async (req, res) => {
   res
     .status(201)
     .json({ data: await sendQuote(req.auth!.id, id, itemId, req.body as SendQuoteInput) });
+};
+
+export const createWarrantyVerificationHandler: RequestHandler = async (req, res) => {
+  const { id, itemId } = res.locals.params as { id: number; itemId: number };
+  res.json({
+    data: await createWarrantyVerification(
+      req.auth!.id,
+      id,
+      itemId,
+      req.body as WarrantyVerificationBody,
+    ),
+  });
 };
 
 export const decideQuoteHandler: RequestHandler = async (req, res) => {

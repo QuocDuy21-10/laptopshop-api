@@ -52,7 +52,12 @@ export type DeliveryRecord = {
       } | null;
     } | null;
   } | null;
-  preference?: { emailEnabled: boolean; webPushEnabled: boolean } | null;
+  preference?: {
+    emailEnabled: boolean;
+    webPushEnabled: boolean;
+    afterSalesEmailEnabled?: boolean;
+    afterSalesWebPushEnabled?: boolean;
+  } | null;
   user?: { username: string; emailVerifiedAt: Date | null } | null;
   pushSubscription?: {
     disabledAt: Date | null;

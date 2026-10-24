@@ -6,8 +6,8 @@ import {
   resolveAlertPriceSnapshots,
   type PriceSnapshot,
 } from "modules/pricing/alert-price-resolver";
-import { createOutboxEvent } from "modules/outbox/outbox.repository";
 import { evaluatePriceAlert } from "modules/price-alerts/price-alert.policy";
+import { publishNotification } from "modules/notifications/notification-publish.service";
 
 export type PriceAlertSweepStats = {
   productsScanned: number;
@@ -78,64 +78,6 @@ const notificationContent = (candidate: PriceAlertCandidate) =>
           "đ.",
       };
 
-const createNotificationDeliveryOutbox = async (
-  tx: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
-  notificationId: number,
-  candidate: PriceAlertCandidate,
-) => {
-  const preference = await tx.notificationPreference.findUnique({
-    where: { userId: candidate.userId },
-  });
-  const user = await tx.user.findUnique({
-    where: { id: candidate.userId },
-    select: { username: true, emailVerifiedAt: true },
-  });
-
-  if (preference?.emailEnabled && user?.emailVerifiedAt) {
-    const delivery = await tx.notificationDelivery.create({
-      data: {
-        notificationId,
-        parentType: "NOTIFICATION",
-        channel: "EMAIL",
-        dedupeKey: "notification-email-" + notificationId + "-" + user.username,
-        destinationKey: user.username,
-      },
-    });
-    await createOutboxEvent(tx, {
-      eventType: "NOTIFICATION_DELIVERY_REQUESTED",
-      aggregateType: "NotificationDelivery",
-      aggregateId: delivery.id,
-      dedupeKey: "delivery-outbox-" + delivery.id,
-      payload: { deliveryId: delivery.id, notificationId },
-    });
-  }
-
-  if (preference?.webPushEnabled) {
-    const subscriptions = await tx.pushSubscription.findMany({
-      where: { userId: candidate.userId, disabledAt: null },
-    });
-    for (const subscription of subscriptions) {
-      const delivery = await tx.notificationDelivery.create({
-        data: {
-          notificationId,
-          parentType: "NOTIFICATION",
-          pushSubscriptionId: subscription.id,
-          channel: "WEB_PUSH",
-          dedupeKey: "notification-push-" + notificationId + "-" + subscription.id,
-          destinationKey: subscription.endpointHash,
-        },
-      });
-      await createOutboxEvent(tx, {
-        eventType: "NOTIFICATION_DELIVERY_REQUESTED",
-        aggregateType: "NotificationDelivery",
-        aggregateId: delivery.id,
-        dedupeKey: "delivery-outbox-" + delivery.id,
-        payload: { deliveryId: delivery.id, notificationId },
-      });
-    }
-  }
-};
-
 export const commitPriceAlertCandidate = async (
   client: typeof prisma,
   candidate: PriceAlertCandidate,
@@ -144,32 +86,17 @@ export const commitPriceAlertCandidate = async (
   try {
     await client.$transaction(async (tx) => {
       const content = notificationContent(candidate);
-      const notification = await tx.notification.create({
-        data: {
-          userId: candidate.userId,
-          productId: candidate.productId,
-          type: "PRICE_DROP",
-          title: content.title,
-          message: content.message,
-          oldPrice: candidate.referencePrice,
-          newPrice: candidate.currentPrice,
-          priceSource: candidate.source,
-          promotionId: candidate.promotionId,
-          pricingVersion: candidate.pricingVersion,
-          validUntil: candidate.validUntil,
-          dedupeKey: [
-            "price-alert",
-            candidate.wishlistItemId,
-            candidate.alertVersion,
-            candidate.mode,
-            candidate.referencePrice,
-            candidate.currentPrice,
-            candidate.source,
-            candidate.promotionId ?? "none",
-            candidate.pricingVersion ?? "none",
-          ].join("-"),
-        },
-      });
+      const dedupeKey = [
+        "price-alert",
+        candidate.wishlistItemId,
+        candidate.alertVersion,
+        candidate.mode,
+        candidate.referencePrice,
+        candidate.currentPrice,
+        candidate.source,
+        candidate.promotionId ?? "none",
+        candidate.pricingVersion ?? "none",
+      ].join("-");
 
       const data =
         candidate.mode === "TARGET_PRICE"
@@ -202,7 +129,21 @@ export const commitPriceAlertCandidate = async (
         data,
       });
       if (updated.count !== 1) throw new StaleAlertConfiguration();
-      await createNotificationDeliveryOutbox(tx, notification.id, candidate);
+      await publishNotification(tx, {
+        category: "PRICE_ALERT",
+        userId: candidate.userId,
+        productId: candidate.productId,
+        type: "PRICE_DROP",
+        title: content.title,
+        message: content.message,
+        oldPrice: candidate.referencePrice,
+        newPrice: candidate.currentPrice,
+        priceSource: candidate.source,
+        promotionId: candidate.promotionId,
+        pricingVersion: candidate.pricingVersion,
+        validUntil: candidate.validUntil,
+        dedupeKey,
+      });
     });
     return "created";
   } catch (error) {

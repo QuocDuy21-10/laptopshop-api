@@ -49,7 +49,16 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx prisma generate
+      - name: Start RustFS test storage
+        run: docker compose --profile test up -d rustfs-test
+      - name: Wait for and initialize RustFS test storage
+        run: |
+          docker compose --profile test up --wait rustfs-test
+          docker compose --profile test run --rm --no-deps rustfs-test-init
       - run: npm run test:int
+      - name: Stop RustFS test storage
+        if: always()
+        run: docker compose --profile test down --volumes
 
   docker:
     runs-on: ubuntu-latest

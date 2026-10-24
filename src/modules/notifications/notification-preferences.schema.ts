@@ -8,8 +8,15 @@ export const updateNotificationPreferencesBody = z
     afterSalesWebPushEnabled: z.boolean().optional(),
   })
   .strict()
-  .refine((value) => value.emailEnabled !== undefined || value.webPushEnabled !== undefined, {
-    message: "At least one preference is required",
-  });
+  .refine(
+    (value) =>
+      value.emailEnabled !== undefined ||
+      value.webPushEnabled !== undefined ||
+      value.afterSalesEmailEnabled !== undefined ||
+      value.afterSalesWebPushEnabled !== undefined,
+    {
+      message: "At least one preference is required",
+    },
+  );
 
 export type UpdateNotificationPreferencesBody = z.infer<typeof updateNotificationPreferencesBody>;

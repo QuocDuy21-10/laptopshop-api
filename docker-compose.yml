@@ -6,8 +6,16 @@ services:
     environment:
       NODE_ENV: production
       PORT: "8080"
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-e2e-admin-password}
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       REDIS_URL: redis://redis:6379
+      AFTER_SALES_IMAGES_ENABLED: ${AFTER_SALES_IMAGES_ENABLED:-true}
+      AFTER_SALES_IMAGE_S3_ENDPOINT: ${AFTER_SALES_IMAGE_S3_ENDPOINT:-http://rustfs:9000}
+      AFTER_SALES_IMAGE_S3_REGION: ${AFTER_SALES_IMAGE_S3_REGION:-us-east-1}
+      AFTER_SALES_IMAGE_S3_BUCKET: ${AFTER_SALES_IMAGE_S3_BUCKET:-laptopshop-after-sales-images}
+      AFTER_SALES_IMAGE_S3_ACCESS_KEY_ID: ${AFTER_SALES_IMAGE_S3_ACCESS_KEY_ID:-rustfs-local}
+      AFTER_SALES_IMAGE_S3_SECRET_ACCESS_KEY: ${AFTER_SALES_IMAGE_S3_SECRET_ACCESS_KEY:-rustfs-local-secret}
+      AFTER_SALES_IMAGE_S3_FORCE_PATH_STYLE: ${AFTER_SALES_IMAGE_S3_FORCE_PATH_STYLE:-true}
     ports:
       - "8080:8080"
     depends_on:
@@ -15,6 +23,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      rustfs-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     volumes:
       # a named volume is seeded from the image on first run, so the bundled product images are kept
@@ -60,6 +70,28 @@ services:
     healthcheck:
       disable: true
 
+  after-sales-worker:
+    build:
+      context: .
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      RUN_MIGRATIONS: "false"
+      AFTER_SALES_WORKER_ENABLED: "true"
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      app:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    command: ["node", "dist/workers/after-sales-worker.js"]
+    healthcheck:
+      disable: true
+
   outbox-dispatcher:
     build:
       context: .
@@ -67,6 +99,7 @@ services:
     environment:
       NODE_ENV: production
       RUN_MIGRATIONS: "false"
+      NOTIFICATION_OUTBOX_ENABLED: "true"
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       REDIS_URL: redis://redis:6379
     depends_on:
@@ -87,6 +120,7 @@ services:
     environment:
       NODE_ENV: production
       RUN_MIGRATIONS: "false"
+      NOTIFICATION_WORKER_ENABLED: "true"
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       REDIS_URL: redis://redis:6379
     depends_on:
@@ -107,6 +141,7 @@ services:
     environment:
       NODE_ENV: production
       RUN_MIGRATIONS: "false"
+      NOTIFICATION_WORKER_ENABLED: "true"
       DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
       REDIS_URL: redis://redis:6379
     depends_on:
@@ -194,6 +229,7 @@ services:
       AWS_DEFAULT_REGION: us-east-1
       STORAGE_ENDPOINT: http://rustfs:9000
       STORAGE_BUCKET: laptopshop-review-images
+      STORAGE_BUCKETS: laptopshop-review-images,laptopshop-after-sales-images
     entrypoint: ["/bin/sh", "/init/rustfs-init.sh"]
     volumes:
       - ./docker/rustfs-init.sh:/init/rustfs-init.sh:ro

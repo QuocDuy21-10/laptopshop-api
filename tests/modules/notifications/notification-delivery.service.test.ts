@@ -57,6 +57,39 @@ describe("processNotificationDelivery", () => {
     );
   });
 
+  it("suppresses an after-sales delivery when only its category is disabled", async () => {
+    const provider = { send: jest.fn() };
+    const runtime = deps(
+      baseDelivery({
+        notification: {
+          id: 9,
+          title: "Cập nhật",
+          message: "Cập nhật hậu mãi",
+          type: "AFTER_SALES_STATUS_CHANGED",
+          serviceRequestId: 90,
+          productId: null,
+          oldPrice: null,
+          newPrice: null,
+          priceSource: null,
+          validUntil: null,
+          user: {
+            username: "user@example.test",
+            emailVerifiedAt: new Date(),
+            notificationPreference: {
+              emailEnabled: true,
+              webPushEnabled: false,
+              afterSalesEmailEnabled: false,
+              afterSalesWebPushEnabled: true,
+            },
+          },
+        },
+      }),
+      provider,
+    );
+    await expect(processNotificationDelivery(runtime, 7)).resolves.toBe("suppressed");
+    expect(provider.send).not.toHaveBeenCalled();
+  });
+
   it("marks a successful provider call as delivered with its message id", async () => {
     const provider = { send: jest.fn().mockResolvedValue({ providerMessageId: "mail-7" }) };
     const runtime = deps(baseDelivery(), provider);

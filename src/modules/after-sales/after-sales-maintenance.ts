@@ -1,8 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
 import { deriveRequestStatus } from "modules/after-sales/after-sales.aggregate";
+import { createAfterSalesNotification } from "modules/after-sales/after-sales.notifications";
 
-type Milestone = "REMIND_72H" | "REMIND_144H" | "AUTO_CLOSE_168H";
+export type Milestone = "REMIND_72H" | "REMIND_144H" | "AUTO_CLOSE_168H";
 type ItemForSchedule = {
   id: number;
   version: number;
@@ -31,7 +32,7 @@ export const scheduleConfirmationMilestones = async (
           aggregateType: "ServiceRequestItem",
           aggregateId: item.id,
           dedupeKey: `after-sales-milestone:${item.id}:${item.version}:${milestone}`,
-          payload: { itemId: item.id, itemVersion: item.version, milestone },
+          payload: { jobType: "MILESTONE", itemId: item.id, itemVersion: item.version, milestone },
           availableAt,
         },
       });
@@ -43,8 +44,10 @@ export const processAfterSalesMilestone = async (
   input: { itemId: number; itemVersion: number; milestone: Milestone },
   now = new Date(),
 ) => {
-  if (input.milestone !== "AUTO_CLOSE_168H") return "reminded" as const;
   return prisma.$transaction(async (tx) => {
+    await tx.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM service_request_items WHERE id = ${input.itemId} FOR UPDATE
+    `;
     const item = await tx.serviceRequestItem.findUnique({
       where: { id: input.itemId },
       select: {
@@ -53,16 +56,42 @@ export const processAfterSalesMilestone = async (
         version: true,
         status: true,
         confirmationDueAt: true,
+        request: { select: { userId: true, assignedToId: true } },
       },
     });
     if (
       !item ||
       item.version !== input.itemVersion ||
       !["RETURNED", "RESOLVED"].includes(item.status) ||
-      !item.confirmationDueAt ||
-      item.confirmationDueAt > now
+      !item.confirmationDueAt
     )
       return "noop" as const;
+    if (input.milestone === "AUTO_CLOSE_168H" && item.confirmationDueAt > now)
+      return "noop" as const;
+    const reminderDueAt = new Date(
+      item.confirmationDueAt.getTime() -
+        (input.milestone === "REMIND_72H" ? 96 : input.milestone === "REMIND_144H" ? 24 : 0) *
+          60 *
+          60 *
+          1000,
+    );
+    if (input.milestone !== "AUTO_CLOSE_168H" && now < reminderDueAt) return "noop" as const;
+    if (input.milestone !== "AUTO_CLOSE_168H") {
+      await createAfterSalesNotification(tx, {
+        event: "CONFIRMATION_REQUIRED",
+        requestId: item.serviceRequestId,
+        customerId: item.request.userId,
+        assigneeId: item.request.assignedToId,
+        type: "AFTER_SALES_CONFIRMATION_REQUIRED",
+        title: "Vui lòng xác nhận yêu cầu hậu mãi",
+        message:
+          input.milestone === "REMIND_72H"
+            ? "Bạn còn 4 ngày để xác nhận kết quả xử lý yêu cầu hậu mãi."
+            : "Bạn còn 1 ngày để xác nhận kết quả xử lý yêu cầu hậu mãi.",
+        dedupeKey: `after-sales-confirmation:${item.id}:${input.itemVersion}:${input.milestone}`,
+      });
+      return "reminded" as const;
+    }
     const updated = await tx.serviceRequestItem.updateMany({
       where: { id: item.id, version: input.itemVersion, status: { in: ["RETURNED", "RESOLVED"] } },
       data: {
@@ -93,6 +122,16 @@ export const processAfterSalesMilestone = async (
         status: deriveRequestStatus(statuses.map((row) => row.status as never)),
         version: { increment: 1 },
       },
+    });
+    await createAfterSalesNotification(tx, {
+      event: "ADMIN_STATUS",
+      requestId: item.serviceRequestId,
+      customerId: item.request.userId,
+      assigneeId: item.request.assignedToId,
+      type: "AFTER_SALES_AUTO_CLOSED",
+      title: "Yêu cầu hậu mãi đã tự động đóng",
+      message: "Yêu cầu đã tự động đóng do quá hạn xác nhận 7 ngày.",
+      dedupeKey: `after-sales-auto-closed:${item.id}:${input.itemVersion}`,
     });
     return "closed" as const;
   });

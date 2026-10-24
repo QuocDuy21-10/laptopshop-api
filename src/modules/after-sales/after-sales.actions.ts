@@ -82,7 +82,7 @@ export const transitionItem = async (
       now,
       closeMode: input.closeMode,
       confirmationDueAt: item.confirmationDueAt,
-      quoteAccepted: item.quotes?.[0]?.status === "ACCEPTED" && item.quotes[0].validUntil > now,
+      quoteAccepted: item.quotes?.[0]?.status === "ACCEPTED",
     };
     assertTransition(
       item.request.type as ServiceRequestType,

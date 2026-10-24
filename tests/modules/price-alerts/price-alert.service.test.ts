@@ -94,7 +94,7 @@ describe("runPriceAlertSweep", () => {
         ],
       ]),
     );
-    prismaMock.notification.create.mockResolvedValue({ id: 1 });
+    prismaMock.notification.upsert.mockResolvedValue({ id: 1 });
     prismaMock.wishlistItem.updateMany.mockResolvedValue({ count: 1 });
 
     const result = await runPriceAlertSweep({
@@ -105,8 +105,8 @@ describe("runPriceAlertSweep", () => {
 
     expect(result.itemsEvaluated).toBe(3);
     expect(result.notificationsCreated).toBe(1);
-    expect(prismaMock.notification.create).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ newPrice: 950 }) }),
+    expect(prismaMock.notification.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ create: expect.objectContaining({ newPrice: 950 }) }),
     );
   });
 
@@ -133,7 +133,7 @@ describe("runPriceAlertSweep", () => {
         ],
       ]),
     );
-    prismaMock.notification.create.mockResolvedValue({ id: 1 });
+    prismaMock.notification.upsert.mockResolvedValue({ id: 1 });
     prismaMock.wishlistItem.updateMany.mockResolvedValue({ count: 1 });
 
     await runPriceAlertSweep({

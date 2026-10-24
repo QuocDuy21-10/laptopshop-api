@@ -80,10 +80,10 @@ describe("after-sales item lifecycle", () => {
 
   it("blocks customer cancellation after the device is received", async () => {
     const user = await createUser();
-    const detail = await createCompletedOrderItem(user.id, (await createProduct(1)).id);
+    const detail = await createCompletedOrderItem(user.id, (await createProduct(1, 1000, 12)).id);
     const created = await createServiceRequest(user.id, "life-3", {
-      type: "TECHNICAL_SUPPORT",
-      subject: "Hỗ trợ",
+      type: "WARRANTY",
+      subject: "Bảo hành",
       items: [{ orderDetailId: detail.id, deviceLabel: "Máy", issueDescription: "Lỗi driver" }],
     });
     const itemId = created.request.items[0].id;

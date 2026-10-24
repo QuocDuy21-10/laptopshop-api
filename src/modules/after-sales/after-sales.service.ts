@@ -7,7 +7,7 @@ import {
   toCustomerServiceRequestDto,
   toEligibleDeviceDto,
 } from "modules/after-sales/after-sales.mapper";
-import { classifyCoverage } from "modules/after-sales/after-sales.eligibility";
+import { effectiveCoverage } from "modules/after-sales/after-sales.eligibility";
 import {
   customerServiceRequestInclude,
   adminServiceRequestInclude,
@@ -107,11 +107,22 @@ export const createServiceRequest = async (
             409,
             "ORDER_DETAIL_NOT_ELIGIBLE",
           );
-        const coverage = classifyCoverage({
-          months: detail.warrantyMonthsSnapshot,
-          startAt: detail.warrantyStartAt,
-          endAt: detail.warrantyEndAt,
-        });
+        const latestVerification = detail.warrantyVerifications?.[0] ?? null;
+        const coverage = effectiveCoverage(
+          {
+            months: detail.warrantyMonthsSnapshot,
+            startAt: detail.warrantyStartAt,
+            endAt: detail.warrantyEndAt,
+            policySource: detail.warrantyPolicySource,
+          },
+          latestVerification
+            ? {
+                decision: latestVerification.decision,
+                warrantyStartAt: latestVerification.warrantyStartAt,
+                warrantyEndAt: latestVerification.warrantyEndAt,
+              }
+            : null,
+        );
         if (
           input.type === "WARRANTY" &&
           coverage !== "IN_WARRANTY" &&

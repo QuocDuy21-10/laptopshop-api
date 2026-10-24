@@ -75,6 +75,13 @@ enum WarrantyCoverage {
   REQUIRES_VERIFICATION
 }
 
+enum WarrantyVerificationDecision {
+  IN_WARRANTY
+  OUT_OF_WARRANTY
+  NO_WARRANTY
+  UNVERIFIABLE
+}
+
 enum ServiceRequestType {
   WARRANTY
   TECHNICAL_SUPPORT
@@ -128,6 +135,8 @@ enum ServiceEventKind {
   AUTO_CLOSED
   ADMIN_CLOSED
   FOLLOW_UP_CREATED
+  WARRANTY_VERIFIED
+  ATTACHMENT_REDACTED
 }
 
 enum ServiceEventVisibility {
@@ -189,6 +198,7 @@ enum OutboxEventType {
   PRICE_REEVALUATION_REQUESTED
   NOTIFICATION_DELIVERY_REQUESTED
   AFTER_SALES_MILESTONE_REQUESTED
+  AFTER_SALES_ATTACHMENT_DELETE_REQUESTED
 }
 
 model User {
@@ -234,6 +244,7 @@ model User {
   afterSalesEvents            ServiceRequestEvent[]        @relation("AfterSalesEventActor")
   afterSalesAttachments       ServiceRequestAttachment[]   @relation("AfterSalesAttachmentUploader")
   afterSalesQuotes            ServiceQuote[]               @relation("AfterSalesQuoteCreator")
+  warrantyVerifications       WarrantyVerification[]       @relation("WarrantyVerificationVerifier")
 
   @@map("users")
 }
@@ -313,27 +324,27 @@ model WishlistItem {
 }
 
 model Notification {
-  id             Int                      @id @default(autoincrement())
-  userId         Int
-  productId      Int?
+  id               Int                      @id @default(autoincrement())
+  userId           Int
+  productId        Int?
   serviceRequestId Int?
-  type           NotificationType
-  title          String                   @db.VarChar(255)
-  message        String                   @db.VarChar(500)
-  oldPrice       Int?
-  newPrice       Int?
-  priceSource    NotificationPriceSource?
-  promotionId    Int?
-  pricingVersion Int?
-  validUntil     DateTime?
-  dedupeKey      String                   @unique @db.VarChar(191)
-  readAt         DateTime?
-  createdAt      DateTime                 @default(now())
+  type             NotificationType
+  title            String                   @db.VarChar(255)
+  message          String                   @db.VarChar(500)
+  oldPrice         Int?
+  newPrice         Int?
+  priceSource      NotificationPriceSource?
+  promotionId      Int?
+  pricingVersion   Int?
+  validUntil       DateTime?
+  dedupeKey        String                   @unique @db.VarChar(191)
+  readAt           DateTime?
+  createdAt        DateTime                 @default(now())
 
-  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  product    Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
-  serviceRequest ServiceRequest?    @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
-  deliveries NotificationDelivery[]
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product        Product?               @relation(fields: [productId], references: [id], onDelete: SetNull)
+  serviceRequest ServiceRequest?        @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
+  deliveries     NotificationDelivery[]
 
   @@index([userId, readAt, createdAt])
   @@index([serviceRequestId, createdAt])
@@ -341,14 +352,14 @@ model Notification {
 }
 
 model NotificationPreference {
-  id             Int      @id @default(autoincrement())
-  userId         Int      @unique
-  emailEnabled   Boolean  @default(false)
-  webPushEnabled Boolean  @default(false)
-  afterSalesEmailEnabled Boolean @default(true)
-  afterSalesWebPushEnabled Boolean @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                       Int      @id @default(autoincrement())
+  userId                   Int      @unique
+  emailEnabled             Boolean  @default(false)
+  webPushEnabled           Boolean  @default(false)
+  afterSalesEmailEnabled   Boolean  @default(true)
+  afterSalesWebPushEnabled Boolean  @default(true)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -564,10 +575,11 @@ model OrderDetail {
   product   Product @relation(fields: [productId], references: [id])
   productId Int
 
-  review              Review?
-  serviceRequestItems ServiceRequestItem[]
-  automaticPromotion  Promotion?           @relation("OrderDetailAutomaticPromotion", fields: [automaticPromotionId], references: [id], onDelete: Restrict)
-  flashSaleAllocation FlashSaleAllocation?
+  review                Review?
+  serviceRequestItems   ServiceRequestItem[]
+  warrantyVerifications WarrantyVerification[]
+  automaticPromotion    Promotion?             @relation("OrderDetailAutomaticPromotion", fields: [automaticPromotionId], references: [id], onDelete: Restrict)
+  flashSaleAllocation   FlashSaleAllocation?
 
   @@map("order_detail")
 }
@@ -628,17 +640,38 @@ model ServiceRequestItem {
   createdAt              DateTime                 @default(now())
   updatedAt              DateTime                 @updatedAt
 
-  request     ServiceRequest             @relation(fields: [serviceRequestId], references: [id], onDelete: Restrict)
-  orderDetail OrderDetail                @relation(fields: [orderDetailId], references: [id], onDelete: Restrict)
-  events      ServiceRequestEvent[]
-  attachments ServiceRequestAttachment[]
-  quotes      ServiceQuote[]
+  request               ServiceRequest             @relation(fields: [serviceRequestId], references: [id], onDelete: Restrict)
+  orderDetail           OrderDetail                @relation(fields: [orderDetailId], references: [id], onDelete: Restrict)
+  events                ServiceRequestEvent[]
+  attachments           ServiceRequestAttachment[]
+  quotes                ServiceQuote[]
+  warrantyVerifications WarrantyVerification[]
 
   @@unique([serviceRequestId, position])
   @@index([orderDetailId, status])
   @@index([serviceRequestId, status])
   @@index([confirmationDueAt, status])
   @@map("service_request_items")
+}
+
+model WarrantyVerification {
+  id                   Int                          @id @default(autoincrement())
+  orderDetailId        Int
+  serviceRequestItemId Int
+  decision             WarrantyVerificationDecision
+  warrantyStartAt      DateTime?
+  warrantyEndAt        DateTime?
+  verifiedById         Int
+  internalNote         String?                      @db.Text
+  createdAt            DateTime                     @default(now())
+
+  orderDetail        OrderDetail        @relation(fields: [orderDetailId], references: [id], onDelete: Restrict)
+  serviceRequestItem ServiceRequestItem @relation(fields: [serviceRequestItemId], references: [id], onDelete: Restrict)
+  verifiedBy         User               @relation("WarrantyVerificationVerifier", fields: [verifiedById], references: [id], onDelete: Restrict)
+
+  @@index([orderDetailId, createdAt, id])
+  @@index([serviceRequestItemId, createdAt, id])
+  @@map("warranty_verifications")
 }
 
 model ServiceRequestEvent {
@@ -670,6 +703,9 @@ model ServiceRequestAttachment {
   eventId              Int?
   uploadedById         Int
   objectKey            String                  @unique @db.VarChar(512)
+  uploadKey            String?                 @db.VarChar(64)
+  uploadHash           String?                 @db.Char(64)
+  uploadPosition       Int?                    @db.UnsignedSmallInt
   mimeType             String                  @db.VarChar(50)
   byteSize             Int
   width                Int
@@ -685,6 +721,7 @@ model ServiceRequestAttachment {
   item     ServiceRequestItem? @relation(fields: [serviceRequestItemId], references: [id], onDelete: SetNull)
   uploader User                @relation("AfterSalesAttachmentUploader", fields: [uploadedById], references: [id], onDelete: Restrict)
 
+  @@unique([serviceRequestItemId, uploadKey, uploadPosition])
   @@index([serviceRequestId, createdAt])
   @@index([serviceRequestItemId, status, createdAt])
   @@index([status, updatedAt])

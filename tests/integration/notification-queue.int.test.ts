@@ -65,7 +65,7 @@ describe("notification queue recovery", () => {
     });
 
     await dispatchOutboxBatch(makeDeps());
-    expect(jobs).toEqual([{ jobId: "notification-delivery-" + delivery.id }]);
+    expect(jobs).toEqual([{ jobId: "notification-delivery-" + delivery.id + "-" + event.id }]);
     await expect(prisma.outboxEvent.findUnique({ where: { id: event.id } })).resolves.toMatchObject(
       {
         publishedAt: expect.any(Date),
