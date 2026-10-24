@@ -493,6 +493,24 @@ model WorkerHeartbeat {
   @@map("worker_heartbeats")
 }
 
+model WorkerCheckpoint {
+  workerName          String   @id @db.VarChar(100)
+  ownerToken          String?  @db.VarChar(128)
+  cursor              Json?
+  cycleStartedAt      DateTime?
+  lastStartedAt       DateTime?
+  lastCompletedAt     DateTime?
+  lastSucceededAt     DateTime?
+  lastDurationMs      Int?
+  consecutiveFailures Int      @default(0)
+  lastErrorCode       String?  @db.VarChar(100)
+  lastStats           Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("worker_checkpoints")
+}
+
 model Cart {
   id     Int  @id @default(autoincrement())
   user   User @relation(fields: [userId], references: [id])

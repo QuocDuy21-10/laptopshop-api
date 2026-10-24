@@ -1,6 +1,7 @@
 import { prisma } from "config/client";
 
 export const resetDb = async () => {
+  await prisma.workerCheckpoint.deleteMany();
   await prisma.notificationDeliveryAudit.deleteMany();
   await prisma.workerHeartbeat.deleteMany();
   await prisma.notificationDelivery.deleteMany();
