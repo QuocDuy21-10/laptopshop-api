@@ -84,7 +84,34 @@ const schema = z
     SEPAY_MODE: z.enum(["test", "live"]).default("test"),
     PAYMENT_TTL_MINUTES: z.coerce.number().int().positive().default(15),
     PAYMENT_GRACE_SECONDS: z.coerce.number().int().nonnegative().default(120),
-    PAYMENT_EVENT_ENCRYPTION_KEY: z.preprocess(emptyToUndefined, z.string().length(64).optional()),
+    PAYMENT_EVENT_ENCRYPTION_KEY: z.preprocess(
+      emptyToUndefined,
+      z
+        .string()
+        .regex(/^[0-9a-fA-F]{64}$/)
+        .optional(),
+    ),
+    PAYMENT_EVENT_KEY_ID: z.preprocess(emptyToUndefined, z.string().min(1).max(32).optional()),
+    PAYMENT_RECONCILIATION_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .min(60_000)
+      .max(180_000)
+      .default(120_000),
+    PAYMENT_RECONCILIATION_SETTLEMENT_SECONDS: z.coerce
+      .number()
+      .int()
+      .min(0)
+      .max(3_600)
+      .default(300),
+    PAYMENT_MAX_AUTO_HOLD_MINUTES: z.coerce.number().int().min(30).max(1_440).default(60),
+    SEPAY_API_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(30_000).default(10_000),
+    PAYMENT_RECONCILIATION_LEASE_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(300_000)
+      .default(60_000),
     SEPAY_WEBHOOK_SECRET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     SEPAY_API_TOKEN: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     SEPAY_BANK_CODE: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
@@ -203,9 +230,17 @@ const schema = z
         message: "SEPAY_MODE=live is required in production",
       });
     }
-    if (e.BANK_TRANSFER_ENABLED) {
+    if (e.PAYMENT_RECONCILIATION_LEASE_MS <= e.SEPAY_API_TIMEOUT_MS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["PAYMENT_RECONCILIATION_LEASE_MS"],
+        message: "PAYMENT_RECONCILIATION_LEASE_MS must be greater than SEPAY_API_TIMEOUT_MS",
+      });
+    }
+    if (e.BANK_TRANSFER_ENABLED || e.PAYMENT_PROVIDER === "sepay") {
       for (const key of [
         "PAYMENT_EVENT_ENCRYPTION_KEY",
+        "PAYMENT_EVENT_KEY_ID",
         "SEPAY_WEBHOOK_SECRET",
         "SEPAY_API_TOKEN",
         "SEPAY_BANK_CODE",

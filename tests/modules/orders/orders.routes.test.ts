@@ -329,4 +329,39 @@ describe("POST /api/v1/orders/me/:id/cancel", () => {
     expect(res.body.error.code).toBe("PAID_ORDER_CANNOT_CANCEL");
     expect(prismaMock.order.updateMany).not.toHaveBeenCalled();
   });
+
+  it("does not allow a customer to cancel a bank-transfer order under verification", async () => {
+    prismaMock.order.findFirst.mockResolvedValue({
+      status: "PENDING",
+      paymentMethod: "BANK_TRANSFER",
+      paymentStatus: "PAYMENT_UNPAID",
+      payment: { status: "VERIFYING" },
+    });
+    const res = await cancel();
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("PAYMENT_VERIFICATION_IN_PROGRESS");
+    expect(prismaMock.order.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("does not release stock when payment success wins after the initial read", async () => {
+    prismaMock.order.findFirst.mockResolvedValue({
+      status: "PENDING",
+      paymentMethod: "BANK_TRANSFER",
+      paymentStatus: "PAYMENT_UNPAID",
+      payment: { status: "PENDING" },
+    });
+    prismaMock.order.updateMany.mockResolvedValue({ count: 0 });
+    const res = await cancel();
+    expect(res.status).toBe(409);
+    expect(prismaMock.product.update).not.toHaveBeenCalled();
+    expect(prismaMock.payment.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.order.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          paymentStatus: "PAYMENT_UNPAID",
+          payment: { status: { in: ["PENDING"] } },
+        }),
+      }),
+    );
+  });
 });

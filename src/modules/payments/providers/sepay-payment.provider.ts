@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { AppError } from "lib/errors";
+import type { PaymentAuthority } from "modules/payments/payment-authority";
 import {
   ListTransactionsInput,
   NormalizedPaymentTransaction,
@@ -9,12 +10,14 @@ import {
   VerifyWebhookInput,
 } from "modules/payments/providers/payment-provider";
 
-type SePayConfig = {
+export type SePayConfig = {
   webhookSecret: string;
   apiToken: string;
   bankCode: string;
   accountNumber: string;
   accountName: string;
+  mode?: "test" | "live";
+  timeoutMs?: number;
   apiBaseUrl?: string;
 };
 
@@ -68,10 +71,12 @@ const parseTransaction = (data: Record<string, unknown>): NormalizedPaymentTrans
 
 export class SePayPaymentProvider implements PaymentProvider {
   readonly id: string = "sepay";
+  readonly authority: PaymentAuthority;
   private readonly config: SePayConfig;
 
   constructor(config: SePayConfig) {
     this.config = config;
+    this.authority = { provider: "sepay", mode: config.mode ?? "test" };
   }
 
   buildInstructions(input: PaymentInstructionInput): PaymentInstructions {
@@ -124,16 +129,30 @@ export class SePayPaymentProvider implements PaymentProvider {
     url.searchParams.set("per_page", String(Math.min(100, Math.max(1, limit))));
     url.searchParams.set("transfer_type", "in");
     if (cursor) url.searchParams.set("since_id", cursor);
-    const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${this.config.apiToken}` },
-    });
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: { Authorization: `Bearer ${this.config.apiToken}` },
+        signal: AbortSignal.timeout(this.config.timeoutMs ?? 10_000),
+      });
+    } catch (error) {
+      if (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError"))
+        throw new AppError("Payment provider request timed out", 504, "PAYMENT_PROVIDER_TIMEOUT");
+      throw new AppError("Payment provider unavailable", 502, "PAYMENT_PROVIDER_UNAVAILABLE");
+    }
     if (!response.ok)
       throw new AppError("Payment provider unavailable", 502, "PAYMENT_PROVIDER_UNAVAILABLE");
     const body = (await response.json()) as {
       data?: Record<string, unknown>[];
       meta?: { pagination?: { has_more?: boolean } };
     };
-    const items = (body.data ?? []).map(parseTransaction);
+    if (!Array.isArray(body.data) || typeof body.meta?.pagination?.has_more !== "boolean")
+      throw new AppError(
+        "Invalid payment provider response",
+        502,
+        "PAYMENT_PROVIDER_INVALID_RESPONSE",
+      );
+    const items = body.data.map(parseTransaction);
     return {
       items,
       cursor: items.length ? items.at(-1)!.providerEventId : (cursor ?? null),

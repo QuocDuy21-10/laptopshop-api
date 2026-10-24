@@ -21,12 +21,18 @@ export const cancelOrder = async (
     from: OrderStatus[];
     reason?: string;
     paymentDisposition: "CANCEL" | "EXPIRE";
+    allowVerificationCancel?: boolean;
     now: Date;
   },
 ): Promise<OrderDto> => {
   const order = await tx.order.findFirst({
     where: { id: input.orderId, ...(input.userId ? { userId: input.userId } : {}) },
-    select: { status: true, paymentMethod: true, paymentStatus: true },
+    select: {
+      status: true,
+      paymentMethod: true,
+      paymentStatus: true,
+      payment: { select: { status: true } },
+    },
   });
   if (!order) throw notFound("Order");
   if (
@@ -38,8 +44,33 @@ export const cancelOrder = async (
   if (order.paymentMethod === "BANK_TRANSFER" && order.paymentStatus === PAYMENT_STATUS.SUCCESS) {
     throw new AppError("A paid order requires refund handling", 409, "PAID_ORDER_CANNOT_CANCEL");
   }
+  if (
+    input.paymentDisposition === "CANCEL" &&
+    !input.allowVerificationCancel &&
+    order.paymentMethod === "BANK_TRANSFER" &&
+    (order.payment?.status === "VERIFYING" || order.payment?.status === "REVIEW_REQUIRED")
+  ) {
+    throw new AppError(
+      "Payment verification is still in progress",
+      409,
+      "PAYMENT_VERIFICATION_IN_PROGRESS",
+    );
+  }
+  const allowedPaymentStatuses =
+    input.paymentDisposition === "EXPIRE" || input.allowVerificationCancel
+      ? ["PENDING", "VERIFYING", "REVIEW_REQUIRED"]
+      : ["PENDING"];
   const updated = await tx.order.updateMany({
-    where: { id: input.orderId, status: order.status },
+    where: {
+      id: input.orderId,
+      status: order.status,
+      ...(order.paymentMethod === "BANK_TRANSFER"
+        ? {
+            paymentStatus: PAYMENT_STATUS.UNPAID,
+            payment: { status: { in: allowedPaymentStatuses } },
+          }
+        : {}),
+    },
     data: {
       status: ORDER_STATUS.CANCELLED,
       ...(order.paymentMethod === "BANK_TRANSFER" ? { paymentStatus: PAYMENT_STATUS.FAILED } : {}),
@@ -48,7 +79,13 @@ export const cancelOrder = async (
   if (updated.count !== 1) throw invalidTransition(order.status, ORDER_STATUS.CANCELLED);
   if (order.paymentMethod === "BANK_TRANSFER") {
     await tx.payment.updateMany({
-      where: { orderId: input.orderId, status: "PENDING" },
+      where: {
+        orderId: input.orderId,
+        status:
+          input.paymentDisposition === "EXPIRE" || input.allowVerificationCancel
+            ? { in: ["PENDING", "VERIFYING", "REVIEW_REQUIRED"] }
+            : "PENDING",
+      },
       data: {
         status: input.paymentDisposition === "EXPIRE" ? "EXPIRED" : "CANCELLED",
         cancelledAt: input.now,

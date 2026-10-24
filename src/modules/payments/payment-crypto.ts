@@ -8,7 +8,7 @@ type EncryptedPayload = {
   keyId: string;
 };
 
-export const encryptPayload = (raw: Buffer, keyHex: string): EncryptedPayload => {
+export const encryptPayload = (raw: Buffer, keyHex: string, keyId: string): EncryptedPayload => {
   const key = Buffer.from(keyHex, "hex");
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
@@ -18,7 +18,7 @@ export const encryptPayload = (raw: Buffer, keyHex: string): EncryptedPayload =>
     iv,
     tag: cipher.getAuthTag(),
     hash: crypto.createHash("sha256").update(raw).digest("hex"),
-    keyId: keyHex.slice(0, 8),
+    keyId,
   };
 };
 

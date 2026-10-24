@@ -93,6 +93,12 @@ describe("parseEnv", () => {
       PAYMENT_GRACE_SECONDS: "180",
       SEPAY_MODE: "live",
       PAYMENT_EVENT_ENCRYPTION_KEY: "a".repeat(64),
+      PAYMENT_EVENT_KEY_ID: "payment-key-v1",
+      PAYMENT_RECONCILIATION_INTERVAL_MS: "120000",
+      PAYMENT_RECONCILIATION_SETTLEMENT_SECONDS: "300",
+      PAYMENT_MAX_AUTO_HOLD_MINUTES: "60",
+      SEPAY_API_TIMEOUT_MS: "10000",
+      PAYMENT_RECONCILIATION_LEASE_MS: "60000",
       SEPAY_WEBHOOK_SECRET: "webhook-secret",
       SEPAY_API_TOKEN: "api-token",
       SEPAY_BANK_CODE: "VCB",
@@ -104,6 +110,53 @@ describe("parseEnv", () => {
     expect(e.PAYMENT_TTL_MINUTES).toBe(20);
     expect(e.PAYMENT_GRACE_SECONDS).toBe(180);
     expect(e.SEPAY_MODE).toBe("live");
+    expect(e.PAYMENT_EVENT_KEY_ID).toBe("payment-key-v1");
+    expect(e.PAYMENT_RECONCILIATION_INTERVAL_MS).toBe(120_000);
+    expect(e.PAYMENT_RECONCILIATION_SETTLEMENT_SECONDS).toBe(300);
+    expect(e.PAYMENT_MAX_AUTO_HOLD_MINUTES).toBe(60);
+    expect(e.SEPAY_API_TIMEOUT_MS).toBe(10_000);
+    expect(e.PAYMENT_RECONCILIATION_LEASE_MS).toBe(60_000);
+  });
+
+  it("rejects non-hex payment encryption keys and missing key ids", () => {
+    expect(() =>
+      parseEnv({
+        ...base,
+        PAYMENT_PROVIDER: "sepay",
+        PAYMENT_EVENT_ENCRYPTION_KEY: "g".repeat(64),
+      }),
+    ).toThrow(/PAYMENT_EVENT_ENCRYPTION_KEY/);
+    expect(() =>
+      parseEnv({
+        ...base,
+        PAYMENT_PROVIDER: "sepay",
+        PAYMENT_EVENT_ENCRYPTION_KEY: "a".repeat(64),
+        SEPAY_WEBHOOK_SECRET: "webhook-secret",
+        SEPAY_API_TOKEN: "api-token",
+        SEPAY_BANK_CODE: "VCB",
+        SEPAY_ACCOUNT_NUMBER: "0123456789",
+        SEPAY_ACCOUNT_NAME: "LAPTOP SHOP",
+      }),
+    ).toThrow(/PAYMENT_EVENT_KEY_ID/);
+  });
+
+  it("validates bounded payment reconciliation timings", () => {
+    expect(() => parseEnv({ ...base, PAYMENT_MAX_AUTO_HOLD_MINUTES: "29" })).toThrow(
+      /PAYMENT_MAX_AUTO_HOLD_MINUTES/,
+    );
+    expect(() => parseEnv({ ...base, PAYMENT_MAX_AUTO_HOLD_MINUTES: "1441" })).toThrow(
+      /PAYMENT_MAX_AUTO_HOLD_MINUTES/,
+    );
+    expect(() => parseEnv({ ...base, PAYMENT_RECONCILIATION_INTERVAL_MS: "59999" })).toThrow(
+      /PAYMENT_RECONCILIATION_INTERVAL_MS/,
+    );
+    expect(() =>
+      parseEnv({
+        ...base,
+        SEPAY_API_TIMEOUT_MS: "10000",
+        PAYMENT_RECONCILIATION_LEASE_MS: "10000",
+      }),
+    ).toThrow(/PAYMENT_RECONCILIATION_LEASE_MS/);
   });
 
   it("requires all VAPID values when Web Push is enabled", () => {

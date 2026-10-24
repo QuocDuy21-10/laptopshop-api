@@ -9,3 +9,19 @@ export const paymentEventQuery = pageQuery.extend({
 });
 export const resolvePaymentEventBody = z.object({ note: z.string().trim().min(1).max(500) });
 export type PaymentEventQuery = z.infer<typeof paymentEventQuery>;
+
+export const paymentReviewCaseIdParams = z.object({ id: z.string().uuid() });
+export const paymentReviewCaseQuery = pageQuery.extend({
+  status: z.enum(["OPEN", "RESOLVED"]).optional(),
+});
+export const extendPaymentReviewCaseBody = z.object({
+  note: z.string().trim().min(1).max(500),
+  holdUntil: z.string().datetime(),
+  version: z.number().int().nonnegative(),
+});
+export const releasePaymentReviewCaseBody = z.object({
+  note: z.string().trim().min(1).max(500),
+  confirmation: z.literal("RELEASE_STOCK"),
+  version: z.number().int().nonnegative(),
+});
+export type PaymentReviewCaseQuery = z.infer<typeof paymentReviewCaseQuery>;

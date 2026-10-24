@@ -2,9 +2,11 @@ import { AppError } from "lib/errors";
 
 export const PAYMENT_STATUS = {
   PENDING: "PENDING",
+  VERIFYING: "VERIFYING",
   SUCCEEDED: "SUCCEEDED",
   EXPIRED: "EXPIRED",
   CANCELLED: "CANCELLED",
+  REVIEW_REQUIRED: "REVIEW_REQUIRED",
 } as const;
 export type PaymentStatus = (typeof PAYMENT_STATUS)[keyof typeof PAYMENT_STATUS];
 
@@ -21,6 +23,7 @@ export const PAYMENT_REVIEW_REASON = {
   OUTBOUND: "OUTBOUND",
   LATE_PAYMENT: "LATE_PAYMENT",
   INVALID_PAYMENT_STATE: "INVALID_PAYMENT_STATE",
+  PROVIDER_MISMATCH: "PROVIDER_MISMATCH",
 } as const;
 export type PaymentReviewReason =
   (typeof PAYMENT_REVIEW_REASON)[keyof typeof PAYMENT_REVIEW_REASON];

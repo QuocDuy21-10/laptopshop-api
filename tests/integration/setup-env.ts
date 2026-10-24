@@ -7,6 +7,7 @@ process.env.REDIS_URL = "redis://localhost:6379";
 process.env.BANK_TRANSFER_ENABLED = "true";
 process.env.PAYMENT_PROVIDER = "fake";
 process.env.PAYMENT_EVENT_ENCRYPTION_KEY = "a".repeat(64);
+process.env.PAYMENT_EVENT_KEY_ID = "payment-key-test";
 process.env.SEPAY_WEBHOOK_SECRET = "test-webhook-secret";
 process.env.SEPAY_API_TOKEN = "test-api-token";
 process.env.SEPAY_BANK_CODE = "VCB";

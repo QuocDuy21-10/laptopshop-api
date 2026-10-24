@@ -35,4 +35,13 @@ describe("classifyPaymentTransaction", () => {
       reason,
     });
   });
+
+  it.each(["VERIFYING", "REVIEW_REQUIRED"] as const)(
+    "matches a valid transaction while payment is %s",
+    (status) => {
+      expect(classifyPaymentTransaction({ ...payment, status }, transaction)).toEqual({
+        status: "MATCHED",
+      });
+    },
+  );
 });

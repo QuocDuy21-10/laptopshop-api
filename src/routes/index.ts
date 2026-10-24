@@ -11,7 +11,11 @@ import { adminOrderRoutes, orderRoutes } from "modules/orders/orders.routes";
 import { adminInventoryRoutes } from "modules/inventory/inventory.routes";
 import { dashboardRoutes } from "modules/dashboard/dashboard.routes";
 import { notFoundHandler } from "middlewares/error.middleware";
-import { adminPaymentRoutes, paymentRoutes } from "modules/payments/payments.routes";
+import {
+  adminPaymentReviewRoutes,
+  adminPaymentRoutes,
+  paymentRoutes,
+} from "modules/payments/payments.routes";
 import { createAdvisorRoutes, type AdvisorRouteDeps } from "modules/advisor/advisor.routes";
 import {
   productReviewRoutes,
@@ -77,6 +81,7 @@ export const createApiV1Router = (
   admin.use("/dashboard", dashboardRoutes);
   admin.use("/inventory", adminInventoryRoutes);
   admin.use("/payment-events", adminPaymentRoutes);
+  admin.use("/payment-review-cases", adminPaymentReviewRoutes);
   admin.use("/reviews", adminReviewRoutes);
   admin.use("/after-sales", adminAfterSalesRoutes);
   if (afterSalesAttachments)

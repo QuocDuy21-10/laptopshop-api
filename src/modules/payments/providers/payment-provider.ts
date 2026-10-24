@@ -1,3 +1,5 @@
+import type { PaymentAuthority } from "modules/payments/payment-authority";
+
 export type PaymentInstructionInput = {
   amount: number;
   transferCode: string;
@@ -35,6 +37,7 @@ export type ListTransactionsInput = { cursor?: string | null; limit?: number };
 
 export interface PaymentProvider {
   readonly id: string;
+  readonly authority: PaymentAuthority;
   buildInstructions(input: PaymentInstructionInput): PaymentInstructions;
   verifyWebhook(input: VerifyWebhookInput): NormalizedPaymentTransaction;
   listTransactions(input: ListTransactionsInput): Promise<{

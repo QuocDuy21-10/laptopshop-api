@@ -9,9 +9,11 @@ describe("payment status rules", () => {
   it("exposes the terminal payment states", () => {
     expect(PAYMENT_STATUS).toEqual({
       PENDING: "PENDING",
+      VERIFYING: "VERIFYING",
       SUCCEEDED: "SUCCEEDED",
       EXPIRED: "EXPIRED",
       CANCELLED: "CANCELLED",
+      REVIEW_REQUIRED: "REVIEW_REQUIRED",
     });
   });
 
@@ -33,6 +35,7 @@ describe("payment status rules", () => {
       OUTBOUND: "OUTBOUND",
       LATE_PAYMENT: "LATE_PAYMENT",
       INVALID_PAYMENT_STATE: "INVALID_PAYMENT_STATE",
+      PROVIDER_MISMATCH: "PROVIDER_MISMATCH",
     });
     expect(PAYMENT_EVENT_STATUS.REVIEW_REQUIRED).toBe("REVIEW_REQUIRED");
   });

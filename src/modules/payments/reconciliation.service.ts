@@ -1,44 +1,85 @@
+import crypto from "node:crypto";
 import { prisma } from "config/client";
 import { env } from "config/env";
+import { AppError } from "lib/errors";
 import { logger } from "lib/logger";
-import { ingestPaymentTransaction } from "modules/payments/payments.service";
+import {
+  claimReconciliationLease,
+  completeReconciliationCycle,
+  failReconciliationCycle,
+  renewReconciliationLease,
+} from "modules/payments/payment-checkpoint.service";
+import { ingestPaymentTransaction } from "modules/payments/payment-ingestion.service";
 import { paymentProvider } from "modules/payments/payment-provider.factory";
 
-export const reconcilePayments = async () => {
+let reconciliationInFlight: Promise<{ processed: number; skipped: boolean }> | null = null;
+
+const runReconciliation = async (now: Date) => {
   const provider = paymentProvider();
-  if (provider.id === "fake") return 0;
-  const now = new Date();
-  const checkpoint = await prisma.paymentProviderCheckpoint.upsert({
-    where: { provider_mode: { provider: provider.id, mode: env.SEPAY_MODE } },
-    create: { provider: provider.id, mode: env.SEPAY_MODE, lastStartedAt: now },
-    update: { lastStartedAt: now },
-  });
+  if (provider.id === "fake") return { processed: 0, skipped: true };
+  const owner = crypto.randomUUID();
+  const checkpoint = await claimReconciliationLease(provider.authority, owner, now);
+  if (!checkpoint) return { processed: 0, skipped: true };
   let cursor = checkpoint.cursor;
+  const seenCursors = new Set(cursor ? [cursor] : []);
   let count = 0;
   try {
     let hasMore = true;
     while (hasMore) {
       const page = await provider.listTransactions({ cursor, limit: 100 });
+      if (page.hasMore && (!page.cursor || seenCursors.has(page.cursor)))
+        throw new AppError(
+          "Payment reconciliation cursor stalled",
+          502,
+          "PAYMENT_RECONCILIATION_CURSOR_STALLED",
+        );
       for (const transaction of page.items) {
-        await ingestPaymentTransaction(transaction, "RECONCILIATION");
+        await ingestPaymentTransaction(provider.authority, transaction, "RECONCILIATION");
         count += 1;
       }
       hasMore = page.hasMore;
-      if (page.cursor) cursor = page.cursor;
+      if (page.cursor) {
+        seenCursors.add(page.cursor);
+        cursor = page.cursor;
+      }
+      if (hasMore && !(await renewReconciliationLease(checkpoint.id, owner, new Date())))
+        throw new AppError(
+          "Payment reconciliation lease lost",
+          409,
+          "PAYMENT_RECONCILIATION_LEASE_LOST",
+        );
     }
-    await prisma.paymentProviderCheckpoint.update({
-      where: { id: checkpoint.id },
-      data: { cursor, lastSucceededAt: new Date(), lastErrorAt: null, lastError: null },
-    });
-    return count;
+    if (
+      !(await completeReconciliationCycle({
+        checkpointId: checkpoint.id,
+        owner,
+        cursor,
+        verificationBoundary: now,
+        processed: count,
+        now: new Date(),
+      }))
+    )
+      throw new AppError(
+        "Payment reconciliation lease lost",
+        409,
+        "PAYMENT_RECONCILIATION_LEASE_LOST",
+      );
+    return { processed: count, skipped: false };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown reconciliation error";
-    await prisma.paymentProviderCheckpoint.update({
-      where: { id: checkpoint.id },
-      data: { lastErrorAt: new Date(), lastError: message.slice(0, 500) },
-    });
+    await failReconciliationCycle({ checkpointId: checkpoint.id, owner, error: message });
     logger.error({ provider: provider.id, error: message }, "payment reconciliation failed");
     throw error;
+  }
+};
+
+export const reconcilePayments = async (now = new Date()) => {
+  if (reconciliationInFlight) return { processed: 0, skipped: true };
+  reconciliationInFlight = runReconciliation(now);
+  try {
+    return await reconciliationInFlight;
+  } finally {
+    reconciliationInFlight = null;
   }
 };
 
@@ -51,23 +92,24 @@ export const purgeEncryptedPaymentPayloads = async (now = new Date()) => {
 };
 
 export const startPaymentWorker = () => {
-  const runExpiry = async () => {
+  const runMaintenance = async () => {
     try {
-      const { expirePayments } = await import("modules/payments/payments.service");
-      await expirePayments();
+      const { runPaymentMaintenance } =
+        await import("modules/payments/payment-maintenance.service");
+      await runPaymentMaintenance();
     } catch (error) {
-      logger.error({ err: error }, "payment expiry tick failed");
+      logger.error({ err: error }, "payment maintenance tick failed");
     }
   };
-  void runExpiry();
+  void runMaintenance();
   void reconcilePayments().catch(() => undefined);
   void purgeEncryptedPaymentPayloads().catch((error) =>
     logger.error({ err: error }, "payment payload purge failed"),
   );
-  const expiryTimer = setInterval(() => void runExpiry(), 30_000);
+  const expiryTimer = setInterval(() => void runMaintenance(), 30_000);
   const reconciliationTimer = setInterval(
     () => void reconcilePayments().catch(() => undefined),
-    15 * 60_000,
+    env.PAYMENT_RECONCILIATION_INTERVAL_MS,
   );
   const purgeTimer = setInterval(
     () =>

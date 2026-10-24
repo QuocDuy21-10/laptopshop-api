@@ -102,6 +102,10 @@ const V1_PATHS = [
   "/api/v1/admin/payment-events",
   "/api/v1/admin/payment-events/{id}",
   "/api/v1/admin/payment-events/{id}/resolve",
+  "/api/v1/admin/payment-review-cases",
+  "/api/v1/admin/payment-review-cases/{id}",
+  "/api/v1/admin/payment-review-cases/{id}/extend",
+  "/api/v1/admin/payment-review-cases/{id}/release",
   "/api/v1/admin/reviews",
   "/api/v1/admin/reviews/summary",
   "/api/v1/admin/reviews/{id}",
@@ -372,6 +376,15 @@ describe("openapi document", () => {
     expect((doc.components?.schemas?.Dashboard as any).properties).toHaveProperty("lowStockCount");
     expect(doc.components?.schemas).toHaveProperty("Payment");
     expect(doc.components?.schemas).toHaveProperty("PaymentEvent");
+  });
+
+  it("documents payment verification states and admin review-case actions", () => {
+    expect((doc.components?.schemas?.Payment as any).properties.status.enum).toEqual(
+      expect.arrayContaining(["VERIFYING", "REVIEW_REQUIRED"]),
+    );
+    expect(op("/api/v1/admin/payment-review-cases", "get")).toBeDefined();
+    expect(op("/api/v1/admin/payment-review-cases/{id}/extend", "post")).toBeDefined();
+    expect(op("/api/v1/admin/payment-review-cases/{id}/release", "post")).toBeDefined();
   });
 
   it("documents the order history on the admin order detail", () => {
