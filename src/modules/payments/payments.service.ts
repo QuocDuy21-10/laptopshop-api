@@ -1,19 +1,17 @@
-import crypto from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { env } from "config/env";
 import { prisma } from "config/client";
 import { AppError, notFound } from "lib/errors";
 import { pageArgs, pageMeta } from "lib/http";
-import { classifyPaymentTransaction } from "modules/payments/payment-reconcile";
 import { paymentProvider } from "modules/payments/payment-provider.factory";
 import { PaymentRow, paymentInclude, toPaymentDto } from "modules/payments/payment-mapper";
-import { NormalizedPaymentTransaction } from "modules/payments/providers/payment-provider";
 import { PAYMENT_EVENT_STATUS, PAYMENT_STATUS } from "modules/payments/payment-status";
-import { encryptPayload } from "modules/payments/payment-crypto";
 import { PaymentEventQuery } from "modules/payments/payments.schema";
 import { ORDER_STATUS, PAYMENT_STATUS as ORDER_PAYMENT_STATUS } from "modules/orders/order-status";
 import { orderInclude, toOrderDto } from "modules/orders/orders.mapper";
 import { cancelOrder } from "modules/orders/order-cancellation.service";
+
+export { ingestPaymentTransaction } from "modules/payments/payment-ingestion.service";
 
 export const listPaymentMethods = () => [
   { code: "COD", enabled: true },
@@ -48,146 +46,6 @@ export const getCheckoutAttempt = async (userId: number, key: string) => {
     include: orderInclude,
   });
   return order ? toOrderDto(order) : null;
-};
-
-const eventData = (
-  provider: string,
-  source: string,
-  transaction: NormalizedPaymentTransaction,
-  status: string,
-  reason: string | null,
-  paymentId: string | null,
-  rawPayload?: Buffer,
-) => {
-  const encrypted =
-    rawPayload && env.PAYMENT_EVENT_ENCRYPTION_KEY
-      ? encryptPayload(
-          rawPayload,
-          env.PAYMENT_EVENT_ENCRYPTION_KEY,
-          env.PAYMENT_EVENT_KEY_ID ?? "payment-key-v1",
-        )
-      : undefined;
-  return {
-    provider,
-    source,
-    providerEventId: transaction.providerEventId,
-    providerTransactionKey: transaction.providerTransactionKey,
-    paymentId,
-    direction: transaction.direction,
-    amount: transaction.amount,
-    currency: transaction.currency,
-    transferCode: transaction.transferCode,
-    accountNumber: transaction.accountNumber,
-    occurredAt: transaction.occurredAt,
-    status,
-    reviewReason: reason,
-    payloadHash:
-      encrypted?.hash ??
-      crypto.createHash("sha256").update(JSON.stringify(transaction)).digest("hex"),
-    ...(encrypted
-      ? {
-          rawPayload: encrypted.ciphertext,
-          rawPayloadIv: encrypted.iv,
-          rawPayloadTag: encrypted.tag,
-          encryptionKeyId: encrypted.keyId,
-        }
-      : {}),
-  };
-};
-
-export const ingestPaymentTransaction = async (
-  transaction: NormalizedPaymentTransaction,
-  source: "WEBHOOK" | "RECONCILIATION",
-  rawPayload?: Buffer,
-) => {
-  const provider = paymentProvider();
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const duplicate = await tx.paymentWebhookEvent.findFirst({
-        where: {
-          provider: provider.id,
-          OR: [
-            { providerEventId: transaction.providerEventId },
-            { providerTransactionKey: transaction.providerTransactionKey },
-          ],
-        },
-      });
-      if (duplicate) return { duplicate: true, status: duplicate.status };
-      const payment = transaction.transferCode
-        ? await tx.payment.findUnique({
-            where: { transferCode: transaction.transferCode },
-            include: paymentInclude,
-          })
-        : null;
-      const classification = payment
-        ? classifyPaymentTransaction(payment, transaction)
-        : { status: "REVIEW_REQUIRED" as const, reason: "UNKNOWN_CODE" as const };
-      if (classification.status === "MATCHED" && payment) {
-        const orderUpdated = await tx.order.updateMany({
-          where: {
-            id: payment.orderId,
-            status: ORDER_STATUS.PENDING,
-            paymentStatus: ORDER_PAYMENT_STATUS.UNPAID,
-          },
-          data: { paymentStatus: ORDER_PAYMENT_STATUS.SUCCESS },
-        });
-        if (orderUpdated.count === 0) {
-          await tx.paymentWebhookEvent.create({
-            data: eventData(
-              provider.id,
-              source,
-              transaction,
-              PAYMENT_EVENT_STATUS.REVIEW_REQUIRED,
-              "INVALID_PAYMENT_STATE",
-              payment.id,
-              rawPayload,
-            ),
-          });
-          return { duplicate: false, status: "REVIEW_REQUIRED" };
-        }
-        const paymentUpdated = await tx.payment.updateMany({
-          where: { id: payment.id, status: PAYMENT_STATUS.PENDING },
-          data: { status: PAYMENT_STATUS.SUCCEEDED, paidAt: transaction.occurredAt },
-        });
-        if (paymentUpdated.count === 0) {
-          throw new AppError("Payment changed while confirming", 409, "PAYMENT_CONFIRMATION_RACE");
-        }
-        await tx.paymentWebhookEvent.create({
-          data: eventData(
-            provider.id,
-            source,
-            transaction,
-            PAYMENT_EVENT_STATUS.MATCHED,
-            null,
-            payment.id,
-            rawPayload,
-          ),
-        });
-        return { duplicate: false, status: PAYMENT_EVENT_STATUS.MATCHED, paymentId: payment.id };
-      }
-      await tx.paymentWebhookEvent.create({
-        data: eventData(
-          provider.id,
-          source,
-          transaction,
-          PAYMENT_EVENT_STATUS.REVIEW_REQUIRED,
-          classification.reason,
-          payment?.id ?? null,
-          rawPayload,
-        ),
-      });
-      return {
-        duplicate: false,
-        status: PAYMENT_EVENT_STATUS.REVIEW_REQUIRED,
-        paymentId: payment?.id,
-      };
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return { duplicate: true, status: PAYMENT_EVENT_STATUS.MATCHED };
-    }
-    throw error;
-  }
 };
 
 export const expirePayments = async (now = new Date()) => {

@@ -138,10 +138,14 @@ describe("bank transfer payments", () => {
       accountNumber: payment.accountNumber,
       occurredAt: new Date(payment.expiresAt.getTime() - 1000),
     };
-    await expect(ingestPaymentTransaction(transaction, "WEBHOOK")).resolves.toMatchObject({
+    await expect(
+      ingestPaymentTransaction({ provider: "fake", mode: "test" }, transaction, "WEBHOOK"),
+    ).resolves.toMatchObject({
       status: "MATCHED",
     });
-    await expect(ingestPaymentTransaction(transaction, "RECONCILIATION")).resolves.toMatchObject({
+    await expect(
+      ingestPaymentTransaction({ provider: "fake", mode: "test" }, transaction, "RECONCILIATION"),
+    ).resolves.toMatchObject({
       duplicate: true,
     });
     expect((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe(

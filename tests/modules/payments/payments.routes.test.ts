@@ -101,7 +101,7 @@ describe("POST /api/v1/webhooks/payments/:provider", () => {
   });
 
   it("accepts a signed webhook and stores a normalized review event", async () => {
-    prismaMock.paymentWebhookEvent.findFirst.mockResolvedValue(null);
+    prismaMock.paymentWebhookEvent.findMany.mockResolvedValue([]);
     prismaMock.paymentWebhookEvent.create.mockResolvedValue({});
     prismaMock.payment.findUnique.mockResolvedValue(null);
     const timestamp = Math.floor(Date.now() / 1000);

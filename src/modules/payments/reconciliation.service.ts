@@ -1,7 +1,7 @@
 import { prisma } from "config/client";
 import { env } from "config/env";
 import { logger } from "lib/logger";
-import { ingestPaymentTransaction } from "modules/payments/payments.service";
+import { ingestPaymentTransaction } from "modules/payments/payment-ingestion.service";
 import { paymentProvider } from "modules/payments/payment-provider.factory";
 
 export const reconcilePayments = async () => {
@@ -20,7 +20,7 @@ export const reconcilePayments = async () => {
     while (hasMore) {
       const page = await provider.listTransactions({ cursor, limit: 100 });
       for (const transaction of page.items) {
-        await ingestPaymentTransaction(transaction, "RECONCILIATION");
+        await ingestPaymentTransaction(provider.authority, transaction, "RECONCILIATION");
         count += 1;
       }
       hasMore = page.hasMore;

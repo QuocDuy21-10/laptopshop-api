@@ -26,6 +26,7 @@ export const classifyPaymentTransaction = (payment: PaymentLike, transaction: Tr
   else if (transaction.amount !== payment.amount || transaction.currency !== payment.currency)
     reason = "AMOUNT_MISMATCH";
   else if (transaction.occurredAt > payment.expiresAt) reason = "LATE_PAYMENT";
-  else if (payment.status !== "PENDING") reason = "INVALID_PAYMENT_STATE";
+  else if (!["PENDING", "VERIFYING", "REVIEW_REQUIRED"].includes(payment.status))
+    reason = "INVALID_PAYMENT_STATE";
   return reason ? { status: "REVIEW_REQUIRED" as const, reason } : { status: "MATCHED" as const };
 };

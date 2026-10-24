@@ -9,8 +9,8 @@ import {
   listPaymentEvents,
   listPaymentMethods,
   resolvePaymentEvent,
-  ingestPaymentTransaction,
 } from "modules/payments/payments.service";
+import { ingestPaymentTransaction } from "modules/payments/payment-ingestion.service";
 import { paymentProvider } from "modules/payments/payment-provider.factory";
 import {
   paymentProviderParam,
@@ -49,7 +49,7 @@ export const paymentWebhookHandler: RequestHandler = async (req, res) => {
     throw new AppError("Payment provider is unavailable", 404, "PAYMENT_PROVIDER_NOT_FOUND");
   const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
   const transaction = selected.verifyWebhook({ rawBody, headers: req.headers, now: new Date() });
-  await ingestPaymentTransaction(transaction, "WEBHOOK", rawBody);
+  await ingestPaymentTransaction(selected.authority, transaction, "WEBHOOK", rawBody);
   res.status(200).json({ success: true });
 };
 
