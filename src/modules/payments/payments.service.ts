@@ -61,7 +61,11 @@ const eventData = (
 ) => {
   const encrypted =
     rawPayload && env.PAYMENT_EVENT_ENCRYPTION_KEY
-      ? encryptPayload(rawPayload, env.PAYMENT_EVENT_ENCRYPTION_KEY)
+      ? encryptPayload(
+          rawPayload,
+          env.PAYMENT_EVENT_ENCRYPTION_KEY,
+          env.PAYMENT_EVENT_KEY_ID ?? "payment-key-v1",
+        )
       : undefined;
   return {
     provider,

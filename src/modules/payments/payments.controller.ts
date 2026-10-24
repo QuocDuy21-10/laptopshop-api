@@ -1,4 +1,5 @@
 import { RequestHandler } from "express";
+import { env } from "config/env";
 import { idempotencyKeyHeader } from "lib/idempotency";
 import { idParams } from "lib/http";
 import { getCheckoutAttempt } from "modules/payments/payments.service";
@@ -43,6 +44,8 @@ export const paymentWebhookHandler: RequestHandler = async (req, res) => {
   const { provider } = paymentProviderParam.parse(req.params);
   const selected = paymentProvider();
   if (selected.id !== provider)
+    throw new AppError("Payment provider is unavailable", 404, "PAYMENT_PROVIDER_NOT_FOUND");
+  if (selected.id === "fake" && env.NODE_ENV === "production")
     throw new AppError("Payment provider is unavailable", 404, "PAYMENT_PROVIDER_NOT_FOUND");
   const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from("");
   const transaction = selected.verifyWebhook({ rawBody, headers: req.headers, now: new Date() });

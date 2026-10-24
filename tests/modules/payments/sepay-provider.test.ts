@@ -7,6 +7,8 @@ const config = {
   bankCode: "VCB",
   accountNumber: "0123456789",
   accountName: "LAPTOP SHOP",
+  mode: "test" as const,
+  timeoutMs: 10_000,
 };
 
 const body = JSON.stringify({
@@ -27,6 +29,11 @@ const signedHeaders = (timestamp: number) => ({
 });
 
 describe("SePayPaymentProvider", () => {
+  it("binds provider mode into its authority", () => {
+    const provider = new SePayPaymentProvider({ ...config, mode: "live" });
+    expect(provider.authority).toEqual({ provider: "sepay", mode: "live" });
+  });
+
   it("builds a dynamic VietQR instruction URL", () => {
     const provider = new SePayPaymentProvider(config);
     const result = provider.buildInstructions({
@@ -125,5 +132,18 @@ describe("SePayPaymentProvider", () => {
         headers: { "x-sepay-timestamp": String(timestamp), "x-sepay-signature": signature },
       }),
     ).toThrow(expect.objectContaining({ code: "INVALID_WEBHOOK_PAYLOAD" }));
+  });
+
+  it("maps aborted provider requests to a stable timeout error", async () => {
+    const provider = new SePayPaymentProvider(config);
+    global.fetch = jest
+      .fn()
+      .mockRejectedValue(
+        Object.assign(new Error("aborted"), { name: "AbortError" }),
+      ) as typeof fetch;
+
+    await expect(provider.listTransactions({ cursor: null })).rejects.toMatchObject({
+      code: "PAYMENT_PROVIDER_TIMEOUT",
+    });
   });
 });
