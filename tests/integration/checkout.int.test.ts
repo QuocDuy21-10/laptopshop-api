@@ -1,7 +1,8 @@
 import { prisma } from "config/client";
 import { AppError } from "lib/errors";
 import { changeStatus, placeOrder } from "modules/orders/orders.service";
-import { expirePayments, ingestPaymentTransaction } from "modules/payments/payments.service";
+import { ingestPaymentTransaction } from "modules/payments/payment-ingestion.service";
+import { runPaymentMaintenance } from "modules/payments/payment-maintenance.service";
 import { createProduct, createUser, putInCart, receiver, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
@@ -156,7 +157,7 @@ describe("bank transfer payments", () => {
     );
   });
 
-  it("expires an unpaid payment and restores stock once", async () => {
+  it("moves an unpaid QR payment through verification and restores stock once after evidence", async () => {
     const product = await createProduct(2, 1000);
     const user = await createUser();
     await putInCart(user.id, product.id, 1);
@@ -165,8 +166,19 @@ describe("bank transfer payments", () => {
       paymentMethod: "BANK_TRANSFER",
     });
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
-    const expiredAt = new Date(payment.cancelAfter.getTime() + 1);
-    expect(await expirePayments(expiredAt)).toBe(1);
+    const verifyingAt = new Date(payment.expiresAt.getTime() + 1);
+    expect(await runPaymentMaintenance(verifyingAt)).toMatchObject({ verifying: 1, expired: 0 });
+    const evidenceAt = new Date(payment.cancelAfter.getTime() + 5 * 60_000 + 1);
+    await prisma.paymentProviderCheckpoint.create({
+      data: {
+        provider: "fake",
+        mode: "test",
+        previousVerifiedThroughAt: evidenceAt,
+        verifiedThroughAt: evidenceAt,
+        consecutiveSuccesses: 2,
+      },
+    });
+    expect(await runPaymentMaintenance(evidenceAt)).toMatchObject({ expired: 1 });
     expect((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe(
       "EXPIRED",
     );
@@ -176,7 +188,72 @@ describe("bank transfer payments", () => {
     expect((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).quantity).toBe(
       2,
     );
-    expect(await expirePayments(expiredAt)).toBe(0);
+    expect(await runPaymentMaintenance(evidenceAt)).toMatchObject({ expired: 0 });
+  });
+
+  it("lets a valid webhook win without releasing stock when expiry has no evidence", async () => {
+    const product = await createProduct(2, 1000);
+    const user = await createUser();
+    await putInCart(user.id, product.id, 1);
+    const { order } = await placeOrder(user.id, "qr-race", {
+      ...receiver,
+      paymentMethod: "BANK_TRANSFER",
+    });
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
+    const now = new Date(payment.expiresAt.getTime() + 1);
+    const transaction = {
+      providerEventId: "race-event",
+      providerTransactionKey: "race-tx",
+      direction: "IN" as const,
+      amount: payment.amount,
+      currency: "VND",
+      transferCode: payment.transferCode,
+      accountNumber: payment.accountNumber,
+      occurredAt: new Date(payment.expiresAt.getTime() - 1),
+    };
+
+    await runPaymentMaintenance(now);
+    await ingestPaymentTransaction({ provider: "fake", mode: "test" }, transaction, "WEBHOOK");
+    await expect(
+      prisma.payment.findUniqueOrThrow({ where: { id: payment.id } }),
+    ).resolves.toMatchObject({
+      status: "SUCCEEDED",
+    });
+    await expect(
+      prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+    ).resolves.toMatchObject({
+      quantity: 1,
+    });
+  });
+
+  it("does not double-restock when two maintenance workers race", async () => {
+    const product = await createProduct(2, 1000);
+    const user = await createUser();
+    await putInCart(user.id, product.id, 1);
+    const { order } = await placeOrder(user.id, "qr-workers", {
+      ...receiver,
+      paymentMethod: "BANK_TRANSFER",
+    });
+    const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
+    const verifyingAt = new Date(payment.expiresAt.getTime() + 1);
+    await runPaymentMaintenance(verifyingAt);
+    const evidenceAt = new Date(payment.cancelAfter.getTime() + 5 * 60_000 + 1);
+    await prisma.paymentProviderCheckpoint.create({
+      data: {
+        provider: "fake",
+        mode: "test",
+        previousVerifiedThroughAt: evidenceAt,
+        verifiedThroughAt: evidenceAt,
+        consecutiveSuccesses: 2,
+      },
+    });
+
+    await Promise.all([runPaymentMaintenance(evidenceAt), runPaymentMaintenance(evidenceAt)]);
+    await expect(
+      prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+    ).resolves.toMatchObject({
+      quantity: 2,
+    });
   });
 
   it("does not expire a payment after fulfillment already left pending", async () => {
@@ -189,7 +266,10 @@ describe("bank transfer payments", () => {
     });
     await prisma.order.update({ where: { id: order.id }, data: { status: "SHIPPING" } });
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
-    expect(await expirePayments(new Date(payment.cancelAfter.getTime() + 1))).toBe(0);
+    expect(await runPaymentMaintenance(new Date(payment.cancelAfter.getTime() + 1))).toMatchObject({
+      verifying: 0,
+      expired: 0,
+    });
     expect((await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } })).status).toBe(
       "PENDING",
     );

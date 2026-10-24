@@ -6,6 +6,7 @@ import {
 } from "modules/after-sales/after-sales.eligibility";
 
 export const orderInclude = {
+  payment: { select: { status: true } },
   orderDetails: {
     include: {
       product: { select: { name: true, image: true } },
@@ -31,6 +32,14 @@ export const toOrderDto = (o: OrderRow) => ({
   paymentRequired: o.paymentMethod !== "FREE" && o.totalPrice > 0,
   paymentMethod: o.paymentMethod,
   paymentStatus: o.paymentStatus,
+  paymentCancellationBlockedReason:
+    o.paymentMethod !== "BANK_TRANSFER"
+      ? null
+      : o.paymentStatus === "PAYMENT_SUCCESS"
+        ? "PAID"
+        : o.payment?.status === "VERIFYING" || o.payment?.status === "REVIEW_REQUIRED"
+          ? "VERIFYING"
+          : null,
   receiverName: o.receiverName,
   receiverAddress: o.receiverAddress,
   receiverPhone: o.receiverPhone,

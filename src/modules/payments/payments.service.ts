@@ -6,10 +6,9 @@ import { pageArgs, pageMeta } from "lib/http";
 import { paymentProvider } from "modules/payments/payment-provider.factory";
 import { PaymentRow, paymentInclude, toPaymentDto } from "modules/payments/payment-mapper";
 import { PAYMENT_EVENT_STATUS, PAYMENT_STATUS } from "modules/payments/payment-status";
+import { runPaymentMaintenance } from "modules/payments/payment-maintenance.service";
 import { PaymentEventQuery } from "modules/payments/payments.schema";
-import { ORDER_STATUS, PAYMENT_STATUS as ORDER_PAYMENT_STATUS } from "modules/orders/order-status";
 import { orderInclude, toOrderDto } from "modules/orders/orders.mapper";
-import { cancelOrder } from "modules/orders/order-cancellation.service";
 
 export { ingestPaymentTransaction } from "modules/payments/payment-ingestion.service";
 
@@ -49,29 +48,7 @@ export const getCheckoutAttempt = async (userId: number, key: string) => {
 };
 
 export const expirePayments = async (now = new Date()) => {
-  const payments = await prisma.payment.findMany({
-    where: { status: PAYMENT_STATUS.PENDING, cancelAfter: { lte: now } },
-    select: { orderId: true },
-  });
-  let expired = 0;
-  for (const payment of payments) {
-    await prisma.$transaction(async (tx) => {
-      try {
-        await cancelOrder(tx, {
-          orderId: payment.orderId,
-          from: [ORDER_STATUS.PENDING],
-          paymentDisposition: "EXPIRE",
-          reason: "PAYMENT_EXPIRED",
-          now,
-        });
-        expired += 1;
-      } catch (error) {
-        if (error instanceof AppError && error.code === "INVALID_STATUS_TRANSITION") return;
-        throw error;
-      }
-    });
-  }
-  return expired;
+  return (await runPaymentMaintenance(now)).expired;
 };
 
 export const listPaymentEvents = async (q: PaymentEventQuery) => {

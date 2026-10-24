@@ -88,20 +88,21 @@ export const purgeEncryptedPaymentPayloads = async (now = new Date()) => {
 };
 
 export const startPaymentWorker = () => {
-  const runExpiry = async () => {
+  const runMaintenance = async () => {
     try {
-      const { expirePayments } = await import("modules/payments/payments.service");
-      await expirePayments();
+      const { runPaymentMaintenance } =
+        await import("modules/payments/payment-maintenance.service");
+      await runPaymentMaintenance();
     } catch (error) {
-      logger.error({ err: error }, "payment expiry tick failed");
+      logger.error({ err: error }, "payment maintenance tick failed");
     }
   };
-  void runExpiry();
+  void runMaintenance();
   void reconcilePayments().catch(() => undefined);
   void purgeEncryptedPaymentPayloads().catch((error) =>
     logger.error({ err: error }, "payment payload purge failed"),
   );
-  const expiryTimer = setInterval(() => void runExpiry(), 30_000);
+  const expiryTimer = setInterval(() => void runMaintenance(), 30_000);
   const reconciliationTimer = setInterval(
     () => void reconcilePayments().catch(() => undefined),
     env.PAYMENT_RECONCILIATION_INTERVAL_MS,
