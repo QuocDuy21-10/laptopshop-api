@@ -56,8 +56,21 @@ export const cancelOrder = async (
       "PAYMENT_VERIFICATION_IN_PROGRESS",
     );
   }
+  const allowedPaymentStatuses =
+    input.paymentDisposition === "EXPIRE" || input.allowVerificationCancel
+      ? ["PENDING", "VERIFYING", "REVIEW_REQUIRED"]
+      : ["PENDING"];
   const updated = await tx.order.updateMany({
-    where: { id: input.orderId, status: order.status },
+    where: {
+      id: input.orderId,
+      status: order.status,
+      ...(order.paymentMethod === "BANK_TRANSFER"
+        ? {
+            paymentStatus: PAYMENT_STATUS.UNPAID,
+            payment: { status: { in: allowedPaymentStatuses } },
+          }
+        : {}),
+    },
     data: {
       status: ORDER_STATUS.CANCELLED,
       ...(order.paymentMethod === "BANK_TRANSFER" ? { paymentStatus: PAYMENT_STATUS.FAILED } : {}),

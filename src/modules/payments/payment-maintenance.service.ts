@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { env } from "config/env";
 import { prisma } from "config/client";
 import { AppError } from "lib/errors";
@@ -42,27 +43,34 @@ export const runPaymentMaintenance = async (now = new Date()) => {
     }
 
     if (payment.reviewAfter <= now) {
-      const moved = await prisma.payment.updateMany({
-        where: { id: payment.id, status: PAYMENT_STATUS.VERIFYING },
-        data: { status: PAYMENT_STATUS.REVIEW_REQUIRED },
-      });
-      if (moved.count === 1) {
-        await prisma.paymentReviewCase.upsert({
-          where: { paymentId: payment.id },
-          create: {
-            paymentId: payment.id,
-            reason: "RECONCILIATION_INCONCLUSIVE",
-            status: "OPEN",
-            nextReviewAt: payment.reviewAfter,
-          },
-          update: { status: "OPEN", nextReviewAt: payment.reviewAfter },
+      const moved = await prisma.$transaction(async (tx) => {
+        const transition = await tx.payment.updateMany({
+          where: { id: payment.id, status: PAYMENT_STATUS.VERIFYING },
+          data: { status: PAYMENT_STATUS.REVIEW_REQUIRED },
         });
-        escalated += 1;
-      }
+        if (transition.count === 1)
+          await tx.paymentReviewCase.upsert({
+            where: { paymentId: payment.id },
+            create: {
+              paymentId: payment.id,
+              reason: "RECONCILIATION_INCONCLUSIVE",
+              status: "OPEN",
+              nextReviewAt: payment.reviewAfter,
+            },
+            update: { status: "OPEN", nextReviewAt: payment.reviewAfter },
+          });
+        return transition;
+      });
+      if (moved.count === 1) escalated += 1;
       continue;
     }
 
-    if (!payment.providerMode || payment.provider !== provider.authority.provider) continue;
+    if (
+      !payment.providerMode ||
+      payment.provider !== provider.authority.provider ||
+      payment.providerMode !== provider.authority.mode
+    )
+      continue;
     const checkpoint = await prisma.paymentProviderCheckpoint.findFirst({
       where: { provider: provider.authority.provider, mode: provider.authority.mode },
       select: {
@@ -83,6 +91,41 @@ export const runPaymentMaintenance = async (now = new Date()) => {
 
     try {
       await prisma.$transaction(async (tx) => {
+        const lockedRows = await tx.$queryRaw<
+          Array<{
+            consecutiveSuccesses: number;
+            previousVerifiedThroughAt: Date | null;
+            verifiedThroughAt: Date | null;
+          }>
+        >(Prisma.sql`
+          SELECT consecutiveSuccesses, previousVerifiedThroughAt, verifiedThroughAt
+          FROM payment_provider_checkpoints
+          WHERE provider = ${provider.authority.provider} AND mode = ${provider.authority.mode}
+          FOR UPDATE
+        `);
+        const lockedCheckpoint =
+          lockedRows?.[0] ??
+          (await tx.paymentProviderCheckpoint.findFirst({
+            where: { provider: provider.authority.provider, mode: provider.authority.mode },
+            select: {
+              consecutiveSuccesses: true,
+              previousVerifiedThroughAt: true,
+              verifiedThroughAt: true,
+            },
+          }));
+        const lockedEvidence =
+          lockedCheckpoint?.consecutiveSuccesses !== undefined &&
+          lockedCheckpoint.consecutiveSuccesses >= 2 &&
+          lockedCheckpoint.previousVerifiedThroughAt !== null &&
+          lockedCheckpoint.verifiedThroughAt !== null &&
+          lockedCheckpoint.previousVerifiedThroughAt >= boundary &&
+          lockedCheckpoint.verifiedThroughAt >= boundary;
+        if (!lockedEvidence)
+          throw new AppError(
+            "Payment reconciliation evidence changed",
+            409,
+            "PAYMENT_EVIDENCE_CHANGED",
+          );
         await cancelOrder(tx, {
           orderId: payment.orderId,
           from: [ORDER_STATUS.PENDING],
@@ -93,7 +136,11 @@ export const runPaymentMaintenance = async (now = new Date()) => {
       });
       expired += 1;
     } catch (error) {
-      if (error instanceof AppError && error.code === "INVALID_STATUS_TRANSITION") continue;
+      if (
+        error instanceof AppError &&
+        ["INVALID_STATUS_TRANSITION", "PAYMENT_EVIDENCE_CHANGED"].includes(error.code)
+      )
+        continue;
       throw error;
     }
   }

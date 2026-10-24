@@ -53,6 +53,50 @@ describe("runPaymentMaintenance", () => {
     expect(cancelOrder).not.toHaveBeenCalled();
   });
 
+  it("does not use a different provider mode checkpoint", async () => {
+    prismaMock.payment.findMany.mockResolvedValue([
+      { ...payment, status: "VERIFYING", providerMode: "live" },
+    ]);
+    prismaMock.paymentProviderCheckpoint.findFirst.mockResolvedValue({
+      consecutiveSuccesses: 2,
+      previousVerifiedThroughAt: new Date("2026-10-24T09:55:00.000Z"),
+      verifiedThroughAt: new Date("2026-10-24T09:58:00.000Z"),
+    });
+
+    await expect(runPaymentMaintenance(now)).resolves.toMatchObject({ expired: 0 });
+    expect(cancelOrder).not.toHaveBeenCalled();
+  });
+
+  it("rechecks evidence while holding the expiry transaction", async () => {
+    prismaMock.payment.findMany.mockResolvedValue([{ ...payment, status: "VERIFYING" }]);
+    prismaMock.paymentProviderCheckpoint.findFirst
+      .mockResolvedValueOnce({
+        consecutiveSuccesses: 2,
+        previousVerifiedThroughAt: new Date("2026-10-24T09:55:00.000Z"),
+        verifiedThroughAt: new Date("2026-10-24T09:58:00.000Z"),
+      })
+      .mockResolvedValueOnce({
+        consecutiveSuccesses: 0,
+        previousVerifiedThroughAt: null,
+        verifiedThroughAt: null,
+      });
+
+    await expect(runPaymentMaintenance(now)).resolves.toMatchObject({ expired: 0 });
+    expect(cancelOrder).not.toHaveBeenCalled();
+  });
+
+  it("creates the review case in the same transaction as the state escalation", async () => {
+    prismaMock.payment.findMany.mockResolvedValue([
+      { ...payment, status: "VERIFYING", reviewAfter: new Date("2026-10-24T09:59:00.000Z") },
+    ]);
+    prismaMock.$transaction.mockImplementation(async (callback: any) => callback(prismaMock));
+    prismaMock.payment.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.paymentReviewCase.upsert.mockResolvedValue({});
+
+    await runPaymentMaintenance(now);
+    expect(prismaMock.$transaction).toHaveBeenCalled();
+  });
+
   it("expires only after two successful boundaries before reviewAfter", async () => {
     prismaMock.payment.findMany.mockResolvedValue([{ ...payment, status: "VERIFYING" }]);
     prismaMock.paymentProviderCheckpoint.findFirst.mockResolvedValue({

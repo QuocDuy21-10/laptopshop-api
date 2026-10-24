@@ -60,4 +60,15 @@ describe("reconcilePayments", () => {
     expect(failReconciliationCycle).toHaveBeenCalled();
     expect(completeReconciliationCycle).not.toHaveBeenCalled();
   });
+
+  it("rejects a cursor that repeats an earlier high-water cursor", async () => {
+    provider.listTransactions
+      .mockResolvedValueOnce({ items: [], cursor: "tx-2", hasMore: true })
+      .mockResolvedValueOnce({ items: [], cursor: "tx-1", hasMore: true });
+
+    await expect(reconcilePayments(new Date("2026-10-24T10:00:00.000Z"))).rejects.toMatchObject({
+      code: "PAYMENT_RECONCILIATION_CURSOR_STALLED",
+    });
+    expect(failReconciliationCycle).toHaveBeenCalled();
+  });
 });

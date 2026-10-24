@@ -21,12 +21,13 @@ const runReconciliation = async (now: Date) => {
   const checkpoint = await claimReconciliationLease(provider.authority, owner, now);
   if (!checkpoint) return { processed: 0, skipped: true };
   let cursor = checkpoint.cursor;
+  const seenCursors = new Set(cursor ? [cursor] : []);
   let count = 0;
   try {
     let hasMore = true;
     while (hasMore) {
       const page = await provider.listTransactions({ cursor, limit: 100 });
-      if (page.hasMore && (!page.cursor || page.cursor === cursor))
+      if (page.hasMore && (!page.cursor || seenCursors.has(page.cursor)))
         throw new AppError(
           "Payment reconciliation cursor stalled",
           502,
@@ -37,7 +38,10 @@ const runReconciliation = async (now: Date) => {
         count += 1;
       }
       hasMore = page.hasMore;
-      if (page.cursor) cursor = page.cursor;
+      if (page.cursor) {
+        seenCursors.add(page.cursor);
+        cursor = page.cursor;
+      }
       if (hasMore && !(await renewReconciliationLease(checkpoint.id, owner, new Date())))
         throw new AppError(
           "Payment reconciliation lease lost",
