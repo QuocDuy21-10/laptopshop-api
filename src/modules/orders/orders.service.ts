@@ -180,6 +180,7 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
               const expiresAt = new Date(Date.now() + env.PAYMENT_TTL_MINUTES * 60_000);
               return {
                 provider: env.PAYMENT_PROVIDER,
+                providerMode: env.PAYMENT_PROVIDER === "fake" ? "test" : env.SEPAY_MODE,
                 method: "BANK_TRANSFER",
                 status: "PENDING",
                 amount: totalPrice,
@@ -190,6 +191,9 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
                 accountName: env.SEPAY_ACCOUNT_NAME!,
                 expiresAt,
                 cancelAfter: new Date(expiresAt.getTime() + env.PAYMENT_GRACE_SECONDS * 1000),
+                reviewAfter: new Date(
+                  expiresAt.getTime() + env.PAYMENT_MAX_AUTO_HOLD_MINUTES * 60_000,
+                ),
               };
             })()
           : undefined;

@@ -20,6 +20,8 @@ const paymentRow = {
   accountName: "LAPTOP SHOP",
   expiresAt: new Date(Date.now() + 15 * 60_000),
   cancelAfter: new Date(Date.now() + 17 * 60_000),
+  providerMode: "test",
+  reviewAfter: new Date(Date.now() + 75 * 60_000),
   paidAt: null,
   cancelledAt: null,
   order: { id: 50, userId: USER.id, status: "PENDING", paymentStatus: "PAYMENT_UNPAID" },

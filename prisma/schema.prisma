@@ -220,6 +220,8 @@ model User {
   statusChanges               OrderStatusHistory[]
   stockMovements              StockMovement[]
   paymentEventResolutions     PaymentWebhookEvent[]
+  paymentReviewCasesResolved  PaymentReviewCase[]          @relation("PaymentReviewCaseResolver")
+  paymentReviewActions        PaymentReviewAction[]
   stockReceiptsCreated        StockReceipt[]               @relation("ReceiptCreator")
   stockReceiptsPosted         StockReceipt[]               @relation("ReceiptPoster")
   reviews                     Review[]                     @relation("ReviewAuthor")
@@ -494,20 +496,20 @@ model WorkerHeartbeat {
 }
 
 model WorkerCheckpoint {
-  workerName          String   @id @db.VarChar(100)
-  ownerEpoch          Int      @default(0)
-  ownerToken          String?  @db.VarChar(128)
+  workerName          String    @id @db.VarChar(100)
+  ownerEpoch          Int       @default(0)
+  ownerToken          String?   @db.VarChar(128)
   cursor              Json?
   cycleStartedAt      DateTime?
   lastStartedAt       DateTime?
   lastCompletedAt     DateTime?
   lastSucceededAt     DateTime?
   lastDurationMs      Int?
-  consecutiveFailures Int      @default(0)
-  lastErrorCode       String?  @db.VarChar(100)
+  consecutiveFailures Int       @default(0)
+  lastErrorCode       String?   @db.VarChar(100)
   lastStats           Json?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   @@map("worker_checkpoints")
 }
@@ -1091,6 +1093,7 @@ model Payment {
   id            String    @id @default(uuid()) @db.Char(36)
   orderId       Int       @unique
   provider      String    @db.VarChar(20)
+  providerMode  String?   @db.VarChar(20)
   method        String    @default("BANK_TRANSFER") @db.VarChar(30)
   status        String    @default("PENDING") @db.VarChar(20)
   amount        Int
@@ -1101,6 +1104,7 @@ model Payment {
   accountName   String    @db.VarChar(255)
   expiresAt     DateTime
   cancelAfter   DateTime
+  reviewAfter   DateTime
   paidAt        DateTime?
   cancelledAt   DateTime?
   createdAt     DateTime  @default(now())
@@ -1108,14 +1112,17 @@ model Payment {
 
   order         Order                 @relation(fields: [orderId], references: [id])
   webhookEvents PaymentWebhookEvent[]
+  reviewCase    PaymentReviewCase?
 
   @@index([status, cancelAfter])
+  @@index([status, reviewAfter])
   @@map("payments")
 }
 
 model PaymentWebhookEvent {
   id                     String    @id @default(uuid()) @db.Char(36)
   provider               String    @db.VarChar(20)
+  providerMode           String?   @db.VarChar(20)
   source                 String    @db.VarChar(20)
   providerEventId        String    @db.VarChar(150)
   providerTransactionKey String    @db.VarChar(150)
@@ -1141,26 +1148,70 @@ model PaymentWebhookEvent {
   payment    Payment? @relation(fields: [paymentId], references: [id])
   resolvedBy User?    @relation(fields: [resolvedById], references: [id], onDelete: SetNull)
 
-  @@unique([provider, providerEventId])
-  @@unique([provider, providerTransactionKey])
+  @@unique([provider, providerMode, providerEventId], map: "payment_events_provider_mode_event_key")
+  @@unique([provider, providerMode, providerTransactionKey], map: "payment_events_provider_mode_tx_key")
   @@index([status, receivedAt])
   @@index([paymentId])
   @@map("payment_webhook_events")
 }
 
 model PaymentProviderCheckpoint {
-  id              Int       @id @default(autoincrement())
-  provider        String    @db.VarChar(20)
-  mode            String    @db.VarChar(20)
-  cursor          String?   @db.VarChar(150)
-  lastStartedAt   DateTime?
-  lastSucceededAt DateTime?
-  lastErrorAt     DateTime?
-  lastError       String?   @db.VarChar(500)
-  updatedAt       DateTime  @updatedAt
+  id                        Int       @id @default(autoincrement())
+  provider                  String    @db.VarChar(20)
+  mode                      String    @db.VarChar(20)
+  cursor                    String?   @db.VarChar(150)
+  previousVerifiedThroughAt DateTime?
+  verifiedThroughAt         DateTime?
+  leaseOwner                String?   @db.Char(36)
+  leaseExpiresAt            DateTime?
+  lastStartedAt             DateTime?
+  lastSucceededAt           DateTime?
+  lastErrorAt               DateTime?
+  lastError                 String?   @db.VarChar(500)
+  lastDurationMs            Int?
+  lastProcessedCount        Int?
+  consecutiveSuccesses      Int       @default(0)
+  consecutiveFailures       Int       @default(0)
+  updatedAt                 DateTime  @updatedAt
 
   @@unique([provider, mode])
   @@map("payment_provider_checkpoints")
+}
+
+model PaymentReviewCase {
+  id           String    @id @default(uuid()) @db.Char(36)
+  paymentId    String    @unique @db.Char(36)
+  reason       String    @db.VarChar(50)
+  status       String    @default("OPEN") @db.VarChar(20)
+  version      Int       @default(0)
+  openedAt     DateTime  @default(now())
+  nextReviewAt DateTime?
+  resolvedAt   DateTime?
+  resolvedById Int?
+  resolution   String?   @db.VarChar(50)
+
+  payment    Payment               @relation(fields: [paymentId], references: [id])
+  resolvedBy User?                 @relation("PaymentReviewCaseResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  actions    PaymentReviewAction[]
+
+  @@index([status, openedAt])
+  @@map("payment_review_cases")
+}
+
+model PaymentReviewAction {
+  id           String    @id @default(uuid()) @db.Char(36)
+  reviewCaseId String    @db.Char(36)
+  actorId      Int
+  action       String    @db.VarChar(30)
+  note         String    @db.VarChar(500)
+  holdUntil    DateTime?
+  createdAt    DateTime  @default(now())
+
+  reviewCase PaymentReviewCase @relation(fields: [reviewCaseId], references: [id], onDelete: Cascade)
+  actor      User              @relation(fields: [actorId], references: [id])
+
+  @@index([reviewCaseId, createdAt])
+  @@map("payment_review_actions")
 }
 
 model StockMovement {
