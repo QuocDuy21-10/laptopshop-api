@@ -297,4 +297,42 @@ describe("evaluatePricingEvent", () => {
     expect(prismaMock.product.findMany).not.toHaveBeenCalled();
     expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
+
+  it("rejects a pricing event when its product page cannot be evaluated", async () => {
+    prismaMock.product.findMany.mockRejectedValueOnce(new Error("product page failed"));
+
+    await expect(
+      evaluatePricingEvent(prismaMock, { productIds: [1] }, new Date(), 1, 1),
+    ).rejects.toThrow("PRICE_ALERT_EVENT_EVALUATION_FAILED");
+  });
+
+  it("rejects a pricing event when a candidate evaluation fails", async () => {
+    prismaMock.product.findMany.mockResolvedValue([product(1, 900)]);
+    prismaMock.wishlistItem.findMany
+      .mockResolvedValueOnce([item(11, 1, 1_000)])
+      .mockResolvedValueOnce([]);
+    (resolveAlertPriceSnapshots as jest.Mock).mockResolvedValue(
+      new Map([
+        [
+          11,
+          {
+            productId: 1,
+            listPrice: 900,
+            stablePrice: 900,
+            effectivePrice: 900,
+            source: "LIST_PRICE",
+            promotionId: null,
+            pricingVersion: null,
+            validUntil: null,
+            purchasable: true,
+          },
+        ],
+      ]),
+    );
+    prismaMock.$transaction.mockRejectedValueOnce(new Error("candidate failed"));
+
+    await expect(
+      evaluatePricingEvent(prismaMock, { productIds: [1] }, new Date(), 1, 1),
+    ).rejects.toThrow("PRICE_ALERT_EVENT_EVALUATION_FAILED");
+  });
 });

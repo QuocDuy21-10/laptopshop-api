@@ -20,7 +20,34 @@ import { PRICING_QUEUE_NAME, type PricingEvaluationJob } from "queues/pricing.qu
 const delay = (milliseconds: number) =>
   new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 
-type WorkerHeartbeatStatus = "RUNNING" | "HEALTHY" | "DEGRADED";
+export type WorkerHeartbeatStatus = "RUNNING" | "HEALTHY" | "DEGRADED" | "STOPPING";
+
+export const createSerializedHeartbeatReporter = (input: {
+  instanceId: string;
+  recordHeartbeat: (
+    status: WorkerHeartbeatStatus,
+    metadata?: Record<string, unknown>,
+  ) => Promise<unknown>;
+}) => {
+  let state: { status: WorkerHeartbeatStatus; metadata: Record<string, unknown> } = {
+    status: "HEALTHY",
+    metadata: { instanceId: input.instanceId, activity: "idle" },
+  };
+  let pending: Promise<unknown> = Promise.resolve();
+  const report = (status: WorkerHeartbeatStatus, metadata: Record<string, unknown> = {}) => {
+    const next = { status, metadata: { instanceId: input.instanceId, ...metadata } };
+    state = next;
+    pending = pending
+      .catch(() => undefined)
+      .then(() => input.recordHeartbeat(next.status, next.metadata));
+    return pending;
+  };
+  return {
+    report,
+    refresh: () => report(state.status, { ...state.metadata, activity: "heartbeat" }),
+    stop: () => report("STOPPING", { ...state.metadata, activity: "shutdown" }),
+  };
+};
 
 export type PriceAlertWorkerIterationDeps = {
   instanceId: string;
@@ -98,11 +125,15 @@ const main = async () => {
   const stopped = new Promise<void>((resolve) => {
     stopResolve = resolve;
   });
+  const heartbeatReporter = createSerializedHeartbeatReporter({
+    instanceId,
+    recordHeartbeat: (status, metadata) =>
+      recordWorkerHeartbeat(prisma, "price-alert-worker", instanceId, status, metadata),
+  });
   const heartbeat = setInterval(() => {
-    void recordWorkerHeartbeat(prisma, "price-alert-worker", instanceId, "HEALTHY", {
-      instanceId,
-      activity: "idle",
-    }).catch((error) => logger.error({ error }, "price alert heartbeat failed"));
+    void heartbeatReporter
+      .refresh()
+      .catch((error) => logger.error({ error }, "price alert heartbeat failed"));
   }, 60_000);
   heartbeat.unref();
 
@@ -131,18 +162,16 @@ const main = async () => {
             token: randomUUID,
             logger,
           }),
-        recordHeartbeat: (status, metadata) =>
-          recordWorkerHeartbeat(prisma, "price-alert-worker", instanceId, status, metadata),
+        recordHeartbeat: (status, metadata) => heartbeatReporter.report(status, metadata),
         getCheckpoint: () => getPriceAlertCheckpointSnapshot(prisma),
       });
       if (!stopping) await Promise.race([delay(env.PRICE_ALERT_INTERVAL_MS), stopped]);
     }
   } finally {
     clearInterval(heartbeat);
-    await recordWorkerHeartbeat(prisma, "price-alert-worker", instanceId, "STOPPING", {
-      instanceId,
-      activity: "shutdown",
-    }).catch((error) => logger.error({ error }, "price alert stop heartbeat failed"));
+    await heartbeatReporter
+      .stop()
+      .catch((error) => logger.error({ error }, "price alert stop heartbeat failed"));
     await pricingWorker?.close();
     await queueConnection?.disconnect();
     await Promise.allSettled([redis.quit(), prisma.$disconnect()]);

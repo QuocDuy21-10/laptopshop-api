@@ -1,10 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
+import { isUniqueViolation } from "lib/errors";
 import { logger } from "lib/logger";
 import type { PriceAlertSweepStats } from "modules/price-alerts/price-alert.service";
 
 export const PRICE_ALERT_WORKER_NAME = "price-alert-worker";
 const CURSOR_VERSION = 1;
+class CheckpointOwnershipLost extends Error {}
 
 export type PriceAlertCheckpointCursor = {
   version: 1;
@@ -69,6 +71,7 @@ const mapSnapshot = (row: NonNullable<CheckpointRow>): PriceAlertCheckpointSnaps
 export const claimPriceAlertCheckpoint = async (
   client: CheckpointClient,
   input: { ownerToken: string; now: Date },
+  attempt = 0,
 ): Promise<PriceAlertCheckpointSnapshot> => {
   const existing = await client.workerCheckpoint.findUnique({
     where: { workerName: PRICE_ALERT_WORKER_NAME },
@@ -84,23 +87,45 @@ export const claimPriceAlertCheckpoint = async (
       "price alert checkpoint cursor is invalid; restarting from zero",
     );
   }
-  const row = await client.workerCheckpoint.upsert({
-    where: { workerName: PRICE_ALERT_WORKER_NAME },
-    create: {
-      workerName: PRICE_ALERT_WORKER_NAME,
+  if (!existing) {
+    try {
+      const row = await client.workerCheckpoint.create({
+        data: {
+          workerName: PRICE_ALERT_WORKER_NAME,
+          ownerEpoch: 1,
+          ownerToken: input.ownerToken,
+          cursor: toJson({ version: CURSOR_VERSION, lastProductId: checkpointProductId }),
+          cycleStartedAt: input.now,
+          lastStartedAt: input.now,
+        },
+      });
+      return mapSnapshot(row);
+    } catch (error) {
+      if (isUniqueViolation(error) && attempt < 1) {
+        return claimPriceAlertCheckpoint(client, input, attempt + 1);
+      }
+      throw error;
+    }
+  }
+
+  const expectedEpoch = existing.ownerEpoch;
+  const claimed = await client.workerCheckpoint.updateMany({
+    where: { workerName: PRICE_ALERT_WORKER_NAME, ownerEpoch: expectedEpoch },
+    data: {
+      ownerEpoch: expectedEpoch + 1,
       ownerToken: input.ownerToken,
       cursor: toJson({ version: CURSOR_VERSION, lastProductId: checkpointProductId }),
-      cycleStartedAt: input.now,
-      lastStartedAt: input.now,
-    },
-    update: {
-      ownerToken: input.ownerToken,
-      cursor: toJson({ version: CURSOR_VERSION, lastProductId: checkpointProductId }),
-      cycleStartedAt: checkpointProductId > 0 ? (existing?.cycleStartedAt ?? input.now) : input.now,
+      cycleStartedAt: checkpointProductId > 0 ? (existing.cycleStartedAt ?? input.now) : input.now,
       lastStartedAt: input.now,
     },
   });
-  return mapSnapshot(row);
+  if (claimed.count !== 1)
+    throw new CheckpointOwnershipLost("Price alert checkpoint ownership changed");
+  const claimedRow = await client.workerCheckpoint.findUnique({
+    where: { workerName: PRICE_ALERT_WORKER_NAME },
+  });
+  if (!claimedRow) throw new CheckpointOwnershipLost("Price alert checkpoint disappeared");
+  return mapSnapshot(claimedRow);
 };
 
 export const advancePriceAlertCheckpoint = async (

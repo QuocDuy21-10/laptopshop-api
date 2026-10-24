@@ -34,6 +34,7 @@ const checkpointRow = {
   consecutiveFailures: 0,
   lastErrorCode: null,
   lastStats: stats,
+  ownerEpoch: 1,
   createdAt: now,
   updatedAt: now,
 };
@@ -49,15 +50,20 @@ describe("price alert checkpoint", () => {
   });
 
   it("claims the existing cursor while replacing the owner token", async () => {
-    prismaMock.workerCheckpoint.upsert.mockResolvedValue(checkpointRow);
+    prismaMock.workerCheckpoint.findUnique.mockResolvedValue({ ...checkpointRow, ownerEpoch: 1 });
+    prismaMock.workerCheckpoint.updateMany.mockResolvedValue({ count: 1 });
 
     await expect(
       claimPriceAlertCheckpoint(prismaMock, { ownerToken: "new-owner", now }),
     ).resolves.toMatchObject({ checkpointProductId: 12 });
-    expect(prismaMock.workerCheckpoint.upsert).toHaveBeenCalledWith(
+    expect(prismaMock.workerCheckpoint.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { workerName: "price-alert-worker" },
-        update: expect.objectContaining({ ownerToken: "new-owner", lastStartedAt: now }),
+        where: { workerName: "price-alert-worker", ownerEpoch: 1 },
+        data: expect.objectContaining({
+          ownerToken: "new-owner",
+          lastStartedAt: now,
+          ownerEpoch: 2,
+        }),
       }),
     );
   });
@@ -72,6 +78,17 @@ describe("price alert checkpoint", () => {
         stats,
       }),
     ).resolves.toBe(false);
+  });
+
+  it("rejects a claim whose pre-read epoch was replaced by another owner", async () => {
+    prismaMock.workerCheckpoint.findUnique.mockResolvedValue(checkpointRow);
+    prismaMock.workerCheckpoint.updateMany.mockResolvedValue({ count: 0 });
+    prismaMock.workerCheckpoint.upsert.mockResolvedValue(checkpointRow);
+
+    await expect(
+      claimPriceAlertCheckpoint(prismaMock, { ownerToken: "stale-owner", now }),
+    ).rejects.toThrow(/checkpoint ownership/i);
+    expect(prismaMock.workerCheckpoint.updateMany).toHaveBeenCalled();
   });
 
   it("returns a sanitized completed snapshot without owner token or raw cursor", async () => {

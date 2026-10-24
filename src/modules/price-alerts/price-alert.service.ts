@@ -414,5 +414,8 @@ export const evaluatePricingEvent = async (
     });
     if (result !== "COMPLETED") break;
   }
+  if (stats.errors > 0 || (productIds.length > 0 && stats.productsScanned < productIds.length)) {
+    throw new Error("PRICE_ALERT_EVENT_EVALUATION_FAILED");
+  }
   return stats;
 };

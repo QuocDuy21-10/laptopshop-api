@@ -1,10 +1,13 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { PriceAlertCheckpointSnapshot } from "modules/price-alerts/price-alert.checkpoint";
 import type { LockedPriceAlertSweepResult } from "modules/price-alerts/price-alert.runner";
-import { runPriceAlertWorkerIteration } from "../../src/workers/price-alert-worker";
+import {
+  createSerializedHeartbeatReporter,
+  runPriceAlertWorkerIteration,
+} from "../../src/workers/price-alert-worker";
 
 type HeartbeatFn = (
-  status: "RUNNING" | "HEALTHY" | "DEGRADED",
+  status: "RUNNING" | "HEALTHY" | "DEGRADED" | "STOPPING",
   metadata?: Record<string, unknown>,
 ) => Promise<unknown>;
 
@@ -46,6 +49,49 @@ const deps = (runSweep: () => Promise<LockedPriceAlertSweepResult>) => ({
 });
 
 describe("price alert worker iteration", () => {
+  it("serializes refresh and shutdown without overwriting a degraded state", async () => {
+    const deferred = () => {
+      let resolve!: () => void;
+      const promise = new Promise<void>((done) => {
+        resolve = done;
+      });
+      return { promise, resolve };
+    };
+    const first = deferred();
+    const second = deferred();
+    const record = jest
+      .fn<HeartbeatFn>()
+      .mockImplementationOnce(() => first.promise)
+      .mockImplementationOnce(() => second.promise)
+      .mockResolvedValue(undefined);
+    const reporter = createSerializedHeartbeatReporter({
+      instanceId: "instance-1",
+      recordHeartbeat: record,
+    });
+
+    const degraded = reporter.report("DEGRADED", { reason: "LEASE_LOST" });
+    const refreshed = reporter.refresh();
+    const stopping = reporter.stop();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(record).toHaveBeenCalledTimes(1);
+    first.resolve();
+    await degraded;
+    await Promise.resolve();
+    expect(record).toHaveBeenNthCalledWith(
+      2,
+      "DEGRADED",
+      expect.objectContaining({ reason: "LEASE_LOST" }),
+    );
+    second.resolve();
+    await refreshed;
+    await stopping;
+    expect(record).toHaveBeenLastCalledWith(
+      "STOPPING",
+      expect.objectContaining({ activity: "shutdown" }),
+    );
+  });
+
   it("records RUNNING then HEALTHY for a clean sweep", async () => {
     const input = deps(async () => sweep());
 

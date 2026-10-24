@@ -105,34 +105,41 @@ export const runLockedPriceAlertSweep = async (
       },
     });
     const durationMs = Date.now() - startedAt;
+    let effectiveSweep = sweep;
     if (
       !leaseLost &&
       sweep.stopReason !== "LEASE_LOST" &&
       sweep.stopReason !== "CHECKPOINT_REJECTED"
     ) {
       if (sweep.completed) {
-        await completePriceAlertCheckpoint(deps.client, {
+        const persisted = await completePriceAlertCheckpoint(deps.client, {
           ownerToken: token,
           now: deps.now(),
           durationMs,
           stats: sweep.stats,
           successful: sweep.stats.errors === 0,
         });
+        if (!persisted) {
+          effectiveSweep = { ...sweep, completed: false, stopReason: "CHECKPOINT_REJECTED" };
+        }
       } else {
-        await failPriceAlertCheckpoint(deps.client, {
+        const persisted = await failPriceAlertCheckpoint(deps.client, {
           ownerToken: token,
           now: deps.now(),
           durationMs,
           errorCode: "BATCH_ERROR",
           stats: sweep.stats,
         });
+        if (!persisted) {
+          effectiveSweep = { ...sweep, completed: false, stopReason: "CHECKPOINT_REJECTED" };
+        }
       }
     }
     deps.logger.info(
-      { ...sweep.stats, durationMs, leaseLost, stopReason: sweep.stopReason },
+      { ...effectiveSweep.stats, durationMs, leaseLost, stopReason: effectiveSweep.stopReason },
       "price alert sweep completed",
     );
-    return { kind: "RAN", sweep };
+    return { kind: "RAN", sweep: effectiveSweep };
   } catch (error) {
     if (checkpointOwner && !leaseLost) {
       await failPriceAlertCheckpoint(deps.client, {

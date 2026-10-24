@@ -151,6 +151,34 @@ describe("runLockedPriceAlertSweep", () => {
     );
   });
 
+  it("returns checkpoint rejected when final completion loses ownership", async () => {
+    const set = jest.fn<() => Promise<"OK" | null>>().mockResolvedValue("OK");
+    const redis = { set, eval: jest.fn<() => Promise<number>>().mockResolvedValue(1) };
+    completeMock.mockResolvedValue(false);
+    runSweepMock.mockResolvedValue(cleanSweep);
+
+    const result = await runLockedPriceAlertSweep(deps(redis));
+
+    expect(result).toMatchObject({
+      kind: "RAN",
+      sweep: { completed: false, stopReason: "CHECKPOINT_REJECTED" },
+    });
+  });
+
+  it("returns checkpoint rejected when final failure cannot be persisted", async () => {
+    const set = jest.fn<() => Promise<"OK" | null>>().mockResolvedValue("OK");
+    const redis = { set, eval: jest.fn<() => Promise<number>>().mockResolvedValue(1) };
+    failMock.mockResolvedValue(false);
+    runSweepMock.mockResolvedValue({ ...cleanSweep, completed: false, stopReason: "BATCH_ERROR" });
+
+    const result = await runLockedPriceAlertSweep(deps(redis));
+
+    expect(result).toMatchObject({
+      kind: "RAN",
+      sweep: { completed: false, stopReason: "CHECKPOINT_REJECTED" },
+    });
+  });
+
   it("renews before TTL and stops accepting pages after lease loss", async () => {
     jest.useFakeTimers();
     const set = jest.fn<() => Promise<"OK" | null>>().mockResolvedValue("OK");
