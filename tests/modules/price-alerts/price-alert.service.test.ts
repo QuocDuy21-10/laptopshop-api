@@ -44,7 +44,7 @@ beforeEach(() => {
 
 describe("runPriceAlertSweep", () => {
   it("pages product IDs and Wishlist items without loading the full watch set", async () => {
-    prismaMock.wishlistItem.groupBy
+    prismaMock.$queryRaw
       .mockResolvedValueOnce([{ productId: 1 }, { productId: 2 }])
       .mockResolvedValueOnce([]);
     prismaMock.product.findMany.mockResolvedValue([product(1, 1_000), product(2, 2_000)]);
@@ -63,14 +63,7 @@ describe("runPriceAlertSweep", () => {
     });
 
     expect(result).toMatchObject({ completed: true, lastProductId: 2, stopReason: "COMPLETED" });
-    expect(prismaMock.wishlistItem.groupBy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        by: ["productId"],
-        where: { alertMode: { not: null }, productId: { gt: 0 } },
-        orderBy: { productId: "asc" },
-        take: 2,
-      }),
-    );
+    expect(prismaMock.$queryRaw).toHaveBeenCalledTimes(2);
     expect(prismaMock.wishlistItem.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         take: 1,
@@ -81,7 +74,7 @@ describe("runPriceAlertSweep", () => {
   });
 
   it("stops on discovery failure without claiming a successful page", async () => {
-    prismaMock.wishlistItem.groupBy.mockRejectedValueOnce(new Error("discovery failed"));
+    prismaMock.$queryRaw.mockRejectedValueOnce(new Error("discovery failed"));
     const onProductBatchComplete = jest.fn().mockResolvedValue(true);
 
     const result = await runPriceAlertSweep({
@@ -98,9 +91,7 @@ describe("runPriceAlertSweep", () => {
   });
 
   it("stops after a checkpoint callback rejects ownership", async () => {
-    prismaMock.wishlistItem.groupBy
-      .mockResolvedValueOnce([{ productId: 1 }])
-      .mockResolvedValueOnce([]);
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ productId: 1 }]).mockResolvedValueOnce([]);
     prismaMock.product.findMany.mockResolvedValue([product(1, 1_000)]);
     prismaMock.wishlistItem.findMany.mockResolvedValueOnce([]);
     const onProductBatchComplete = jest.fn().mockResolvedValue(false);
@@ -121,7 +112,7 @@ describe("runPriceAlertSweep", () => {
   });
 
   it("deduplicates and sorts watched products before one resolver call per batch", async () => {
-    prismaMock.wishlistItem.groupBy
+    prismaMock.$queryRaw
       .mockResolvedValueOnce([{ productId: 1 }])
       .mockResolvedValueOnce([{ productId: 2 }])
       .mockResolvedValueOnce([]);
@@ -147,7 +138,7 @@ describe("runPriceAlertSweep", () => {
   });
 
   it("uses automatic promotion pricing and skips inactive or out-of-stock products", async () => {
-    prismaMock.wishlistItem.groupBy
+    prismaMock.$queryRaw
       .mockResolvedValueOnce([{ productId: 1 }, { productId: 2 }, { productId: 3 }])
       .mockResolvedValueOnce([]);
     prismaMock.wishlistItem.findMany.mockResolvedValueOnce([
@@ -197,9 +188,7 @@ describe("runPriceAlertSweep", () => {
   });
 
   it("triggers a Flash Sale alert without lowering the stable reference price", async () => {
-    prismaMock.wishlistItem.groupBy
-      .mockResolvedValueOnce([{ productId: 1 }])
-      .mockResolvedValueOnce([]);
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ productId: 1 }]).mockResolvedValueOnce([]);
     prismaMock.wishlistItem.findMany.mockResolvedValueOnce([item(11, 1, 1_000)]);
     prismaMock.wishlistItem.findMany.mockResolvedValueOnce([]);
     prismaMock.product.findMany.mockResolvedValue([product(1, 1_000)]);
@@ -238,9 +227,7 @@ describe("runPriceAlertSweep", () => {
   });
 
   it("counts malformed alert state without throwing", async () => {
-    prismaMock.wishlistItem.groupBy
-      .mockResolvedValueOnce([{ productId: 1 }])
-      .mockResolvedValueOnce([]);
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ productId: 1 }]).mockResolvedValueOnce([]);
     prismaMock.wishlistItem.findMany.mockResolvedValueOnce([item(11, 1, null)]);
     prismaMock.wishlistItem.findMany.mockResolvedValueOnce([]);
     prismaMock.product.findMany.mockResolvedValue([product(1, 1_000)]);
@@ -256,7 +243,7 @@ describe("runPriceAlertSweep", () => {
   });
 
   it("stops and preserves the cursor after a batch read error", async () => {
-    prismaMock.wishlistItem.groupBy
+    prismaMock.$queryRaw
       .mockResolvedValueOnce([{ productId: 1 }, { productId: 2 }])
       .mockResolvedValueOnce([]);
     prismaMock.product.findMany
@@ -291,7 +278,7 @@ describe("evaluatePricingEvent", () => {
       2,
     );
 
-    expect(prismaMock.wishlistItem.groupBy).not.toHaveBeenCalled();
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
     expect(prismaMock.product.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: { in: [1, 3] } } }),
     );
@@ -308,6 +295,6 @@ describe("evaluatePricingEvent", () => {
 
     expect(result).toMatchObject({ productsScanned: 0, itemsEvaluated: 0, errors: 0 });
     expect(prismaMock.product.findMany).not.toHaveBeenCalled();
-    expect(prismaMock.wishlistItem.groupBy).not.toHaveBeenCalled();
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
   });
 });

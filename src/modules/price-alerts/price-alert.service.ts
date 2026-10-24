@@ -1,4 +1,4 @@
-import { Product } from "@prisma/client";
+import { Prisma, Product } from "@prisma/client";
 import { prisma } from "config/client";
 import { env } from "config/env";
 import { isUniqueViolation } from "lib/errors";
@@ -341,12 +341,14 @@ export const runPriceAlertSweep = async (
 
     let rows: Array<{ productId: number }>;
     try {
-      rows = await input.client.wishlistItem.groupBy({
-        by: ["productId"],
-        where: { alertMode: { not: null }, productId: { gt: cursor } },
-        orderBy: { productId: "asc" },
-        take: input.productBatchSize,
-      });
+      rows = await input.client.$queryRaw<{ productId: number }[]>(Prisma.sql`
+        SELECT DISTINCT productId
+        FROM wishlist_items
+        WHERE alertMode IS NOT NULL
+          AND productId > ${cursor}
+        ORDER BY productId ASC
+        LIMIT ${input.productBatchSize}
+      `);
     } catch (error) {
       stats.errors += 1;
       input.logger?.error({ error, cursor }, "price alert product discovery failed");
