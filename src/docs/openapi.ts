@@ -176,7 +176,13 @@ const PricedProduct = registry.register(
     salePrice: z.number().int(),
     productDiscountAmount: z.number().int(),
     promotion: z
-      .object({ id: z.number(), name: z.string(), endsAt: z.string().datetime() })
+      .object({
+        id: z.number(),
+        name: z.string(),
+        endsAt: z.string().datetime(),
+        kind: z.enum(["AUTOMATIC", "FLASH_SALE"]),
+        eligibility: z.enum(["POTENTIAL", "EXACT"]),
+      })
       .nullable(),
   }),
 );
@@ -326,6 +332,16 @@ const Cart = registry.register(
         productDiscountAmount: z.number(),
         lineTotal: z.number(),
         product: PricedProduct,
+        promotionFallback: z
+          .object({
+            skippedKind: z.literal("FLASH_SALE"),
+            promotionId: z.number(),
+            reason: z.enum(["GLOBAL_QUOTA", "USER_QUOTA", "GLOBAL_AND_USER_QUOTA"]),
+            requestedQuantity: z.number(),
+            availableQuantity: z.number(),
+            appliedPromotionKind: z.enum(["AUTOMATIC"]).nullable(),
+          })
+          .nullable(),
       }),
     ),
     itemCount: z.number(),
@@ -342,7 +358,22 @@ const PricingQuote = registry.register(
     couponEligibleSubtotal: z.number(),
     couponDiscount: z.number(),
     total: z.number(),
-    lines: z.array(z.record(z.unknown())),
+    lines: z.array(
+      z
+        .object({
+          promotionFallback: z
+            .object({
+              skippedKind: z.literal("FLASH_SALE"),
+              promotionId: z.number(),
+              reason: z.enum(["GLOBAL_QUOTA", "USER_QUOTA", "GLOBAL_AND_USER_QUOTA"]),
+              requestedQuantity: z.number(),
+              availableQuantity: z.number(),
+              appliedPromotionKind: z.enum(["AUTOMATIC"]).nullable(),
+            })
+            .nullable(),
+        })
+        .passthrough(),
+    ),
     coupon: z
       .object({ id: z.number(), code: z.string(), name: z.string(), valid: z.literal(true) })
       .nullable(),

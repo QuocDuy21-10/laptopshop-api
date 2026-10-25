@@ -1,6 +1,6 @@
 import { prisma } from "config/client";
 import { changeStatus, placeOrder } from "modules/orders/orders.service";
-import { createProduct, createUser, putInCart, receiver, resetDb } from "./fixtures";
+import { createProduct, createUser, putInCart, quotedReceiver, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
@@ -11,7 +11,7 @@ describe("warranty snapshots", () => {
     const product = await createProduct(2, 1000, 24);
     await putInCart(user.id, product.id, 1);
 
-    const placed = await placeOrder(user.id, "warranty-snapshot", receiver);
+    const placed = await placeOrder(user.id, "warranty-snapshot", await quotedReceiver(user.id));
     const createdDetail = await prisma.orderDetail.findFirstOrThrow({
       where: { orderId: placed.order.id },
     });

@@ -6,6 +6,7 @@ import type {
   AutomaticPromotionInput,
   CouponInput,
   PromotionPricingInput,
+  ResolvedAutomaticPromotion,
 } from "modules/promotions/promotions.types";
 
 const automatic = (overrides: Partial<AutomaticPromotionInput> = {}): AutomaticPromotionInput => ({
@@ -30,6 +31,26 @@ const coupon = (overrides: Partial<CouponInput> = {}): CouponInput => ({
   maxDiscount: null,
   pricingVersion: 1,
   targetProductIds: [],
+  ...overrides,
+});
+
+const resolvedAutomatic = (
+  overrides: Partial<ResolvedAutomaticPromotion> = {},
+): ResolvedAutomaticPromotion => ({
+  ...automatic(),
+  kind: "AUTOMATIC",
+  startsAt: new Date("2026-10-01T00:00:00Z"),
+  endsAt: new Date("2026-11-01T00:00:00Z"),
+  unitDiscount: 10,
+  ...overrides,
+});
+
+const line = (overrides: Record<string, unknown> = {}) => ({
+  productId: 1,
+  quantity: 1,
+  listPrice: 100,
+  promotion: null,
+  promotionFallback: null,
   ...overrides,
 });
 
@@ -58,9 +79,23 @@ describe("promotion pricing", () => {
     expect(winner?.id).toBe(2);
   });
 
+  it("uses the actual list price when comparing fixed and percentage discounts", () => {
+    const winner = selectAutomaticPromotion(
+      [
+        automatic({ id: 1, priority: 2, discountKind: "PERCENT", discountValue: 10 }),
+        automatic({ id: 2, priority: 2, discountKind: "FIXED", discountValue: 500 }),
+      ],
+      1_000,
+    );
+
+    expect(winner?.id).toBe(2);
+  });
+
   it("rounds automatic percentage discounts on one unit before multiplying quantity", () => {
     const result = calculatePromotionPricing({
-      lines: [{ productId: 1, quantity: 3, listPrice: 99, automaticCandidates: [automatic()] }],
+      lines: [
+        line({ quantity: 3, listPrice: 99, promotion: resolvedAutomatic({ unitDiscount: 9 }) }),
+      ],
     });
 
     expect(result.lines[0]).toMatchObject({
@@ -75,12 +110,15 @@ describe("promotion pricing", () => {
   it("applies a fixed automatic discount per unit and caps each unit at zero", () => {
     const result = calculatePromotionPricing({
       lines: [
-        {
-          productId: 1,
+        line({
           quantity: 3,
           listPrice: 250,
-          automaticCandidates: [automatic({ discountKind: "FIXED", discountValue: 100 })],
-        },
+          promotion: resolvedAutomatic({
+            discountKind: "FIXED",
+            discountValue: 100,
+            unitDiscount: 100,
+          }),
+        }),
       ],
     });
 
@@ -89,7 +127,7 @@ describe("promotion pricing", () => {
 
   it("applies a fixed coupon once per order", () => {
     const result = calculatePromotionPricing({
-      lines: [{ productId: 1, quantity: 3, listPrice: 100 }],
+      lines: [line({ quantity: 3 })],
       coupon: coupon({ discountKind: "FIXED", discountValue: 150 }),
     });
 
@@ -103,7 +141,7 @@ describe("promotion pricing", () => {
 
   it("caps a percentage coupon at maxDiscount", () => {
     const result = calculatePromotionPricing({
-      lines: [{ productId: 1, quantity: 1, listPrice: 1_000 }],
+      lines: [line({ listPrice: 1_000 })],
       coupon: coupon({ discountValue: 20, maxDiscount: 100 }),
     });
 
@@ -113,10 +151,10 @@ describe("promotion pricing", () => {
   it("allocates integer coupon remainders by productId and excludes zero-value lines", () => {
     const input: PromotionPricingInput = {
       lines: [
-        { productId: 3, quantity: 1, listPrice: 10 },
-        { productId: 0, quantity: 1, listPrice: 0 },
-        { productId: 1, quantity: 1, listPrice: 10 },
-        { productId: 2, quantity: 1, listPrice: 10 },
+        line({ productId: 3, listPrice: 10 }),
+        line({ productId: 0, listPrice: 0 }),
+        line({ productId: 1, listPrice: 10 }),
+        line({ productId: 2, listPrice: 10 }),
       ],
       coupon: coupon({ discountKind: "FIXED", discountValue: 10 }),
     };
@@ -130,5 +168,39 @@ describe("promotion pricing", () => {
     ]);
     expect(result.lines.reduce((sum, line) => sum + line.couponDiscountAmount, 0)).toBe(10);
     expect(result.totalPrice).toBe(20);
+  });
+
+  it("uses the resolved winner and publishes only the safe fallback fields", () => {
+    const result = calculatePromotionPricing({
+      lines: [
+        line({
+          promotion: resolvedAutomatic({ id: 2, unitDiscount: 20 }),
+          promotionFallback: {
+            promotionId: 8,
+            reason: "GLOBAL_QUOTA",
+            requestedQuantity: 1,
+            globalRemaining: 0,
+            userRemaining: 0,
+            availableQuantity: 0,
+            appliedPromotionKind: "AUTOMATIC",
+          },
+        }),
+      ],
+    });
+
+    expect(result.lines[0]).toMatchObject({
+      automaticPromotion: { id: 2, kind: "AUTOMATIC" },
+      promotionKind: "AUTOMATIC",
+      promotionFallback: {
+        skippedKind: "FLASH_SALE",
+        promotionId: 8,
+        reason: "GLOBAL_QUOTA",
+        requestedQuantity: 1,
+        availableQuantity: 0,
+        appliedPromotionKind: "AUTOMATIC",
+      },
+    });
+    expect(result.lines[0].promotionFallback).not.toHaveProperty("globalRemaining");
+    expect(result.lines[0].promotionFallback).not.toHaveProperty("userRemaining");
   });
 });

@@ -57,13 +57,13 @@ describe("admin Flash Sale allocations", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.meta).toMatchObject({ page: 2, pageSize: 10, total: 1 });
-    expect(response.body.items[0]).toMatchObject({
+    expect(response.body.data[0]).toMatchObject({
       promotionId: 42,
       productId: 3,
       quantity: 1,
       status: "CLAIMED",
     });
-    expect(response.body.items[0]).not.toHaveProperty("password");
+    expect(response.body.data[0]).not.toHaveProperty("password");
   });
 
   it("returns Flash Sale quota summary derived from current quotas and allocation history", async () => {
@@ -75,10 +75,11 @@ describe("admin Flash Sale allocations", () => {
     prismaMock.flashSaleProductQuota.findMany.mockResolvedValue([
       { productId: 3, totalQuota: 10, claimedUnits: 2 },
     ]);
-    prismaMock.flashSaleAllocation.aggregate.mockResolvedValue({
-      _sum: { quantity: 3, discountAmount: 600 },
-      _count: { _all: 3 },
-    });
+    prismaMock.flashSaleAllocation.aggregate
+      .mockResolvedValueOnce({ _sum: { quantity: 3 }, _count: { _all: 3 } })
+      .mockResolvedValueOnce({ _sum: { discountAmount: 400 }, _count: { _all: 2 } })
+      .mockResolvedValueOnce({ _sum: { quantity: 1 }, _count: { _all: 1 } })
+      .mockResolvedValueOnce({ _sum: { quantity: 2 }, _count: { _all: 2 } });
 
     const response = await request(buildApp())
       .get("/api/v1/admin/promotions/42/summary")
@@ -89,7 +90,15 @@ describe("admin Flash Sale allocations", () => {
       promotionId: 42,
       totalQuota: 10,
       claimedUnits: 2,
-      totalDiscountAmount: 600,
+      allocationCount: 3,
+      releasedUnits: 1,
+      totalDiscountAmount: 400,
     });
+    expect(prismaMock.flashSaleAllocation.aggregate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { promotionId: 42, status: "CLAIMED" },
+        _sum: { discountAmount: true },
+      }),
+    );
   });
 });

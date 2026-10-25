@@ -278,6 +278,18 @@ describe("openapi document", () => {
         FlashSaleAvailability: expect.anything(),
       }),
     );
+    const quoteLine = (doc.components?.schemas?.PricingQuote as any).properties.lines.items;
+    expect(quoteLine.properties.promotionFallback.nullable).toBe(true);
+    expect(quoteLine.properties.promotionFallback.properties).toEqual(
+      expect.objectContaining({
+        skippedKind: expect.anything(),
+        promotionId: expect.anything(),
+        reason: expect.anything(),
+        requestedQuantity: expect.anything(),
+        availableQuantity: expect.anything(),
+        appliedPromotionKind: expect.anything(),
+      }),
+    );
     expect(op("/api/v1/promotions/flash-sales/availability", "get").security).toBeUndefined();
   });
 
@@ -341,6 +353,18 @@ describe("openapi document", () => {
       expect.objectContaining({ $ref: expect.stringContaining("CatalogProduct") }),
     );
     expect((doc.components?.schemas?.Product as any).properties.reviewSummary).toBeUndefined();
+  });
+
+  it("documents resolved promotion eligibility and cart fallback diagnostics", () => {
+    const pricedProduct = doc.components?.schemas?.PricedProduct as any;
+    const cart = doc.components?.schemas?.Cart as any;
+    expect(pricedProduct.properties.promotion.properties).toEqual(
+      expect.objectContaining({ kind: expect.anything(), eligibility: expect.anything() }),
+    );
+    expect(cart.properties.items.items.properties.promotionFallback.nullable).toBe(true);
+    expect(cart.properties.items.items.properties.promotionFallback.properties.reason.enum).toEqual(
+      expect.arrayContaining(["GLOBAL_QUOTA", "USER_QUOTA", "GLOBAL_AND_USER_QUOTA"]),
+    );
   });
 
   it("documents the product hardware specs", () => {

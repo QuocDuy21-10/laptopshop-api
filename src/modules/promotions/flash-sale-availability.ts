@@ -1,10 +1,12 @@
 import { prisma } from "config/client";
 import { AppError } from "lib/errors";
-import { automaticDiscountPerUnit } from "modules/promotions/promotion-pricing";
 import {
+  isFlashSaleAvailabilityEligible,
   toFlashSaleAvailabilityDto,
   type FlashSaleAvailabilityDto,
 } from "modules/promotions/flash-sale.mapper";
+import { effectivePromotionState } from "modules/promotions/promotions.mapper";
+import { comparePromotionCandidates } from "modules/promotions/promotion-selection";
 
 type AvailabilityInput = { productIds: number[]; userId?: number; now: Date };
 type AvailabilityRow = {
@@ -28,6 +30,41 @@ type AvailabilityRow = {
     }>;
   } | null;
 };
+
+type AvailabilityCandidate = {
+  row: AvailabilityRow;
+  quota: NonNullable<AvailabilityRow["flashSalePolicy"]>["quotas"][number];
+};
+
+const compareAvailabilityCandidates = (a: AvailabilityCandidate, b: AvailabilityCandidate) =>
+  comparePromotionCandidates(
+    {
+      id: a.row.id,
+      name: a.row.name,
+      discountKind: a.row.discountKind,
+      discountValue: a.row.discountValue,
+      priority: a.row.flashSalePolicy!.priority,
+      stackableWithCoupon: false,
+      pricingVersion: 1,
+    },
+    {
+      id: b.row.id,
+      name: b.row.name,
+      discountKind: b.row.discountKind,
+      discountValue: b.row.discountValue,
+      priority: b.row.flashSalePolicy!.priority,
+      stackableWithCoupon: false,
+      pricingVersion: 1,
+    },
+    a.quota.product.price,
+  );
+
+const isEligibleForOneUnit = (candidate: AvailabilityCandidate, userId?: number) =>
+  isFlashSaleAvailabilityEligible({
+    quota: candidate.quota,
+    userClaimedUnits: candidate.quota.usages?.[0]?.claimedUnits,
+    userId,
+  });
 
 export const getFlashSaleAvailability = async (
   input: AvailabilityInput,
@@ -69,54 +106,31 @@ export const getFlashSaleAvailability = async (
     },
   })) as unknown as AvailabilityRow[];
 
-  const winners = new Map<
+  const candidatesByProduct = new Map<
     number,
-    { row: AvailabilityRow; quota: AvailabilityRow["flashSalePolicy"]["quotas"][number] }
+    { running: AvailabilityCandidate[]; scheduled: AvailabilityCandidate[] }
   >();
   for (const row of rows) {
     if (!row.flashSalePolicy) continue;
+    const state = effectivePromotionState(row.state, row.startsAt, row.endsAt, input.now);
+    if (state !== "RUNNING" && state !== "SCHEDULED") continue;
     for (const quota of row.flashSalePolicy.quotas) {
-      const current = winners.get(quota.productId);
-      const currentDiscount = current
-        ? automaticDiscountPerUnit(
-            {
-              id: current.row.id,
-              name: current.row.name,
-              discountKind: current.row.discountKind,
-              discountValue: current.row.discountValue,
-              priority: current.row.flashSalePolicy!.priority,
-              stackableWithCoupon: false,
-              pricingVersion: 1,
-            },
-            quota.product.price,
-          )
-        : -1;
-      const nextDiscount = automaticDiscountPerUnit(
-        {
-          id: row.id,
-          name: row.name,
-          discountKind: row.discountKind,
-          discountValue: row.discountValue,
-          priority: row.flashSalePolicy.priority,
-          stackableWithCoupon: false,
-          pricingVersion: 1,
-        },
-        quota.product.price,
-      );
-      if (
-        !current ||
-        row.flashSalePolicy.priority > current.row.flashSalePolicy!.priority ||
-        (row.flashSalePolicy.priority === current.row.flashSalePolicy!.priority &&
-          (nextDiscount > currentDiscount ||
-            (nextDiscount === currentDiscount && row.id < current.row.id)))
-      ) {
-        winners.set(quota.productId, { row, quota });
-      }
+      const candidates = candidatesByProduct.get(quota.productId) ?? { running: [], scheduled: [] };
+      candidates[state === "RUNNING" ? "running" : "scheduled"].push({ row, quota });
+      candidatesByProduct.set(quota.productId, candidates);
     }
   }
+  const winners = [...candidatesByProduct.values()].flatMap(({ running, scheduled }) => {
+    const sortedRunning = [...running].sort(compareAvailabilityCandidates);
+    const winner =
+      sortedRunning.find((candidate) => isEligibleForOneUnit(candidate, input.userId)) ??
+      sortedRunning[0] ??
+      [...scheduled].sort(compareAvailabilityCandidates)[0];
+    return winner ? [winner] : [];
+  });
   return {
     serverTime: input.now,
-    items: [...winners.values()]
+    items: winners
       .sort((a, b) => a.quota.productId - b.quota.productId)
       .map(({ row, quota }) =>
         toFlashSaleAvailabilityDto({

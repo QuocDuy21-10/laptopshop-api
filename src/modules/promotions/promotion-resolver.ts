@@ -1,34 +1,25 @@
-import {
-  automaticDiscountPerUnit,
-  selectAutomaticPromotion,
-} from "modules/promotions/promotion-pricing";
-import type { AutomaticPromotionInput } from "modules/promotions/promotions.types";
+import { automaticDiscountPerUnit } from "modules/promotions/promotion-pricing";
+import { selectProductPromotion } from "modules/promotions/promotion-selection";
+import type {
+  ProductPromotionResolution,
+  PromotionResolutionContext,
+  PromotionResolutionLine,
+  ResolvedAutomaticPromotion,
+  ResolvedPromotion,
+} from "modules/promotions/promotions.types";
 
 export type PrismaClientLike = {
-  promotion: {
-    findMany: (args: unknown) => Promise<unknown[]>;
-  };
+  promotion: { findMany: (args: unknown) => Promise<unknown[]> };
 };
 
-export type ResolvedAutomaticPromotion = AutomaticPromotionInput & {
-  startsAt: Date;
-  endsAt: Date;
-  unitDiscount: number;
-};
-
-export type ResolvedFlashSale = ResolvedAutomaticPromotion & {
-  kind: "FLASH_SALE";
-  totalQuota: number;
-  claimedUnits: number;
-  remainingQuota: number;
-  maxUnitsPerUser: number;
-  showRemainingQuota: boolean;
-  userClaimedUnits?: number;
-  userRemainingQuota?: number;
-};
-
-export type ResolvedPromotion =
-  (ResolvedAutomaticPromotion & { kind: "AUTOMATIC" }) | ResolvedFlashSale;
+export type {
+  ProductPromotionResolution,
+  PromotionResolutionContext,
+  PromotionResolutionLine,
+  ResolvedAutomaticPromotion,
+  ResolvedFlashSale,
+  ResolvedPromotion,
+} from "modules/promotions/promotions.types";
 
 type PromotionRow = {
   id: number;
@@ -55,12 +46,25 @@ type PromotionRow = {
   products: Array<{ productId: number; product?: { price: number } }>;
 };
 
-const promotionQuery = (productIds: number[], now: Date, userId?: number) => ({
+const normalizeLines = (lines: PromotionResolutionLine[]): PromotionResolutionLine[] => {
+  const quantities = new Map<number, number>();
+  for (const line of lines) {
+    quantities.set(line.productId, (quantities.get(line.productId) ?? 0) + line.quantity);
+  }
+  return [...quantities.entries()]
+    .map(([productId, quantity]) => ({ productId, quantity }))
+    .sort((a, b) => a.productId - b.productId);
+};
+
+const hasExactUserContext = (context: PromotionResolutionContext) =>
+  context.eligibilityMode === "EXACT" && context.userId !== undefined;
+
+const promotionQuery = (productIds: number[], context: PromotionResolutionContext) => ({
   where: {
     kind: { in: ["AUTOMATIC", "FLASH_SALE"] },
     state: "ACTIVE",
-    startsAt: { lte: now },
-    endsAt: { gt: now },
+    startsAt: { lte: context.now },
+    endsAt: { gt: context.now },
     OR: [
       { products: { some: { productId: { in: productIds } } } },
       { flashSalePolicy: { quotas: { some: { productId: { in: productIds } } } } },
@@ -78,7 +82,9 @@ const promotionQuery = (productIds: number[], now: Date, userId?: number) => ({
           where: { productId: { in: productIds } },
           include: {
             product: { select: { price: true } },
-            ...(userId === undefined ? {} : { usages: { where: { userId } } }),
+            ...(!hasExactUserContext(context)
+              ? {}
+              : { usages: { where: { userId: context.userId } } }),
           },
         },
       },
@@ -86,39 +92,17 @@ const promotionQuery = (productIds: number[], now: Date, userId?: number) => ({
   },
 });
 
-export const resolveProductPromotions = async (
-  client: PrismaClientLike,
-  productIds: number[],
-  now: Date,
-  userId?: number,
-): Promise<Map<number, ResolvedPromotion>> => {
-  const ids = [...new Set(productIds)].sort((a, b) => a - b);
-  if (ids.length === 0) return new Map();
-  const rows = ((await client.promotion.findMany(promotionQuery(ids, now, userId))) ??
-    []) as PromotionRow[];
-  const candidatesByProduct = new Map<
-    number,
-    Array<{
-      candidate: AutomaticPromotionInput;
-      listPrice: number;
-      resolved: ResolvedPromotion;
-    }>
-  >();
-
-  const addCandidate = (
-    productId: number,
-    candidate: AutomaticPromotionInput,
-    listPrice: number,
-    resolved: ResolvedPromotion,
-  ) => {
-    const list = candidatesByProduct.get(productId) ?? [];
-    list.push({ candidate, listPrice, resolved });
-    candidatesByProduct.set(productId, list);
+const candidatesFromRows = (rows: PromotionRow[], context: PromotionResolutionContext) => {
+  const candidatesByProduct = new Map<number, ResolvedPromotion[]>();
+  const add = (productId: number, candidate: ResolvedPromotion) => {
+    const candidates = candidatesByProduct.get(productId) ?? [];
+    candidates.push(candidate);
+    candidatesByProduct.set(productId, candidates);
   };
 
   for (const row of rows) {
     if (row.automaticPolicy) {
-      const candidate: AutomaticPromotionInput = {
+      const candidate = {
         id: row.id,
         name: row.name,
         discountKind: row.discountKind,
@@ -128,26 +112,23 @@ export const resolveProductPromotions = async (
         pricingVersion: row.pricingVersion,
       };
       for (const target of row.products) {
-        addCandidate(
-          target.productId,
-          candidate,
-          target.product?.price ?? Number.MAX_SAFE_INTEGER,
-          {
-            ...candidate,
-            kind: "AUTOMATIC",
-            startsAt: row.startsAt,
-            endsAt: row.endsAt,
-            unitDiscount: automaticDiscountPerUnit(
-              candidate,
-              target.product?.price ?? Number.MAX_SAFE_INTEGER,
-            ),
-          },
-        );
+        const listPrice = target.product?.price ?? Number.MAX_SAFE_INTEGER;
+        add(target.productId, {
+          ...candidate,
+          kind: "AUTOMATIC",
+          startsAt: row.startsAt,
+          endsAt: row.endsAt,
+          unitDiscount: automaticDiscountPerUnit(candidate, listPrice),
+        });
       }
     }
     if (row.flashSalePolicy) {
       for (const quota of row.flashSalePolicy.quotas) {
-        const candidate: AutomaticPromotionInput = {
+        const listPrice = quota.product?.price ?? Number.MAX_SAFE_INTEGER;
+        const userClaimedUnits = hasExactUserContext(context)
+          ? (quota.usages?.[0]?.claimedUnits ?? 0)
+          : undefined;
+        const candidate = {
           id: row.id,
           name: row.name,
           discountKind: row.discountKind,
@@ -156,10 +137,7 @@ export const resolveProductPromotions = async (
           stackableWithCoupon: row.flashSalePolicy.stackableWithCoupon,
           pricingVersion: row.pricingVersion,
         };
-        const listPrice = quota.product?.price ?? Number.MAX_SAFE_INTEGER;
-        const userClaimedUnits =
-          userId === undefined ? undefined : (quota.usages?.[0]?.claimedUnits ?? 0);
-        addCandidate(quota.productId, candidate, listPrice, {
+        add(quota.productId, {
           ...candidate,
           kind: "FLASH_SALE",
           startsAt: row.startsAt,
@@ -180,17 +158,26 @@ export const resolveProductPromotions = async (
       }
     }
   }
+  return candidatesByProduct;
+};
 
-  const result = new Map<number, ResolvedPromotion>();
-  for (const productId of ids) {
-    const candidates = candidatesByProduct.get(productId) ?? [];
-    const winner = selectAutomaticPromotion(
-      candidates.map(({ candidate }) => candidate),
-      candidates[0]?.listPrice ?? Number.MAX_SAFE_INTEGER,
+export const resolveProductPromotions = async (
+  client: PrismaClientLike,
+  lines: PromotionResolutionLine[],
+  context: PromotionResolutionContext,
+): Promise<Map<number, ProductPromotionResolution>> => {
+  const normalizedLines = normalizeLines(lines);
+  if (normalizedLines.length === 0) return new Map();
+  const productIds = normalizedLines.map((line) => line.productId);
+  const rows = ((await client.promotion.findMany(promotionQuery(productIds, context))) ??
+    []) as PromotionRow[];
+  const candidatesByProduct = candidatesFromRows(rows, context);
+  const result = new Map<number, ProductPromotionResolution>();
+  for (const line of normalizedLines) {
+    result.set(
+      line.productId,
+      selectProductPromotion(candidatesByProduct.get(line.productId) ?? [], line, context),
     );
-    if (!winner) continue;
-    const resolved = candidates.find(({ candidate }) => candidate.id === winner.id)?.resolved;
-    if (resolved) result.set(productId, resolved);
   }
   return result;
 };
@@ -218,46 +205,16 @@ export const resolveAutomaticPromotions = async (
       },
     },
   })) ?? []) as PromotionRow[];
-  const candidatesByProduct = new Map<
-    number,
-    Array<{ candidate: AutomaticPromotionInput; listPrice: number }>
-  >();
-  for (const row of rows) {
-    if (!row.automaticPolicy) continue;
-    const candidate: AutomaticPromotionInput = {
-      id: row.id,
-      name: row.name,
-      discountKind: row.discountKind,
-      discountValue: row.discountValue,
-      priority: row.automaticPolicy.priority,
-      stackableWithCoupon: row.automaticPolicy.stackableWithCoupon,
-      pricingVersion: row.pricingVersion,
-    };
-    for (const target of row.products) {
-      const list = candidatesByProduct.get(target.productId) ?? [];
-      list.push({ candidate, listPrice: target.product?.price ?? Number.MAX_SAFE_INTEGER });
-      candidatesByProduct.set(target.productId, list);
-    }
-  }
-
+  const context: PromotionResolutionContext = { now, eligibilityMode: "POTENTIAL" };
+  const candidatesByProduct = candidatesFromRows(rows, context);
   const result = new Map<number, ResolvedAutomaticPromotion>();
   for (const productId of ids) {
-    const candidates = candidatesByProduct.get(productId) ?? [];
-    const winner = selectAutomaticPromotion(
-      candidates.map(({ candidate }) => candidate),
-      candidates[0]?.listPrice ?? Number.MAX_SAFE_INTEGER,
-    );
-    if (!winner) continue;
-    const row = rows.find((candidate) => candidate.id === winner.id)!;
-    const listPrice =
-      candidates.find(({ candidate }) => candidate.id === winner.id)?.listPrice ??
-      Number.MAX_SAFE_INTEGER;
-    result.set(productId, {
-      ...winner,
-      startsAt: row.startsAt,
-      endsAt: row.endsAt,
-      unitDiscount: automaticDiscountPerUnit(winner, listPrice),
-    });
+    const winner = selectProductPromotion(
+      candidatesByProduct.get(productId) ?? [],
+      { productId, quantity: 1 },
+      context,
+    ).winner;
+    if (winner?.kind === "AUTOMATIC") result.set(productId, winner);
   }
   return result;
 };

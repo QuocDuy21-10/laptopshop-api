@@ -3,7 +3,10 @@ import {
   emptyProductReviewSummary,
   type ProductReviewSummary,
 } from "modules/products/products.review-stats.repository";
-import type { ResolvedAutomaticPromotion } from "modules/promotions/promotion-resolver";
+import type {
+  ProductPromotionResolution,
+  ResolvedAutomaticPromotion,
+} from "modules/promotions/promotion-resolver";
 
 export const productImage = (file: string | null) => (file ? `/images/product/${file}` : null);
 
@@ -13,13 +16,19 @@ export type ProductDto = ReturnType<typeof toProductDto>;
 
 export const toPricedProductDto = (
   product: Product,
-  promotion: ResolvedAutomaticPromotion | null,
+  resolution: ProductPromotionResolution | null,
 ) => ({
   ...toProductDto(product),
-  salePrice: promotion ? product.price - promotion.unitDiscount : product.price,
-  productDiscountAmount: promotion?.unitDiscount ?? 0,
-  promotion: promotion
-    ? { id: promotion.id, name: promotion.name, endsAt: promotion.endsAt }
+  salePrice: resolution?.winner ? product.price - resolution.winner.unitDiscount : product.price,
+  productDiscountAmount: resolution?.winner?.unitDiscount ?? 0,
+  promotion: resolution?.winner
+    ? {
+        id: resolution.winner.id,
+        name: resolution.winner.name,
+        endsAt: resolution.winner.endsAt,
+        kind: resolution.winner.kind,
+        eligibility: resolution.winner.kind === "AUTOMATIC" ? "EXACT" : resolution.eligibility,
+      }
     : null,
 });
 export type PricedProductDto = ReturnType<typeof toPricedProductDto>;
@@ -32,16 +41,22 @@ export const withProductPricingDto = (
   salePrice: promotion ? product.price - promotion.unitDiscount : product.price,
   productDiscountAmount: promotion?.unitDiscount ?? 0,
   promotion: promotion
-    ? { id: promotion.id, name: promotion.name, endsAt: promotion.endsAt }
+    ? {
+        id: promotion.id,
+        name: promotion.name,
+        endsAt: promotion.endsAt,
+        kind: "AUTOMATIC" as const,
+        eligibility: "EXACT" as const,
+      }
     : null,
 });
 
 export const toCatalogProductDto = (
   product: Product,
   summary?: ProductReviewSummary,
-  promotion: ResolvedAutomaticPromotion | null = null,
+  resolution: ProductPromotionResolution | null = null,
 ) => ({
-  ...toPricedProductDto(product, promotion),
+  ...toPricedProductDto(product, resolution),
   reviewSummary: summary ?? emptyProductReviewSummary,
 });
 

@@ -15,6 +15,7 @@ export type PromotionCandidateKind = "AUTOMATIC" | "FLASH_SALE";
 
 export type PromotionPricingCandidate = AutomaticPromotionInput & {
   kind?: PromotionCandidateKind;
+  unitDiscount?: number;
   totalQuota?: number;
   claimedUnits?: number;
   remainingQuota?: number;
@@ -22,6 +23,61 @@ export type PromotionPricingCandidate = AutomaticPromotionInput & {
   showRemainingQuota?: boolean;
   userClaimedUnits?: number;
   userRemainingQuota?: number;
+};
+
+export type ResolvedAutomaticPromotion = AutomaticPromotionInput & {
+  kind: "AUTOMATIC";
+  startsAt: Date;
+  endsAt: Date;
+  unitDiscount: number;
+};
+
+export type ResolvedFlashSale = AutomaticPromotionInput & {
+  kind: "FLASH_SALE";
+  startsAt: Date;
+  endsAt: Date;
+  unitDiscount: number;
+  totalQuota: number;
+  claimedUnits: number;
+  remainingQuota: number;
+  maxUnitsPerUser: number;
+  showRemainingQuota: boolean;
+  userClaimedUnits?: number;
+  userRemainingQuota?: number;
+};
+
+export type ResolvedPromotion =
+  (ResolvedAutomaticPromotion & { kind: "AUTOMATIC" }) | ResolvedFlashSale;
+
+export type PromotionEligibilityMode = "POTENTIAL" | "EXACT";
+export type PromotionFallbackReason = "GLOBAL_QUOTA" | "USER_QUOTA" | "GLOBAL_AND_USER_QUOTA";
+export type PromotionResolutionLine = { productId: number; quantity: number };
+export type PromotionResolutionContext = {
+  now: Date;
+  userId?: number;
+  eligibilityMode: PromotionEligibilityMode;
+};
+export type FlashSaleFallback = {
+  promotionId: number;
+  reason: PromotionFallbackReason;
+  requestedQuantity: number;
+  globalRemaining: number;
+  userRemaining?: number;
+  availableQuantity: number;
+  appliedPromotionKind: "AUTOMATIC" | null;
+};
+export type PublicPromotionFallback = {
+  skippedKind: "FLASH_SALE";
+  promotionId: number;
+  reason: PromotionFallbackReason;
+  requestedQuantity: number;
+  availableQuantity: number;
+  appliedPromotionKind: "AUTOMATIC" | null;
+};
+export type ProductPromotionResolution = {
+  winner: ResolvedPromotion | null;
+  eligibility: PromotionEligibilityMode;
+  fallback: FlashSaleFallback | null;
 };
 
 export type CouponInput = {
@@ -55,7 +111,8 @@ export type PricingLineInput = {
   productId: number;
   quantity: number;
   listPrice: number;
-  automaticCandidates?: PromotionPricingCandidate[];
+  promotion: ResolvedPromotion | null;
+  promotionFallback: FlashSaleFallback | null;
 };
 
 export type PromotionPricingInput = {
@@ -68,8 +125,9 @@ export type PromotionPricingLineResult = {
   quantity: number;
   listPrice: number;
   lineSubtotal: number;
-  automaticPromotion: PromotionPricingCandidate | null;
+  automaticPromotion: ResolvedPromotion | null;
   promotionKind: PromotionCandidateKind | null;
+  promotionFallback: PublicPromotionFallback | null;
   flashSale: {
     remainingQuota: number | null;
     maxUnitsPerUser: number;
@@ -98,19 +156,7 @@ export type PricingFingerprintLineInput = {
   productId: number;
   quantity: number;
   listPrice: number;
-  automaticPromotionId: number | null;
-  pricingVersion: number | null;
-  promotionId?: number | null;
-  promotionKind?: PromotionCandidateKind | null;
-  discountKind?: DiscountKind | null;
-  discountValue?: number | null;
-  priority?: number | null;
-  stackableWithCoupon?: boolean | null;
-  maxUnitsPerUser?: number | null;
-  totalQuota?: number | null;
-  claimedUnits?: number | null;
-  remainingQuota?: number | null;
-  showRemainingQuota?: boolean | null;
+  promotion: ResolvedPromotion | null;
 };
 
 export type PricingFingerprintInput = {

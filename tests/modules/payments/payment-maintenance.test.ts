@@ -10,7 +10,7 @@ jest.mock("modules/payments/payment-provider.factory", () => ({
 }));
 jest.mock("modules/orders/order-cancellation.service", () => ({ cancelOrder: jest.fn() }));
 
-import { prismaMock, resetPrisma } from "../../helpers/prisma";
+import { prismaError, prismaMock, resetPrisma } from "../../helpers/prisma";
 import { cancelOrder } from "modules/orders/order-cancellation.service";
 import { runPaymentMaintenance } from "modules/payments/payment-maintenance.service";
 
@@ -112,6 +112,23 @@ describe("runPaymentMaintenance", () => {
       prismaMock,
       expect.objectContaining({ paymentDisposition: "EXPIRE", orderId: 50 }),
     );
+  });
+
+  it("retries the complete expiry transaction after a deadlock", async () => {
+    prismaMock.payment.findMany.mockResolvedValue([{ ...payment, status: "VERIFYING" }]);
+    prismaMock.paymentProviderCheckpoint.findFirst.mockResolvedValue({
+      consecutiveSuccesses: 2,
+      previousVerifiedThroughAt: new Date("2026-10-24T09:55:00.000Z"),
+      verifiedThroughAt: new Date("2026-10-24T09:58:00.000Z"),
+    });
+    prismaMock.$transaction
+      .mockRejectedValueOnce(prismaError("P2034"))
+      .mockImplementationOnce(async (operation: (tx: unknown) => unknown) => operation(prismaMock));
+    (cancelOrder as jest.Mock).mockResolvedValue({});
+
+    await expect(runPaymentMaintenance(now)).resolves.toMatchObject({ expired: 1 });
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
+    expect(cancelOrder).toHaveBeenCalledTimes(1);
   });
 
   it("escalates inconclusive verification without touching stock", async () => {

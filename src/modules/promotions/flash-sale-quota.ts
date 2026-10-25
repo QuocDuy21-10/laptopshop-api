@@ -35,7 +35,7 @@ const validatePromotion = (
     now < promotion.startsAt ||
     now >= promotion.endsAt
   ) {
-    throw new AppError("Promotion is not active", 409, "PROMOTION_NOT_ACTIVE", {
+    throw new AppError("Promotion pricing changed", 409, "PROMOTION_CHANGED", {
       promotionId: claim.promotionId,
     });
   }
@@ -65,16 +65,17 @@ export const claimFlashSaleQuotas = async (
     tx,
     [...new Set(claims.map((claim) => claim.promotionId))].sort((a, b) => a - b),
   );
+  const lockedAt = new Date();
 
   for (const claim of claims) {
-    validatePromotion(promotions.get(claim.promotionId), claim, input.now);
+    validatePromotion(promotions.get(claim.promotionId), claim, lockedAt);
     const quota = await tx.flashSaleProductQuota.findUnique({
       where: {
         promotionId_productId: { promotionId: claim.promotionId, productId: claim.productId },
       },
     });
     if (!quota)
-      throw new AppError("Flash Sale quota not found", 409, "PROMOTION_NOT_ACTIVE", {
+      throw new AppError("Flash Sale configuration changed", 409, "PROMOTION_CHANGED", {
         promotionId: claim.promotionId,
         productId: claim.productId,
       });
@@ -198,7 +199,7 @@ export const releaseFlashSaleAllocations = async (
       data: { status: "RELEASED", releasedAt: input.now, releaseReason: input.reason.slice(0, 50) },
     });
     if (transitioned.count !== 1) continue;
-    await tx.flashSaleProductQuota.updateMany({
+    const globalResult = await tx.flashSaleProductQuota.updateMany({
       where: {
         promotionId: allocation.promotionId,
         productId: allocation.productId,
@@ -206,7 +207,15 @@ export const releaseFlashSaleAllocations = async (
       },
       data: { claimedUnits: { decrement: allocation.quantity } },
     });
-    await tx.flashSaleUserUsage.updateMany({
+    if (globalResult.count !== 1) {
+      throw new AppError("Flash Sale quota counter mismatch", 409, "FLASH_SALE_COUNTER_MISMATCH", {
+        promotionId: allocation.promotionId,
+        productId: allocation.productId,
+        userId: allocation.userId,
+        quantity: allocation.quantity,
+      });
+    }
+    const userResult = await tx.flashSaleUserUsage.updateMany({
       where: {
         promotionId: allocation.promotionId,
         productId: allocation.productId,
@@ -215,6 +224,14 @@ export const releaseFlashSaleAllocations = async (
       },
       data: { claimedUnits: { decrement: allocation.quantity } },
     });
+    if (userResult.count !== 1) {
+      throw new AppError("Flash Sale quota counter mismatch", 409, "FLASH_SALE_COUNTER_MISMATCH", {
+        promotionId: allocation.promotionId,
+        productId: allocation.productId,
+        userId: allocation.userId,
+        quantity: allocation.quantity,
+      });
+    }
     releasedUnits += allocation.quantity;
   }
   return releasedUnits;

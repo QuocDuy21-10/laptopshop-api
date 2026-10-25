@@ -1,7 +1,7 @@
 import { prisma } from "config/client";
 import { ingestPaymentTransaction } from "modules/payments/payment-ingestion.service";
 import { releasePaymentReviewCase } from "modules/payments/payment-review.service";
-import { createProduct, createUser, putInCart, receiver, resetDb } from "./fixtures";
+import { createProduct, createUser, putInCart, quotedReceiver, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
@@ -14,7 +14,7 @@ describe("payment review provider race", () => {
     const { order } = await (
       await import("modules/orders/orders.service")
     ).placeOrder(user.id, "review-race", {
-      ...receiver,
+      ...(await quotedReceiver(user.id)),
       paymentMethod: "BANK_TRANSFER",
     });
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });

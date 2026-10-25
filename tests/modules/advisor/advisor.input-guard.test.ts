@@ -107,6 +107,7 @@ describe("advisor input guard", () => {
                 priority: 1,
                 stackableWithCoupon: false,
                 pricingVersion: 1,
+                kind: "AUTOMATIC",
                 startsAt: new Date("2026-10-01T00:00:00.000Z"),
                 endsAt: new Date("2026-11-01T00:00:00.000Z"),
                 unitDiscount: 1_000,

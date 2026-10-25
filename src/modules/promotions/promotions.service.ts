@@ -288,7 +288,7 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
       ];
       await requestPricingReevaluation(tx, {
         productIds,
-        eventVersion: String(updated.pricingVersion),
+        eventVersion: `${id}-${updated.pricingVersion}`,
         availableAt: body.startsAt && body.startsAt > new Date() ? body.startsAt : undefined,
       });
     }
@@ -342,7 +342,7 @@ export const transitionPromotion = async (
     ];
     await requestPricingReevaluation(tx, {
       productIds,
-      eventVersion: String(promotion.pricingVersion),
+      eventVersion: `${id}-${promotion.pricingVersion}`,
       availableAt:
         ["ACTIVATE", "RESUME"].includes(action) && current.startsAt > now
           ? current.startsAt
@@ -438,21 +438,26 @@ export const getPromotionSummary = async (id: number) => {
       where: { promotionId: id },
       select: { productId: true, totalQuota: true, claimedUnits: true },
     });
-    const [allocationAggregate, releasedAggregate, completedAggregate] = await Promise.all([
-      prisma.flashSaleAllocation.aggregate({
-        where: { promotionId: id },
-        _sum: { quantity: true, discountAmount: true },
-        _count: { _all: true },
-      }),
-      prisma.flashSaleAllocation.aggregate({
-        where: { promotionId: id, status: "RELEASED" },
-        _sum: { quantity: true },
-      }),
-      prisma.flashSaleAllocation.aggregate({
-        where: { promotionId: id, status: "CLAIMED", order: { status: "COMPLETED" } },
-        _sum: { quantity: true },
-      }),
-    ]);
+    const [allocationAggregate, claimedDiscountAggregate, releasedAggregate, completedAggregate] =
+      await Promise.all([
+        prisma.flashSaleAllocation.aggregate({
+          where: { promotionId: id },
+          _sum: { quantity: true },
+          _count: { _all: true },
+        }),
+        prisma.flashSaleAllocation.aggregate({
+          where: { promotionId: id, status: "CLAIMED" },
+          _sum: { discountAmount: true },
+        }),
+        prisma.flashSaleAllocation.aggregate({
+          where: { promotionId: id, status: "RELEASED" },
+          _sum: { quantity: true },
+        }),
+        prisma.flashSaleAllocation.aggregate({
+          where: { promotionId: id, status: "CLAIMED", order: { status: "COMPLETED" } },
+          _sum: { quantity: true },
+        }),
+      ]);
     const totalQuota = quotas.reduce((sum, quota) => sum + quota.totalQuota, 0);
     const claimedUnits = quotas.reduce((sum, quota) => sum + quota.claimedUnits, 0);
     return {
@@ -464,7 +469,7 @@ export const getPromotionSummary = async (id: number) => {
       releasedUnits: releasedAggregate._sum.quantity ?? 0,
       completedUnits: completedAggregate._sum.quantity ?? 0,
       allocationCount: allocationAggregate._count._all,
-      totalDiscountAmount: allocationAggregate._sum.discountAmount ?? 0,
+      totalDiscountAmount: claimedDiscountAggregate._sum.discountAmount ?? 0,
       breakdown: quotas.map((quota) => ({
         productId: quota.productId,
         totalQuota: quota.totalQuota,
@@ -549,7 +554,8 @@ const quoteLineInput = (
   productId: line.productId,
   quantity: line.quantity,
   listPrice: line.product.price,
-  automaticCandidates: promotions.has(line.productId) ? [promotions.get(line.productId)!] : [],
+  promotion: promotions.get(line.productId)?.winner ?? null,
+  promotionFallback: promotions.get(line.productId)?.fallback ?? null,
 });
 
 export const quoteOrder = async (
@@ -565,33 +571,9 @@ export const quoteOrder = async (
   if (lines.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
   const promotions = await resolveProductPromotions(
     prisma,
-    lines.map((line) => line.productId),
-    now,
-    userId,
+    lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+    { now, userId, eligibilityMode: "EXACT" },
   );
-  for (const line of lines) {
-    const promotion = promotions.get(line.productId);
-    if (promotion?.kind !== "FLASH_SALE") continue;
-    if (promotion.remainingQuota < line.quantity) {
-      throw new AppError("Flash Sale quota exceeded", 409, "FLASH_SALE_QUOTA_EXCEEDED", {
-        promotionId: promotion.id,
-        productId: line.productId,
-        requestedQuantity: line.quantity,
-        remainingQuota: promotion.remainingQuota,
-      });
-    }
-    if (
-      promotion.userRemainingQuota !== undefined &&
-      promotion.userRemainingQuota < line.quantity
-    ) {
-      throw new AppError("Flash Sale user limit exceeded", 409, "FLASH_SALE_USER_LIMIT", {
-        promotionId: promotion.id,
-        productId: line.productId,
-        requestedQuantity: line.quantity,
-        userRemainingQuota: promotion.userRemainingQuota,
-      });
-    }
-  }
   const inputs = lines.map((line) => quoteLineInput(line, promotions));
   const coupon = couponCode ? await resolveCoupon(prisma, couponCode, userId, inputs, now) : null;
   const pricing = calculatePromotionPricing({ lines: inputs, coupon });
@@ -607,15 +589,7 @@ export const quoteOrder = async (
       productId: line.productId,
       quantity: line.quantity,
       listPrice: line.listPrice,
-      automaticPromotionId: line.automaticCandidates?.[0]?.id ?? null,
-      pricingVersion: line.automaticCandidates?.[0]?.pricingVersion ?? null,
-      promotionId: line.automaticCandidates?.[0]?.id ?? null,
-      promotionKind: line.automaticCandidates?.[0]?.kind ?? null,
-      discountKind: line.automaticCandidates?.[0]?.discountKind ?? null,
-      discountValue: line.automaticCandidates?.[0]?.discountValue ?? null,
-      priority: line.automaticCandidates?.[0]?.priority ?? null,
-      stackableWithCoupon: line.automaticCandidates?.[0]?.stackableWithCoupon ?? null,
-      maxUnitsPerUser: line.automaticCandidates?.[0]?.maxUnitsPerUser ?? null,
+      promotion: line.promotion,
     })),
     coupon: coupon
       ? {

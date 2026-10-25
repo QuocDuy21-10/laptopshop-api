@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import {
-  toPricedProductDto,
   toProductDto,
+  withProductPricingDto,
   type PricedProductDto,
 } from "modules/products/products.mapper";
 import type { PriceSnapshot } from "modules/pricing/alert-price-resolver";
@@ -28,10 +28,16 @@ export const toWishlistItemDto = (
         salePrice: snapshot.effectivePrice,
         productDiscountAmount: row.product.price - snapshot.effectivePrice,
         promotion: promotion
-          ? { id: promotion.id, name: promotion.name, endsAt: promotion.endsAt }
+          ? {
+              id: promotion.id,
+              name: promotion.name,
+              endsAt: promotion.endsAt,
+              kind: "AUTOMATIC" as const,
+              eligibility: "EXACT" as const,
+            }
           : null,
       }
-    : toPricedProductDto(row.product, promotion),
+    : withProductPricingDto(toProductDto(row.product), promotion),
   alertMode: row.alertMode,
   targetPrice: row.targetPrice,
   referencePrice: row.referencePrice,

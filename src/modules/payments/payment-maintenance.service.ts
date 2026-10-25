@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { env } from "config/env";
 import { prisma } from "config/client";
 import { AppError } from "lib/errors";
+import { withPrismaTransactionRetry } from "lib/prisma-retry";
 import { paymentProvider } from "modules/payments/payment-provider.factory";
 import { PAYMENT_STATUS } from "modules/payments/payment-status";
 import { cancelOrder } from "modules/orders/order-cancellation.service";
@@ -90,50 +91,54 @@ export const runPaymentMaintenance = async (now = new Date()) => {
     if (!enoughEvidence) continue;
 
     try {
-      await prisma.$transaction(async (tx) => {
-        const lockedRows = await tx.$queryRaw<
-          Array<{
-            consecutiveSuccesses: number;
-            previousVerifiedThroughAt: Date | null;
-            verifiedThroughAt: Date | null;
-          }>
-        >(Prisma.sql`
-          SELECT consecutiveSuccesses, previousVerifiedThroughAt, verifiedThroughAt
-          FROM payment_provider_checkpoints
-          WHERE provider = ${provider.authority.provider} AND mode = ${provider.authority.mode}
-          FOR UPDATE
-        `);
-        const lockedCheckpoint =
-          lockedRows?.[0] ??
-          (await tx.paymentProviderCheckpoint.findFirst({
-            where: { provider: provider.authority.provider, mode: provider.authority.mode },
-            select: {
-              consecutiveSuccesses: true,
-              previousVerifiedThroughAt: true,
-              verifiedThroughAt: true,
-            },
-          }));
-        const lockedEvidence =
-          lockedCheckpoint?.consecutiveSuccesses !== undefined &&
-          lockedCheckpoint.consecutiveSuccesses >= 2 &&
-          lockedCheckpoint.previousVerifiedThroughAt !== null &&
-          lockedCheckpoint.verifiedThroughAt !== null &&
-          lockedCheckpoint.previousVerifiedThroughAt >= boundary &&
-          lockedCheckpoint.verifiedThroughAt >= boundary;
-        if (!lockedEvidence)
-          throw new AppError(
-            "Payment reconciliation evidence changed",
-            409,
-            "PAYMENT_EVIDENCE_CHANGED",
-          );
-        await cancelOrder(tx, {
-          orderId: payment.orderId,
-          from: [ORDER_STATUS.PENDING],
-          paymentDisposition: "EXPIRE",
-          reason: "PAYMENT_EXPIRED",
-          now,
-        });
-      });
+      await withPrismaTransactionRetry(
+        () =>
+          prisma.$transaction(async (tx) => {
+            const lockedRows = await tx.$queryRaw<
+              Array<{
+                consecutiveSuccesses: number;
+                previousVerifiedThroughAt: Date | null;
+                verifiedThroughAt: Date | null;
+              }>
+            >(Prisma.sql`
+              SELECT consecutiveSuccesses, previousVerifiedThroughAt, verifiedThroughAt
+              FROM payment_provider_checkpoints
+              WHERE provider = ${provider.authority.provider} AND mode = ${provider.authority.mode}
+              FOR UPDATE
+            `);
+            const lockedCheckpoint =
+              lockedRows?.[0] ??
+              (await tx.paymentProviderCheckpoint.findFirst({
+                where: { provider: provider.authority.provider, mode: provider.authority.mode },
+                select: {
+                  consecutiveSuccesses: true,
+                  previousVerifiedThroughAt: true,
+                  verifiedThroughAt: true,
+                },
+              }));
+            const lockedEvidence =
+              lockedCheckpoint?.consecutiveSuccesses !== undefined &&
+              lockedCheckpoint.consecutiveSuccesses >= 2 &&
+              lockedCheckpoint.previousVerifiedThroughAt !== null &&
+              lockedCheckpoint.verifiedThroughAt !== null &&
+              lockedCheckpoint.previousVerifiedThroughAt >= boundary &&
+              lockedCheckpoint.verifiedThroughAt >= boundary;
+            if (!lockedEvidence)
+              throw new AppError(
+                "Payment reconciliation evidence changed",
+                409,
+                "PAYMENT_EVIDENCE_CHANGED",
+              );
+            await cancelOrder(tx, {
+              orderId: payment.orderId,
+              from: [ORDER_STATUS.PENDING],
+              paymentDisposition: "EXPIRE",
+              reason: "PAYMENT_EXPIRED",
+              now,
+            });
+          }),
+        3,
+      );
       expired += 1;
     } catch (error) {
       if (

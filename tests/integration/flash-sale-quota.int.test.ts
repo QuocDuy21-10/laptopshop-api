@@ -3,7 +3,9 @@ import {
   claimFlashSaleQuotas,
   recordFlashSaleAllocations,
 } from "modules/promotions/flash-sale-quota";
-import { createProduct, createUser, resetDb } from "./fixtures";
+import { changeStatus, placeOrder } from "modules/orders/orders.service";
+import { quoteOrder } from "modules/promotions/promotions.service";
+import { createProduct, createUser, putInCart, receiver, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
@@ -85,5 +87,102 @@ describe("Flash Sale quota concurrency", () => {
         where: { promotionId_productId: { promotionId: promotion.id, productId: product.id } },
       }),
     ).resolves.toMatchObject({ claimedUnits: 2 });
+  });
+
+  it("rolls back order, stock and coupon release when a Flash Sale counter is corrupt", async () => {
+    const product = await createProduct(5, 1_000);
+    const user = await createUser();
+    const window = {
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 10 * 60_000),
+    };
+    const flash = await prisma.promotion.create({
+      data: {
+        kind: "FLASH_SALE",
+        state: "ACTIVE",
+        name: "Flash rollback",
+        discountKind: "PERCENT",
+        discountValue: 20,
+        ...window,
+        createdById: user.id,
+        updatedById: user.id,
+        flashSalePolicy: { create: { priority: 10, stackableWithCoupon: true } },
+        flashSaleQuotas: { create: { productId: product.id, totalQuota: 5, maxUnitsPerUser: 5 } },
+      },
+    });
+    const coupon = await prisma.promotion.create({
+      data: {
+        kind: "COUPON",
+        state: "ACTIVE",
+        name: "Coupon rollback",
+        discountKind: "PERCENT",
+        discountValue: 10,
+        ...window,
+        createdById: user.id,
+        updatedById: user.id,
+        couponPolicy: {
+          create: { code: "ROLLBACK10", scope: "ORDER", maxUses: 5, maxUsesPerUser: 5 },
+        },
+      },
+    });
+    await putInCart(user.id, product.id, 2);
+    const quote = await quoteOrder(user.id, "ROLLBACK10");
+    const { order } = await placeOrder(user.id, "flash-release-rollback", {
+      ...receiver,
+      couponCode: "ROLLBACK10",
+      pricingFingerprint: quote.pricingFingerprint,
+    });
+    await prisma.flashSaleUserUsage.update({
+      where: {
+        promotionId_productId_userId: {
+          promotionId: flash.id,
+          productId: product.id,
+          userId: user.id,
+        },
+      },
+      data: { claimedUnits: 0 },
+    });
+
+    await expect(changeStatus(order.id, "CANCELLED", { actorId: user.id })).rejects.toMatchObject({
+      code: "FLASH_SALE_COUNTER_MISMATCH",
+      details: { promotionId: flash.id, productId: product.id, userId: user.id, quantity: 2 },
+    });
+
+    await expect(
+      prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+    ).resolves.toMatchObject({ status: "PENDING" });
+    await expect(
+      prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+    ).resolves.toMatchObject({ quantity: 3, sold: 2 });
+    await expect(
+      prisma.couponPolicy.findUniqueOrThrow({ where: { promotionId: coupon.id } }),
+    ).resolves.toMatchObject({ usedCount: 1 });
+    await expect(
+      prisma.promotionUserUsage.findUniqueOrThrow({
+        where: { promotionId_userId: { promotionId: coupon.id, userId: user.id } },
+      }),
+    ).resolves.toMatchObject({ usedCount: 1 });
+    await expect(
+      prisma.promotionRedemption.findUniqueOrThrow({ where: { orderId: order.id } }),
+    ).resolves.toMatchObject({ status: "APPLIED" });
+    await expect(
+      prisma.flashSaleProductQuota.findUniqueOrThrow({
+        where: { promotionId_productId: { promotionId: flash.id, productId: product.id } },
+      }),
+    ).resolves.toMatchObject({ claimedUnits: 2 });
+    await expect(
+      prisma.flashSaleUserUsage.findUniqueOrThrow({
+        where: {
+          promotionId_productId_userId: {
+            promotionId: flash.id,
+            productId: product.id,
+            userId: user.id,
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ claimedUnits: 0 });
+    await expect(
+      prisma.flashSaleAllocation.findFirstOrThrow({ where: { orderId: order.id } }),
+    ).resolves.toMatchObject({ status: "CLAIMED" });
   });
 });
