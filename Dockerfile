@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 FROM node:22-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache openssl

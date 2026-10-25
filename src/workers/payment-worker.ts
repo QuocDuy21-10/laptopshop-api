@@ -2,11 +2,15 @@ import { prisma } from "config/client";
 import { logger } from "lib/logger";
 import { startPaymentWorker } from "modules/payments/reconciliation.service";
 
-startPaymentWorker();
+const stop = startPaymentWorker();
 logger.info("Payment worker is running");
+
+const heartbeat = setInterval(() => {}, 60_000);
 
 const shutdown = async (signal: string) => {
   logger.info({ signal }, "payment worker shutting down");
+  clearInterval(heartbeat);
+  stop();
   await prisma.$disconnect();
   process.exit(0);
 };

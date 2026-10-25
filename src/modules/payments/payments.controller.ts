@@ -14,8 +14,10 @@ import { ingestPaymentTransaction } from "modules/payments/payment-ingestion.ser
 import { paymentProvider } from "modules/payments/payment-provider.factory";
 import {
   paymentProviderParam,
+  PaymentEventIdParams,
   PaymentEventQuery,
   resolvePaymentEventBody,
+  PaymentReviewCaseIdParams,
   PaymentReviewCaseQuery,
   extendPaymentReviewCaseBody,
   releasePaymentReviewCaseBody,
@@ -68,12 +70,12 @@ export const listPaymentEventsHandler: RequestHandler = async (_req, res) => {
 };
 
 export const getPaymentEventHandler: RequestHandler = async (_req, res) => {
-  const { id } = res.locals.params as { id: string };
+  const { id } = res.locals.params as PaymentEventIdParams;
   res.json({ data: await getPaymentEvent(id) });
 };
 
 export const resolvePaymentEventHandler: RequestHandler = async (req, res) => {
-  const { id } = res.locals.params as { id: string };
+  const { id } = res.locals.params as PaymentEventIdParams;
   const body = resolvePaymentEventBody.parse(req.body);
   res.json({ data: await resolvePaymentEvent(id, req.auth!.id, body.note) });
 };
@@ -84,12 +86,12 @@ export const listPaymentReviewCasesHandler: RequestHandler = async (_req, res) =
 };
 
 export const getPaymentReviewCaseHandler: RequestHandler = async (_req, res) => {
-  const { id } = res.locals.params as { id: string };
+  const { id } = res.locals.params as PaymentReviewCaseIdParams;
   res.json({ data: await getPaymentReviewCase(id) });
 };
 
 export const extendPaymentReviewCaseHandler: RequestHandler = async (req, res) => {
-  const { id } = res.locals.params as { id: string };
+  const { id } = res.locals.params as PaymentReviewCaseIdParams;
   const body = extendPaymentReviewCaseBody.parse(req.body) as {
     note: string;
     holdUntil: string;
@@ -99,7 +101,7 @@ export const extendPaymentReviewCaseHandler: RequestHandler = async (req, res) =
 };
 
 export const releasePaymentReviewCaseHandler: RequestHandler = async (req, res) => {
-  const { id } = res.locals.params as { id: string };
+  const { id } = res.locals.params as PaymentReviewCaseIdParams;
   const body = releasePaymentReviewCaseBody.parse(req.body) as {
     note: string;
     confirmation: "RELEASE_STOCK";
