@@ -2,5 +2,5 @@ dist
 public
 coverage
 prisma/migrations
-package-lock.json
+pnpm-lock.yaml
 src/views

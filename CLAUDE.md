@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- `npm install`, then `npx prisma generate` and `npx prisma migrate dev` (MySQL). Copy `.env.example` to `.env`; `DATABASE_URL` and `JWT_SECRET` are required, and a Redis instance must be reachable at `REDIS_URL` (`docker compose up -d mysql redis`). `npm run seed` seeds roles, admins and products into empty tables.
-- `npm run dev`: nodemon running `ts-node -r tsconfig-paths/register src/server.ts`; `npm run start:debug` adds `--inspect=9229`
-- `npm run build` (tsc + tsc-alias), `npm start` runs `dist/server.js`
-- `npm run lint`, `npm run typecheck`, `npm run format`
-- `npm test` (Jest + Supertest, Prisma mocked via `tests/helpers/prisma.ts`, no DB or Redis); single test: `npx jest tests/path/file.test.ts -t "name"`
-- `npm run test:int`: real-MySQL tests in `tests/integration` (checkout/cancel concurrency). Start the throwaway DB with `docker compose --profile test up -d mysql-test` or set `TEST_DATABASE_URL` (the database name must end in `_test`).
+- `pnpm install`, then `pnpm exec prisma generate` and `pnpm exec prisma migrate dev` (MySQL). Copy `.env.example` to `.env`; `DATABASE_URL` and `JWT_SECRET` are required, and a Redis instance must be reachable at `REDIS_URL` (`docker compose up -d mysql redis`). `pnpm run seed` seeds roles, admins and products into empty tables.
+- `pnpm run dev`: nodemon running `ts-node -r tsconfig-paths/register src/server.ts`; `pnpm run start:debug` adds `--inspect=9229`
+- `pnpm run build` (tsc + tsc-alias), `pnpm start` runs `dist/server.js`
+- `pnpm run lint`, `pnpm run typecheck`, `pnpm run format`
+- `pnpm test` (Jest + Supertest, Prisma mocked via `tests/helpers/prisma.ts`, no DB or Redis); single test: `pnpm exec jest tests/path/file.test.ts -t "name"`
+- `pnpm run test:int`: real-MySQL tests in `tests/integration` (checkout/cancel concurrency). Start the throwaway DB with `docker compose --profile test up -d mysql-test` or set `TEST_DATABASE_URL` (the database name must end in `_test`).
 
 ## Architecture
 

@@ -6,7 +6,7 @@ Before starting any task, read and follow these rule files:
 
 - `.codex/rules/git-workflow.md`
 
-Before finishing any change, run and pass: `npm run lint && npm run typecheck && npm test` (no DB or Redis needed; Prisma is mocked). Changes to checkout, cancel or stock logic must also pass `npm run test:int` (real MySQL, see CLAUDE.md).
+Before finishing any change, run and pass: `pnpm run lint && pnpm run typecheck && pnpm test` (no DB or Redis needed; Prisma is mocked). Changes to checkout, cancel or stock logic must also pass `pnpm run test:int` (real MySQL, see CLAUDE.md).
 
 Rules that are easy to miss:
 

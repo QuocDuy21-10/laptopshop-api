@@ -2,26 +2,28 @@
 FROM node:22-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache openssl
-COPY package.json package-lock.json ./
+RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY prisma ./prisma
-RUN npm ci --ignore-scripts && npx prisma generate
+RUN pnpm install --frozen-lockfile --ignore-scripts && pnpm exec prisma generate
 
 FROM deps AS build
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
-RUN npm run build
+RUN pnpm run build
 
 FROM node:22-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN apk add --no-cache openssl \
   && apk add --no-cache --virtual .native-build-deps python3 make g++
-COPY package.json package-lock.json ./
+RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY prisma ./prisma
-RUN npm ci --omit=dev --ignore-scripts \
-  && npm rebuild bcrypt sharp \
-  && npx prisma generate \
-  && npm cache clean --force \
+RUN pnpm install --frozen-lockfile --prod --ignore-scripts \
+  && pnpm rebuild bcrypt sharp \
+  && pnpm exec prisma generate \
+  && pnpm store prune \
   && apk del .native-build-deps
 COPY --from=build /app/dist ./dist
 COPY public ./public

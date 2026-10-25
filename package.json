@@ -1,6 +1,7 @@
 {
   "name": "laptopshop-api",
   "version": "1.0.0",
+  "packageManager": "pnpm@11.24.0",
   "description": "laptopshop-api",
   "main": "dist/server.js",
   "scripts": {

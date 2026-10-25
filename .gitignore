@@ -26,12 +26,11 @@ build/
 coverage/
 *.tsbuildinfo
 .eslintcache
-.npm/
 
 # --- Logs & runtime ---
 *.log
 logs/
-npm-debug.log*
+pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pids/
