@@ -3,11 +3,13 @@ import { prisma } from "config/client";
 import { env } from "config/env";
 import { AppError, notFound } from "lib/errors";
 import { pageArgs, pageMeta, PageQuery } from "lib/http";
+import { withPrismaTransactionRetry } from "lib/prisma-retry";
 import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
 import { assertDayRange, createdAtRange, formatShopDateTime } from "lib/shop-time";
 import { productUnavailable } from "modules/cart/cart.service";
 import { moveStock } from "modules/inventory/inventory.service";
 import { warrantySnapshotForCompletion } from "modules/orders/order-warranty";
+import { lockProductRows } from "modules/orders/order-locks";
 import {
   adminOrderDetailInclude,
   adminOrderInclude,
@@ -50,6 +52,19 @@ const findByKey = (userId: number, idempotencyKey: string) =>
     include: orderInclude,
   });
 
+const assertReplayMatches = (
+  existing: NonNullable<Awaited<ReturnType<typeof findByKey>>>,
+  requestHash: string,
+) => {
+  if (existing.requestHash && existing.requestHash !== requestHash) {
+    throw new AppError(
+      "Idempotency key was reused with a different request",
+      409,
+      "IDEMPOTENCY_KEY_REUSED",
+    );
+  }
+};
+
 export const placeOrder = async (userId: number, key: string, receiver: PlaceOrderBody) => {
   const paymentMethod = receiver.paymentMethod ?? "COD";
   const requestHash = createCheckoutRequestHash({
@@ -62,214 +77,233 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
   });
   const existing = await findByKey(userId, key);
   if (existing) {
-    if (existing.requestHash && existing.requestHash !== requestHash) {
-      throw new AppError(
-        "Idempotency key was reused with a different request",
-        409,
-        "IDEMPOTENCY_KEY_REUSED",
-      );
-    }
+    assertReplayMatches(existing, requestHash);
     return { order: toOrderDto(existing), created: false };
   }
   if (paymentMethod === "BANK_TRANSFER" && !env.BANK_TRANSFER_ENABLED) {
     throw new AppError("Bank transfer is unavailable", 409, "PAYMENT_METHOD_UNAVAILABLE");
   }
   try {
-    const order = await prisma.$transaction(async (tx) => {
-      const now = new Date();
-      // productId order gives every checkout the same lock order, so concurrent checkouts cannot deadlock
-      const lines = await tx.cartDetail.findMany({
-        where: { cart: { userId } },
-        include: {
-          product: { select: { price: true, isActive: true, warrantyMonths: true } },
-        },
-        orderBy: { productId: "asc" },
-      });
-      if (lines.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
-      for (const line of lines) {
-        if (!line.product.isActive) throw productUnavailable(line.productId);
-      }
-      const promotions = await resolveProductPromotions(
-        tx,
-        lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
-        { now, userId, eligibilityMode: "EXACT" },
-      );
-      const pricingLines: PricingLineInput[] = lines.map((line) => ({
-        productId: line.productId,
-        quantity: line.quantity,
-        listPrice: line.product.price,
-        promotion: promotions.get(line.productId)?.winner ?? null,
-        promotionFallback: promotions.get(line.productId)?.fallback ?? null,
-      }));
-      const coupon = receiver.couponCode
-        ? await resolveCoupon(tx, receiver.couponCode, userId, pricingLines, now)
-        : null;
-      const pricing = calculatePromotionPricing({ lines: pricingLines, coupon });
-      const minimumBase =
-        coupon?.scope === "PRODUCT"
-          ? pricing.couponEligibleSubtotal
-          : pricing.subtotalPrice - pricing.productDiscountAmount;
-      if (coupon && minimumBase < coupon.minOrderValue) {
-        throw new AppError("Minimum order value is not met", 409, "MIN_ORDER_NOT_MET");
-      }
-      const fingerprint = createPricingFingerprint({
-        lines: pricingLines.map((line) => ({
-          productId: line.productId,
-          quantity: line.quantity,
-          listPrice: line.listPrice,
-          promotion: line.promotion,
-        })),
-        coupon: coupon
-          ? {
-              id: coupon.id,
-              pricingVersion: coupon.pricingVersion,
-              scope: coupon.scope,
-              targetProductIds: coupon.targetProductIds,
-            }
-          : null,
-        totals: pricing,
-      });
-      if ((coupon || promotions.size > 0) && fingerprint !== receiver.pricingFingerprint) {
-        throw new AppError("Promotion pricing changed", 409, "PROMOTION_CHANGED");
-      }
-      const flashClaims = pricingLines.flatMap((line) => {
-        const promotion = line.promotion;
-        return promotion?.kind === "FLASH_SALE"
-          ? [
-              {
-                promotionId: promotion.id,
-                productId: line.productId,
-                quantity: line.quantity,
-                pricingVersion: promotion.pricingVersion,
-              },
-            ]
-          : [];
-      });
-      if (flashClaims.length > 0)
-        await claimFlashSaleQuotas(tx, { userId, now, claims: flashClaims });
-      if (coupon) await claimCouponUsage(tx, { promotionId: coupon.id, userId, now });
-      // stock is taken before the order rows exist: order_detail's foreign key share-locks the product,
-      // and upgrading that to the update lock in two concurrent checkouts would deadlock
-      const movements = [];
-      for (const line of lines) {
-        movements.push(
-          await moveStock(tx, {
+    const result = await withPrismaTransactionRetry(
+      () =>
+        prisma.$transaction(async (tx) => {
+          const replay = await tx.order.findUnique({
+            where: { userId_idempotencyKey: { userId, idempotencyKey: key } },
+            include: orderInclude,
+          });
+          if (replay) {
+            assertReplayMatches(replay, requestHash);
+            return { row: replay, created: false };
+          }
+
+          const cartProductIds = await tx.cartDetail.findMany({
+            where: { cart: { userId } },
+            select: { productId: true },
+            orderBy: { productId: "asc" },
+          });
+          if (cartProductIds.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
+          await lockProductRows(
+            tx,
+            cartProductIds.map((line) => line.productId),
+          );
+
+          const now = new Date();
+          const lines = await tx.cartDetail.findMany({
+            where: { cart: { userId } },
+            include: {
+              product: { select: { price: true, isActive: true, warrantyMonths: true } },
+            },
+            orderBy: { productId: "asc" },
+          });
+          if (lines.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
+          for (const line of lines) {
+            if (!line.product.isActive) throw productUnavailable(line.productId);
+          }
+          const promotions = await resolveProductPromotions(
+            tx,
+            lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+            { now, userId, eligibilityMode: "EXACT" },
+          );
+          const pricingLines: PricingLineInput[] = lines.map((line) => ({
             productId: line.productId,
-            delta: -line.quantity,
-            reason: "ORDER",
-            actorId: userId,
-            onlyActive: true,
-          }),
-        );
-      }
-      const totalPrice = pricing.totalPrice;
-      const pricedByProduct = new Map(pricing.lines.map((line) => [line.productId, line]));
-      const payment =
-        paymentMethod === "BANK_TRANSFER" && totalPrice > 0
-          ? (() => {
-              const expiresAt = new Date(Date.now() + env.PAYMENT_TTL_MINUTES * 60_000);
-              return {
-                provider: env.PAYMENT_PROVIDER,
-                providerMode: env.PAYMENT_PROVIDER === "fake" ? "test" : env.SEPAY_MODE,
-                method: "BANK_TRANSFER",
-                status: "PENDING",
-                amount: totalPrice,
-                currency: "VND",
-                transferCode: createTransferCode(),
-                bankCode: env.SEPAY_BANK_CODE!,
-                accountNumber: env.SEPAY_ACCOUNT_NUMBER!,
-                accountName: env.SEPAY_ACCOUNT_NAME!,
-                expiresAt,
-                cancelAfter: new Date(expiresAt.getTime() + env.PAYMENT_GRACE_SECONDS * 1000),
-                reviewAfter: new Date(
-                  expiresAt.getTime() + env.PAYMENT_MAX_AUTO_HOLD_MINUTES * 60_000,
-                ),
-              };
-            })()
-          : undefined;
-      const orderData: Prisma.OrderUncheckedCreateInput = {
-        userId,
-        idempotencyKey: key,
-        totalPrice,
-        subtotalPrice: pricing.subtotalPrice,
-        productDiscountAmount: pricing.productDiscountAmount,
-        couponEligibleSubtotal: pricing.couponEligibleSubtotal,
-        couponDiscountAmount: pricing.couponDiscountAmount,
-        couponPromotionId: coupon?.id,
-        couponCode: coupon?.code,
-        couponName: coupon?.name,
-        requestHash,
-        receiverName: receiver.receiverName,
-        receiverAddress: receiver.receiverAddress,
-        receiverPhone: receiver.receiverPhone,
-        status: ORDER_STATUS.PENDING,
-        paymentMethod: totalPrice === 0 ? "FREE" : paymentMethod,
-        paymentStatus: totalPrice === 0 ? PAYMENT_STATUS.SUCCESS : PAYMENT_STATUS.UNPAID,
-        ...(payment ? { payment: { create: payment } } : {}),
-        orderDetails: {
-          create: lines.map((l) => ({
-            productId: l.productId,
-            quantity: l.quantity,
-            price: l.product.price,
-            productDiscountAmount: pricedByProduct.get(l.productId)!.productDiscountAmount,
-            couponDiscountAmount: pricedByProduct.get(l.productId)!.couponDiscountAmount,
-            automaticPromotionId: pricedByProduct.get(l.productId)!.automaticPromotion?.id,
-            automaticPromotionName: pricedByProduct.get(l.productId)!.automaticPromotion?.name,
-            warrantyMonthsSnapshot: l.product.warrantyMonths,
-            warrantyPolicySource: "CHECKOUT_SNAPSHOT",
-          })),
-        },
-      };
-      const created = await tx.order.create({
-        data: orderData,
-        include: orderInclude,
-      });
-      if (coupon) {
-        await recordCouponRedemption(tx, {
-          promotionId: coupon.id,
-          userId,
-          orderId: created.id,
-          discountAmount: pricing.couponDiscountAmount,
-        });
-      }
-      if (flashClaims.length > 0) {
-        await recordFlashSaleAllocations(tx, {
-          userId,
-          orderId: created.id,
-          lines: created.orderDetails.flatMap((detail) => {
-            const priced = pricedByProduct.get(detail.productId)!;
-            return priced.promotionKind === "FLASH_SALE" && priced.automaticPromotion
+            quantity: line.quantity,
+            listPrice: line.product.price,
+            promotion: promotions.get(line.productId)?.winner ?? null,
+            promotionFallback: promotions.get(line.productId)?.fallback ?? null,
+          }));
+          const coupon = receiver.couponCode
+            ? await resolveCoupon(tx, receiver.couponCode, userId, pricingLines, now)
+            : null;
+          const pricing = calculatePromotionPricing({ lines: pricingLines, coupon });
+          const minimumBase =
+            coupon?.scope === "PRODUCT"
+              ? pricing.couponEligibleSubtotal
+              : pricing.subtotalPrice - pricing.productDiscountAmount;
+          if (coupon && minimumBase < coupon.minOrderValue) {
+            throw new AppError("Minimum order value is not met", 409, "MIN_ORDER_NOT_MET");
+          }
+          const fingerprint = createPricingFingerprint({
+            lines: pricingLines.map((line) => ({
+              productId: line.productId,
+              quantity: line.quantity,
+              listPrice: line.listPrice,
+              promotion: line.promotion,
+            })),
+            coupon: coupon
+              ? {
+                  id: coupon.id,
+                  pricingVersion: coupon.pricingVersion,
+                  scope: coupon.scope,
+                  targetProductIds: coupon.targetProductIds,
+                }
+              : null,
+            totals: pricing,
+          });
+          if ((coupon || promotions.size > 0) && fingerprint !== receiver.pricingFingerprint) {
+            throw new AppError("Promotion pricing changed", 409, "PROMOTION_CHANGED");
+          }
+          const flashClaims = pricingLines.flatMap((line) => {
+            const promotion = line.promotion;
+            return promotion?.kind === "FLASH_SALE"
               ? [
                   {
-                    orderDetailId: detail.id,
-                    promotionId: priced.automaticPromotion.id,
-                    productId: detail.productId,
-                    quantity: detail.quantity,
-                    discountAmount: priced.productDiscountAmount,
+                    promotionId: promotion.id,
+                    productId: line.productId,
+                    quantity: line.quantity,
+                    pricingVersion: promotion.pricingVersion,
                   },
                 ]
               : [];
-          }),
-        });
-      }
-      await tx.orderStatusHistory.create({
-        data: {
-          orderId: created.id,
-          fromStatus: null,
-          toStatus: ORDER_STATUS.PENDING,
-          actorId: userId,
-        },
-      });
-      // link the ledger rows to the order now that it exists
-      await tx.stockMovement.updateMany({
-        where: { id: { in: movements.map((m) => m.id) } },
-        data: { orderId: created.id },
-      });
-      await tx.cartDetail.deleteMany({ where: { cart: { userId } } });
-      await tx.cart.deleteMany({ where: { userId } });
-      return created;
-    });
-    return { order: toOrderDto(order), created: true };
+          });
+          if (coupon) await claimCouponUsage(tx, { promotionId: coupon.id, userId, now });
+          if (flashClaims.length > 0)
+            await claimFlashSaleQuotas(tx, { userId, now, claims: flashClaims });
+          const movements = [];
+          for (const line of lines) {
+            movements.push(
+              await moveStock(tx, {
+                productId: line.productId,
+                delta: -line.quantity,
+                reason: "ORDER",
+                actorId: userId,
+                onlyActive: true,
+              }),
+            );
+          }
+          const totalPrice = pricing.totalPrice;
+          const pricedByProduct = new Map(pricing.lines.map((line) => [line.productId, line]));
+          const payment =
+            paymentMethod === "BANK_TRANSFER" && totalPrice > 0
+              ? (() => {
+                  const expiresAt = new Date(Date.now() + env.PAYMENT_TTL_MINUTES * 60_000);
+                  return {
+                    provider: env.PAYMENT_PROVIDER,
+                    providerMode: env.PAYMENT_PROVIDER === "fake" ? "test" : env.SEPAY_MODE,
+                    method: "BANK_TRANSFER",
+                    status: "PENDING",
+                    amount: totalPrice,
+                    currency: "VND",
+                    transferCode: createTransferCode(),
+                    bankCode: env.SEPAY_BANK_CODE!,
+                    accountNumber: env.SEPAY_ACCOUNT_NUMBER!,
+                    accountName: env.SEPAY_ACCOUNT_NAME!,
+                    expiresAt,
+                    cancelAfter: new Date(expiresAt.getTime() + env.PAYMENT_GRACE_SECONDS * 1000),
+                    reviewAfter: new Date(
+                      expiresAt.getTime() + env.PAYMENT_MAX_AUTO_HOLD_MINUTES * 60_000,
+                    ),
+                  };
+                })()
+              : undefined;
+          const orderData: Prisma.OrderUncheckedCreateInput = {
+            userId,
+            idempotencyKey: key,
+            totalPrice,
+            subtotalPrice: pricing.subtotalPrice,
+            productDiscountAmount: pricing.productDiscountAmount,
+            couponEligibleSubtotal: pricing.couponEligibleSubtotal,
+            couponDiscountAmount: pricing.couponDiscountAmount,
+            couponPromotionId: coupon?.id,
+            couponCode: coupon?.code,
+            couponName: coupon?.name,
+            requestHash,
+            receiverName: receiver.receiverName,
+            receiverAddress: receiver.receiverAddress,
+            receiverPhone: receiver.receiverPhone,
+            status: ORDER_STATUS.PENDING,
+            paymentMethod: totalPrice === 0 ? "FREE" : paymentMethod,
+            paymentStatus: totalPrice === 0 ? PAYMENT_STATUS.SUCCESS : PAYMENT_STATUS.UNPAID,
+            ...(payment ? { payment: { create: payment } } : {}),
+            orderDetails: {
+              create: lines.map((l) => ({
+                productId: l.productId,
+                quantity: l.quantity,
+                price: l.product.price,
+                productDiscountAmount: pricedByProduct.get(l.productId)!.productDiscountAmount,
+                couponDiscountAmount: pricedByProduct.get(l.productId)!.couponDiscountAmount,
+                automaticPromotionId: pricedByProduct.get(l.productId)!.automaticPromotion?.id,
+                automaticPromotionName: pricedByProduct.get(l.productId)!.automaticPromotion?.name,
+                warrantyMonthsSnapshot: l.product.warrantyMonths,
+                warrantyPolicySource: "CHECKOUT_SNAPSHOT",
+              })),
+            },
+          };
+          const created = await tx.order.create({
+            data: orderData,
+            include: orderInclude,
+          });
+          if (coupon) {
+            await recordCouponRedemption(tx, {
+              promotionId: coupon.id,
+              userId,
+              orderId: created.id,
+              discountAmount: pricing.couponDiscountAmount,
+            });
+          }
+          if (flashClaims.length > 0) {
+            await recordFlashSaleAllocations(tx, {
+              userId,
+              orderId: created.id,
+              lines: created.orderDetails.flatMap((detail) => {
+                const priced = pricedByProduct.get(detail.productId)!;
+                return priced.promotionKind === "FLASH_SALE" && priced.automaticPromotion
+                  ? [
+                      {
+                        orderDetailId: detail.id,
+                        promotionId: priced.automaticPromotion.id,
+                        productId: detail.productId,
+                        quantity: detail.quantity,
+                        discountAmount: priced.productDiscountAmount,
+                      },
+                    ]
+                  : [];
+              }),
+            });
+          }
+          await tx.orderStatusHistory.create({
+            data: {
+              orderId: created.id,
+              fromStatus: null,
+              toStatus: ORDER_STATUS.PENDING,
+              actorId: userId,
+            },
+          });
+          // link the ledger rows to the order now that it exists
+          await tx.stockMovement.updateMany({
+            where: { id: { in: movements.map((m) => m.id) } },
+            data: { orderId: created.id },
+          });
+          const persisted = await tx.order.findUniqueOrThrow({
+            where: { id: created.id },
+            include: orderInclude,
+          });
+          await tx.cartDetail.deleteMany({ where: { cart: { userId } } });
+          await tx.cart.deleteMany({ where: { userId } });
+          return { row: persisted, created: true };
+        }),
+      3,
+    );
+    return { order: toOrderDto(result.row), created: result.created };
   } catch (e) {
     if (e instanceof AppError && e.code === "IDEMPOTENCY_KEY_REUSED") throw e;
     // a concurrent request with the same key may have won (P2002, OUT_OF_STOCK or CART_EMPTY here)

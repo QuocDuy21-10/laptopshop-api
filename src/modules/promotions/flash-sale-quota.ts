@@ -35,7 +35,7 @@ const validatePromotion = (
     now < promotion.startsAt ||
     now >= promotion.endsAt
   ) {
-    throw new AppError("Promotion is not active", 409, "PROMOTION_NOT_ACTIVE", {
+    throw new AppError("Promotion pricing changed", 409, "PROMOTION_CHANGED", {
       promotionId: claim.promotionId,
     });
   }
@@ -74,7 +74,7 @@ export const claimFlashSaleQuotas = async (
       },
     });
     if (!quota)
-      throw new AppError("Flash Sale quota not found", 409, "PROMOTION_NOT_ACTIVE", {
+      throw new AppError("Flash Sale configuration changed", 409, "PROMOTION_CHANGED", {
         promotionId: claim.promotionId,
         productId: claim.productId,
       });

@@ -42,6 +42,54 @@ const txMock = () => ({
 });
 
 describe("flash sale quota service", () => {
+  it.each([
+    [
+      "state",
+      {
+        id: 1,
+        state: "PAUSED",
+        startsAt: new Date("2026-10-01"),
+        endsAt: new Date("2026-11-01"),
+        pricingVersion: 1,
+      },
+    ],
+    [
+      "time window",
+      {
+        id: 1,
+        state: "ACTIVE",
+        startsAt: new Date("2026-10-23"),
+        endsAt: new Date("2026-11-01"),
+        pricingVersion: 1,
+      },
+    ],
+    [
+      "pricing version",
+      {
+        id: 1,
+        state: "ACTIVE",
+        startsAt: new Date("2026-10-01"),
+        endsAt: new Date("2026-11-01"),
+        pricingVersion: 2,
+      },
+    ],
+  ])("normalizes a locked promotion %s change to PROMOTION_CHANGED", async (_field, row) => {
+    const tx = txMock();
+    tx.$queryRaw.mockResolvedValueOnce([row]);
+
+    await expect(
+      claimFlashSaleQuotas(tx as never, {
+        userId: 7,
+        now,
+        claims: [{ promotionId: 1, productId: 3, quantity: 1, pricingVersion: 1 }],
+      }),
+    ).rejects.toMatchObject({
+      code: "PROMOTION_CHANGED",
+      details: { promotionId: 1 },
+    });
+    expect(tx.flashSaleProductQuota.findUnique).not.toHaveBeenCalled();
+  });
+
   it("locks promotions, quotas and user usages in deterministic tuple order", async () => {
     const tx = txMock();
     await claimFlashSaleQuotas(tx as never, {

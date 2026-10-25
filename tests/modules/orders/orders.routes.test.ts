@@ -35,6 +35,64 @@ const receiver = {
     },
   }),
 };
+const flashWinner = {
+  id: 10,
+  name: "Flash",
+  kind: "FLASH_SALE" as const,
+  discountKind: "PERCENT" as const,
+  discountValue: 20,
+  priority: 10,
+  stackableWithCoupon: true,
+  pricingVersion: 1,
+  startsAt: new Date("2026-10-01T00:00:00.000Z"),
+  endsAt: new Date("2026-11-01T00:00:00.000Z"),
+  unitDiscount: 200,
+  totalQuota: 10,
+  claimedUnits: 0,
+  remainingQuota: 10,
+  maxUnitsPerUser: 5,
+  showRemainingQuota: true,
+  userClaimedUnits: 0,
+  userRemainingQuota: 5,
+};
+const flashPromotionRow = {
+  id: flashWinner.id,
+  name: flashWinner.name,
+  discountKind: flashWinner.discountKind,
+  discountValue: flashWinner.discountValue,
+  pricingVersion: flashWinner.pricingVersion,
+  startsAt: flashWinner.startsAt,
+  endsAt: flashWinner.endsAt,
+  automaticPolicy: null,
+  products: [],
+  flashSalePolicy: {
+    priority: flashWinner.priority,
+    stackableWithCoupon: flashWinner.stackableWithCoupon,
+    showRemainingQuota: flashWinner.showRemainingQuota,
+    quotas: [
+      {
+        productId: 1,
+        totalQuota: flashWinner.totalQuota,
+        claimedUnits: flashWinner.claimedUnits,
+        maxUnitsPerUser: flashWinner.maxUnitsPerUser,
+        product: { price: 1_000 },
+        usages: [{ userId: USER.id, claimedUnits: 0 }],
+      },
+    ],
+  },
+};
+const flashFingerprint = (quantity = 1, coupon = false) =>
+  createPricingFingerprint({
+    lines: [{ productId: 1, quantity, listPrice: 1_000, promotion: flashWinner }],
+    coupon: coupon ? { id: 20, pricingVersion: 1, scope: "ORDER", targetProductIds: [] } : null,
+    totals: {
+      subtotalPrice: 1_000 * quantity,
+      productDiscountAmount: 200 * quantity,
+      couponEligibleSubtotal: coupon ? 800 * quantity : 0,
+      couponDiscountAmount: coupon ? 80 * quantity : 0,
+      totalPrice: (coupon ? 720 : 800) * quantity,
+    },
+  });
 const orderRow = (over: Record<string, unknown> = {}) => ({
   id: 50,
   userId: USER.id,
@@ -85,6 +143,7 @@ beforeEach(() => {
   prismaMock.stockMovement.create.mockResolvedValue({ id: 900 });
   prismaMock.product.update.mockResolvedValue({ quantity: 2 });
   prismaMock.product.findUniqueOrThrow.mockResolvedValue({ quantity: 0 });
+  prismaMock.order.findUniqueOrThrow.mockResolvedValue(orderRow());
 });
 
 describe("POST /api/v1/orders", () => {
@@ -186,6 +245,281 @@ describe("POST /api/v1/orders", () => {
       where: { id: { in: [900, 900] } },
       data: { orderId: 50 },
     });
+  });
+
+  it("locks sorted product ids and reloads authoritative product values before pricing", async () => {
+    const reloadedLines = [
+      { productId: 1, quantity: 2, product: { price: 60, isActive: true, warrantyMonths: 24 } },
+      { productId: 2, quantity: 1, product: { price: 100, isActive: true } },
+    ];
+    const repricedFingerprint = createPricingFingerprint({
+      lines: [
+        { productId: 1, quantity: 2, listPrice: 60, promotion: null },
+        { productId: 2, quantity: 1, listPrice: 100, promotion: null },
+      ],
+      coupon: null,
+      totals: {
+        subtotalPrice: 220,
+        productDiscountAmount: 0,
+        couponEligibleSubtotal: 0,
+        couponDiscountAmount: 0,
+        totalPrice: 220,
+      },
+    });
+    const reloadedOrder = orderRow({
+      totalPrice: 220,
+      subtotalPrice: 220,
+      orderDetails: [
+        {
+          id: 1,
+          orderId: 50,
+          productId: 1,
+          price: 60,
+          quantity: 2,
+          productDiscountAmount: 0,
+          couponDiscountAmount: 0,
+          warrantyMonthsSnapshot: 24,
+          warrantyStartAt: null,
+          warrantyEndAt: null,
+          warrantyPolicySource: "CHECKOUT_SNAPSHOT",
+          product: { name: "A", image: null },
+          flashSaleAllocation: null,
+        },
+        {
+          id: 2,
+          orderId: 50,
+          productId: 2,
+          price: 100,
+          quantity: 1,
+          productDiscountAmount: 0,
+          couponDiscountAmount: 0,
+          product: { name: "B", image: null },
+          flashSaleAllocation: null,
+        },
+      ],
+    });
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.cartDetail.findMany
+      .mockResolvedValueOnce([{ productId: 2 }, { productId: 1 }])
+      .mockResolvedValueOnce(reloadedLines);
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.order.create.mockResolvedValue(reloadedOrder);
+    prismaMock.order.findUniqueOrThrow.mockResolvedValue(reloadedOrder);
+
+    const res = await post().send({ ...receiver, pricingFingerprint: repricedFingerprint });
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.cartDetail.findMany).toHaveBeenCalledTimes(2);
+    expect(prismaMock.cartDetail.findMany.mock.calls[0][0]).toMatchObject({
+      where: { cart: { userId: USER.id } },
+      select: { productId: true },
+      orderBy: { productId: "asc" },
+    });
+    expect(prismaMock.cartDetail.findMany.mock.calls[1][0]).toMatchObject({
+      include: {
+        product: { select: { price: true, isActive: true, warrantyMonths: true } },
+      },
+    });
+    const [lockStatement] = prismaMock.$queryRaw.mock.calls[0];
+    expect(lockStatement.values).toEqual([1, 2]);
+    expect(prismaMock.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.promotion.findMany.mock.invocationCallOrder[0],
+    );
+    expect(prismaMock.promotion.findMany.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.product.updateMany.mock.invocationCallOrder[0],
+    );
+    expect(prismaMock.order.create.mock.calls[0][0].data.orderDetails.create[0]).toMatchObject({
+      productId: 1,
+      price: 60,
+    });
+  });
+
+  it("rejects a changed resolved winner before quota, stock or order writes", async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.cartDetail.findMany.mockResolvedValue([
+      {
+        productId: 1,
+        quantity: 1,
+        product: { price: 1_000, isActive: true, warrantyMonths: 24 },
+      },
+    ]);
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.promotion.findMany.mockResolvedValue([flashPromotionRow]);
+
+    const res = await post().send({
+      ...receiver,
+      pricingFingerprint: createPricingFingerprint({
+        lines: [{ productId: 1, quantity: 1, listPrice: 1_000, promotion: null }],
+        coupon: null,
+        totals: {
+          subtotalPrice: 1_000,
+          productDiscountAmount: 0,
+          couponEligibleSubtotal: 0,
+          couponDiscountAmount: 0,
+          totalPrice: 1_000,
+        },
+      }),
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("PROMOTION_CHANGED");
+    expect(prismaMock.flashSaleProductQuota.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.product.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.order.create).not.toHaveBeenCalled();
+  });
+
+  it("claims coupon before locked Flash Sale quota and returns the persisted allocation", async () => {
+    const flashLine = {
+      productId: 1,
+      quantity: 1,
+      product: { price: 1_000, isActive: true, warrantyMonths: 24 },
+    };
+    const staleCreated = orderRow({
+      totalPrice: 720,
+      subtotalPrice: 1_000,
+      productDiscountAmount: 200,
+      couponEligibleSubtotal: 800,
+      couponDiscountAmount: 80,
+      couponCode: "SAVE10",
+      orderDetails: [
+        {
+          id: 11,
+          orderId: 50,
+          productId: 1,
+          price: 1_000,
+          quantity: 1,
+          productDiscountAmount: 200,
+          couponDiscountAmount: 80,
+          automaticPromotionId: 10,
+          automaticPromotionName: "Flash",
+          warrantyMonthsSnapshot: 24,
+          warrantyStartAt: null,
+          warrantyEndAt: null,
+          warrantyPolicySource: "CHECKOUT_SNAPSHOT",
+          product: { name: "A", image: null },
+          flashSaleAllocation: null,
+        },
+      ],
+    });
+    const persisted = orderRow({
+      ...staleCreated,
+      orderDetails: [
+        {
+          ...staleCreated.orderDetails[0],
+          flashSaleAllocation: {
+            promotionId: 10,
+            quantity: 1,
+            discountAmount: 200,
+            status: "CLAIMED",
+          },
+        },
+      ],
+    });
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.cartDetail.findMany.mockResolvedValue([flashLine]);
+    prismaMock.promotion.findMany.mockResolvedValue([flashPromotionRow]);
+    prismaMock.promotion.findFirst.mockResolvedValue({
+      id: 20,
+      state: "ACTIVE",
+      name: "Save 10",
+      discountKind: "PERCENT",
+      discountValue: 10,
+      pricingVersion: 1,
+      startsAt: flashWinner.startsAt,
+      endsAt: flashWinner.endsAt,
+      couponPolicy: {
+        code: "SAVE10",
+        scope: "ORDER",
+        minOrderValue: 0,
+        maxDiscount: null,
+      },
+      products: [],
+    });
+    prismaMock.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([
+      {
+        id: 10,
+        state: "ACTIVE",
+        startsAt: flashWinner.startsAt,
+        endsAt: flashWinner.endsAt,
+        pricingVersion: 1,
+      },
+    ]);
+    prismaMock.couponPolicy.findUnique.mockResolvedValue({
+      promotionId: 20,
+      maxUses: 10,
+      usedCount: 0,
+      maxUsesPerUser: 2,
+    });
+    prismaMock.couponPolicy.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.promotionUserUsage.findUnique.mockResolvedValue(null);
+    prismaMock.promotionUserUsage.create.mockResolvedValue({ usedCount: 1 });
+    prismaMock.flashSaleProductQuota.findUnique.mockResolvedValue({
+      totalQuota: 10,
+      claimedUnits: 0,
+      maxUnitsPerUser: 5,
+    });
+    prismaMock.flashSaleProductQuota.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.flashSaleUserUsage.upsert.mockResolvedValue({ claimedUnits: 0 });
+    prismaMock.flashSaleUserUsage.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.order.create.mockResolvedValue(staleCreated);
+    prismaMock.order.findUniqueOrThrow.mockResolvedValue(persisted);
+
+    const res = await post().send({
+      ...receiver,
+      couponCode: "SAVE10",
+      pricingFingerprint: flashFingerprint(1, true),
+    });
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.$queryRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.couponPolicy.findUnique.mock.invocationCallOrder[0],
+    );
+    expect(prismaMock.couponPolicy.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.$queryRaw.mock.invocationCallOrder[1],
+    );
+    expect(prismaMock.$queryRaw.mock.invocationCallOrder[1]).toBeLessThan(
+      prismaMock.flashSaleProductQuota.findUnique.mock.invocationCallOrder[0],
+    );
+    expect(prismaMock.flashSaleProductQuota.updateMany.mock.invocationCallOrder[0]).toBeLessThan(
+      prismaMock.product.updateMany.mock.invocationCallOrder[0],
+    );
+    expect(prismaMock.order.findUniqueOrThrow).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 50 } }),
+    );
+    expect(res.body.data.items[0]).toMatchObject({
+      promotionKind: "FLASH_SALE",
+      flashSaleAllocation: {
+        promotionId: 10,
+        quantity: 1,
+        discountAmount: 200,
+        status: "CLAIMED",
+      },
+    });
+
+    prismaMock.order.findFirst.mockResolvedValue(persisted);
+    const getRes = await request(buildApp())
+      .get("/api/v1/orders/me/50")
+      .set("Cookie", cookieFor(USER));
+    expect(getRes.status).toBe(200);
+    expect(getRes.body.data.items[0]).toEqual(res.body.data.items[0]);
+  });
+
+  it("retries only the transaction operation after a deadlock", async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.cartDetail.findMany.mockResolvedValue(lines);
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.order.create.mockResolvedValue(orderRow());
+    prismaMock.$transaction
+      .mockRejectedValueOnce(prismaError("P2034"))
+      .mockImplementationOnce(async (operation: (tx: unknown) => unknown) => operation(prismaMock));
+
+    const res = await post().send(receiver);
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
   });
 
   it("returns 409 PRODUCT_UNAVAILABLE and creates nothing when a line is hidden", async () => {
