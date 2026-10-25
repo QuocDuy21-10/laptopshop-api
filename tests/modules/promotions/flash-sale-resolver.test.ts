@@ -122,6 +122,44 @@ describe("Flash Sale promotion resolver", () => {
     });
   });
 
+  it("allows a first-time authenticated user to win a Flash Sale when no usage row exists", async () => {
+    const findMany = jest.fn().mockResolvedValue([
+      row({
+        flashSalePolicy: {
+          priority: 3,
+          stackableWithCoupon: true,
+          showRemainingQuota: true,
+          quotas: [
+            {
+              productId: 1,
+              totalQuota: 10,
+              claimedUnits: 3,
+              maxUnitsPerUser: 2,
+              product: { price: 1_000 },
+              usages: [],
+            },
+          ],
+        },
+      }),
+    ]);
+
+    const result = await resolveProductPromotions(
+      { promotion: { findMany } },
+      [{ productId: 1, quantity: 1 }],
+      { now, userId: 7, eligibilityMode: "EXACT" },
+    );
+
+    expect(result.get(1)).toMatchObject({
+      winner: {
+        id: 20,
+        kind: "FLASH_SALE",
+        userClaimedUnits: 0,
+        userRemainingQuota: 2,
+      },
+      fallback: null,
+    });
+  });
+
   it("selects a globally available Flash Sale as POTENTIAL without loading user usage", async () => {
     const findMany = jest.fn().mockResolvedValue([
       row({

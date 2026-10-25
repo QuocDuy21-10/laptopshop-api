@@ -56,6 +56,9 @@ const normalizeLines = (lines: PromotionResolutionLine[]): PromotionResolutionLi
     .sort((a, b) => a.productId - b.productId);
 };
 
+const hasExactUserContext = (context: PromotionResolutionContext) =>
+  context.eligibilityMode === "EXACT" && context.userId !== undefined;
+
 const promotionQuery = (productIds: number[], context: PromotionResolutionContext) => ({
   where: {
     kind: { in: ["AUTOMATIC", "FLASH_SALE"] },
@@ -79,7 +82,7 @@ const promotionQuery = (productIds: number[], context: PromotionResolutionContex
           where: { productId: { in: productIds } },
           include: {
             product: { select: { price: true } },
-            ...(context.userId === undefined
+            ...(!hasExactUserContext(context)
               ? {}
               : { usages: { where: { userId: context.userId } } }),
           },
@@ -89,7 +92,7 @@ const promotionQuery = (productIds: number[], context: PromotionResolutionContex
   },
 });
 
-const candidatesFromRows = (rows: PromotionRow[]) => {
+const candidatesFromRows = (rows: PromotionRow[], context: PromotionResolutionContext) => {
   const candidatesByProduct = new Map<number, ResolvedPromotion[]>();
   const add = (productId: number, candidate: ResolvedPromotion) => {
     const candidates = candidatesByProduct.get(productId) ?? [];
@@ -122,7 +125,9 @@ const candidatesFromRows = (rows: PromotionRow[]) => {
     if (row.flashSalePolicy) {
       for (const quota of row.flashSalePolicy.quotas) {
         const listPrice = quota.product?.price ?? Number.MAX_SAFE_INTEGER;
-        const userClaimedUnits = quota.usages?.[0]?.claimedUnits;
+        const userClaimedUnits = hasExactUserContext(context)
+          ? (quota.usages?.[0]?.claimedUnits ?? 0)
+          : undefined;
         const candidate = {
           id: row.id,
           name: row.name,
@@ -166,7 +171,7 @@ export const resolveProductPromotions = async (
   const productIds = normalizedLines.map((line) => line.productId);
   const rows = ((await client.promotion.findMany(promotionQuery(productIds, context))) ??
     []) as PromotionRow[];
-  const candidatesByProduct = candidatesFromRows(rows);
+  const candidatesByProduct = candidatesFromRows(rows, context);
   const result = new Map<number, ProductPromotionResolution>();
   for (const line of normalizedLines) {
     result.set(
@@ -200,8 +205,8 @@ export const resolveAutomaticPromotions = async (
       },
     },
   })) ?? []) as PromotionRow[];
-  const candidatesByProduct = candidatesFromRows(rows);
   const context: PromotionResolutionContext = { now, eligibilityMode: "POTENTIAL" };
+  const candidatesByProduct = candidatesFromRows(rows, context);
   const result = new Map<number, ResolvedAutomaticPromotion>();
   for (const productId of ids) {
     const winner = selectProductPromotion(
