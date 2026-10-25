@@ -29,6 +29,9 @@ describe("parseEnv", () => {
     expect(e.ADVISOR_GUEST_DAILY_LIMIT).toBe(5);
     expect(e.ADVISOR_USER_DAILY_LIMIT).toBe(10);
     expect(e.ADVISOR_GLOBAL_DAILY_LIMIT).toBe(30);
+    expect(e.ADVISOR_CANDIDATE_BATCH_SIZE).toBe(200);
+    expect(e.ADVISOR_AI_CONCURRENCY_LIMIT).toBe(2);
+    expect(e.ADVISOR_AI_CONCURRENCY_LEASE_MS).toBe(15_000);
     expect(e.REVIEW_IMAGES_ENABLED).toBe(false);
     expect(e.REVIEW_IMAGE_S3_ENDPOINT).toBeUndefined();
     expect(e.REVIEW_IMAGE_S3_REGION).toBeUndefined();
@@ -275,8 +278,22 @@ describe("parseEnv", () => {
     ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "99"],
     ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "2001"],
     ["ADVISOR_GLOBAL_DAILY_LIMIT", "0"],
+    ["ADVISOR_AI_CONCURRENCY_LIMIT", "0"],
+    ["ADVISOR_AI_CONCURRENCY_LIMIT", "21"],
+    ["ADVISOR_AI_CONCURRENCY_LEASE_MS", "999"],
+    ["ADVISOR_AI_CONCURRENCY_LEASE_MS", "60001"],
   ])("rejects invalid advisor configuration %s=%s", (key, value) => {
     expect(() => parseEnv({ ...base, [key]: value })).toThrow();
+  });
+
+  it("requires an admission lease to outlive the provider timeout", () => {
+    expect(() =>
+      parseEnv({
+        ...base,
+        ADVISOR_AI_TIMEOUT_MS: "11000",
+        ADVISOR_AI_CONCURRENCY_LEASE_MS: "12000",
+      }),
+    ).toThrow(/ADVISOR_AI_CONCURRENCY_LEASE_MS/);
   });
 
   it.each([

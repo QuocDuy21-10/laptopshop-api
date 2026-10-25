@@ -1,12 +1,16 @@
-import { prisma } from "config/client";
 import { buildRuleBasedResult } from "modules/advisor/advisor.explanation";
+import { inspectAdvisorProviderInput } from "modules/advisor/advisor.input-guard";
+import type { AdvisorAdmission } from "modules/advisor/advisor.admission";
+import { priceAdvisorCandidates } from "modules/advisor/advisor.pricing";
 import type { AdvisorRepository } from "modules/advisor/advisor.repository";
-import { rankCandidates } from "modules/advisor/advisor.ranking";
+import { rankCandidates, selectTopAdvisorCandidates } from "modules/advisor/advisor.ranking";
 import type {
+  AdvisorCandidate,
   AdvisorInput,
   AdvisorMode,
   AdvisorRecommendation,
   AdvisorResult,
+  PricedAdvisorCandidate,
   RankedAdvisorCandidate,
 } from "modules/advisor/advisor.schema";
 import {
@@ -14,43 +18,24 @@ import {
   type AdvisorProvider,
   type ProviderExplanation,
 } from "modules/advisor/providers/advisor-provider";
-import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
-import { withProductPricingDto } from "modules/products/products.mapper";
 
 export type AdvisorRequester = { kind: "guest" | "user"; key: string };
-
-export interface AdvisorQuota {
-  tryReserve(requester: AdvisorRequester): Promise<boolean>;
-}
 
 export type AdvisorServiceDeps = {
   repository: AdvisorRepository;
   provider?: AdvisorProvider;
-  quota?: AdvisorQuota;
+  admission?: AdvisorAdmission;
   logger?: {
     warn: (object: unknown, message?: string) => void;
     info?: (object: unknown, message?: string) => void;
   };
   model?: string;
-  priceProducts?: (result: AdvisorResult, now: Date) => Promise<AdvisorResult>;
-};
-
-export const decorateAdvisorProducts = async (result: AdvisorResult, now: Date) => {
-  const promotions = await resolveAutomaticPromotions(
-    prisma,
-    result.recommendations.map(({ product }) => product.id),
-    now,
-  );
-  return {
-    ...result,
-    recommendations: result.recommendations.map((recommendation) => ({
-      ...recommendation,
-      product: withProductPricingDto(
-        recommendation.product,
-        promotions.get(recommendation.product.id) ?? null,
-      ),
-    })),
-  };
+  candidateBatchSize?: number;
+  clock?: () => Date;
+  priceCandidates?: (
+    candidates: AdvisorCandidate[],
+    now: Date,
+  ) => Promise<PricedAdvisorCandidate[]>;
 };
 
 export type AdvisorService = {
@@ -81,16 +66,42 @@ const withProviderExplanation = (
   return { mode: "ai_enhanced" as AdvisorMode, recommendations, suggestions: [] };
 };
 
+const identityPriceCandidates = async (
+  candidates: AdvisorCandidate[],
+): Promise<PricedAdvisorCandidate[]> =>
+  candidates.map((product) => ({
+    product,
+    effectivePrice: product.price,
+    automaticPromotion: null,
+  }));
+
 export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService => ({
   async recommend(input, requester) {
     const startedAt = Date.now();
-    const candidates = await deps.repository.findCandidates(input);
-    const ranked = rankCandidates(candidates, input);
+    const requestNow = (deps.clock ?? (() => new Date()))();
+    const batchSize = deps.candidateBatchSize ?? 200;
+    const priceCandidates = deps.priceCandidates ?? identityPriceCandidates;
+    let afterId = 0;
+    let ranked: RankedAdvisorCandidate[] = [];
+
+    while (true) {
+      const candidates = await deps.repository.findCandidateBatch(input, {
+        afterId,
+        limit: batchSize,
+      });
+      if (candidates.length === 0) break;
+      const priced = await priceCandidates(candidates, requestNow);
+      const eligible = priced.filter((candidate) => candidate.effectivePrice <= input.budgetMax);
+      ranked = selectTopAdvisorCandidates(ranked, rankCandidates(eligible, input));
+      const nextAfterId = candidates[candidates.length - 1].id;
+      if (nextAfterId <= afterId || candidates.length < batchSize) break;
+      afterId = nextAfterId;
+    }
+
     const finish = async (result: AdvisorResult, usage?: ProviderExplanation["usage"]) => {
-      const priced = deps.priceProducts ? await deps.priceProducts(result, new Date()) : result;
       deps.logger?.info?.(
         {
-          mode: priced.mode,
+          mode: result.mode,
           model: deps.model,
           latencyMs: Date.now() - startedAt,
           candidateCount: ranked.length,
@@ -98,17 +109,25 @@ export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService =
         },
         "advisor completed",
       );
-      return priced;
+      return result;
     };
     const fallback = () => finish(buildRuleBasedResult(ranked, input));
-    if (!deps.provider || !deps.quota || ranked.length === 0) return fallback();
+    if (!deps.provider || !deps.admission || ranked.length === 0) return fallback();
+    const guard = inspectAdvisorProviderInput({ preferences: input, candidates: ranked });
+    if (!guard.safe) {
+      deps.logger?.warn({ category: "input_guard" }, "advisor input guard fallback");
+      return fallback();
+    }
+    let lease: { release: () => Promise<boolean> } | undefined;
     try {
-      if (!(await deps.quota.tryReserve(requester))) {
-        deps.logger?.warn({ category: "quota" }, "advisor quota fallback");
+      const admission = await deps.admission.acquire(requester);
+      if (admission.status !== "acquired") {
+        deps.logger?.warn({ category: admission.status }, "advisor admission fallback");
         return fallback();
       }
+      lease = admission.lease;
     } catch {
-      deps.logger?.warn({ category: "redis_error" }, "advisor quota fallback");
+      deps.logger?.warn({ category: "redis_error" }, "advisor admission fallback");
       return fallback();
     }
     try {
@@ -119,6 +138,21 @@ export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService =
       const category = error instanceof AdvisorProviderError ? error.category : "provider_5xx";
       deps.logger?.warn({ category }, "advisor provider fallback");
       return fallback();
+    } finally {
+      try {
+        if (lease && !(await lease.release()))
+          deps.logger?.warn(
+            { category: "admission_release_error" },
+            "advisor admission release failed",
+          );
+      } catch {
+        deps.logger?.warn(
+          { category: "admission_release_error" },
+          "advisor admission release failed",
+        );
+      }
     }
   },
 });
+
+export { priceAdvisorCandidates };

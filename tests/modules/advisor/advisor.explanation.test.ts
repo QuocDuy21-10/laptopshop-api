@@ -38,6 +38,8 @@ const ranked = (over: Partial<RankedAdvisorCandidate> = {}): RankedAdvisorCandid
   },
   matchScore: 80,
   rawScore: 0.8,
+  effectivePrice: 18_000_000,
+  automaticPromotion: null,
   features: {
     cpu: 0.75,
     gpu: 0.75,

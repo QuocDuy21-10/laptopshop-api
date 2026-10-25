@@ -191,6 +191,12 @@ describe("openapi document", () => {
     expect(advisor.responses[401]).toBeDefined();
     expect(advisor.responses[429]).toBeDefined();
     expect(doc.components?.schemas).toHaveProperty("AdvisorResult");
+    const advisorRecommendation = doc.components?.schemas?.AdvisorRecommendation as any;
+    const pricedProduct = doc.components?.schemas?.PricedProduct as any;
+    expect(advisorRecommendation.properties.product.$ref).toContain("PricedProduct");
+    expect(pricedProduct.required).toEqual(
+      expect.arrayContaining(["price", "salePrice", "productDiscountAmount", "promotion"]),
+    );
     const properties = doc.components?.schemas?.AdvisorRequest as any;
     expect(properties.properties.workloads).toBeDefined();
     expect(properties.required ?? []).not.toContain("workloads");

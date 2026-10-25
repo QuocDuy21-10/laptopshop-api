@@ -15,18 +15,19 @@ const input: AdvisorInput = {
 beforeEach(resetPrisma);
 
 describe("PrismaAdvisorRepository", () => {
-  it("finds active, in-stock candidates within the hard constraints", async () => {
+  it("finds active, in-stock candidates after a keyset cursor without list-price filtering", async () => {
     prismaMock.product.findMany.mockResolvedValue([]);
-    await new PrismaAdvisorRepository().findCandidates(input);
+    await new PrismaAdvisorRepository().findCandidateBatch(input, { afterId: 10, limit: 50 });
     expect(prismaMock.product.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: {
           isActive: true,
           quantity: { gt: 0 },
-          price: { lte: 20_000_000 },
+          id: { gt: 10 },
           ramGb: { gte: 16 },
         },
         orderBy: { id: "asc" },
+        take: 50,
         select: expect.objectContaining({
           cpuBrand: true,
           gpuBrand: true,
@@ -40,11 +41,15 @@ describe("PrismaAdvisorRepository", () => {
 
   it("does not add the RAM filter when the user leaves it unset", async () => {
     prismaMock.product.findMany.mockResolvedValue([]);
-    await new PrismaAdvisorRepository().findCandidates({ ...input, minRamGb: undefined });
+    await new PrismaAdvisorRepository().findCandidateBatch(
+      { ...input, minRamGb: undefined },
+      { afterId: 0, limit: 20 },
+    );
     expect(prismaMock.product.findMany.mock.calls[0][0].where).toEqual({
       isActive: true,
       quantity: { gt: 0 },
-      price: { lte: 20_000_000 },
+      id: { gt: 0 },
     });
+    expect(prismaMock.product.findMany.mock.calls[0][0].take).toBe(20);
   });
 });

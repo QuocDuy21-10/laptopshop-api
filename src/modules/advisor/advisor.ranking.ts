@@ -1,11 +1,11 @@
 import { HARDWARE_TIER_SCORE, hardwareTier } from "modules/advisor/advisor.hardware-profile";
 import type {
-  AdvisorCandidate,
   AdvisorEvidence,
   AdvisorFeature,
   AdvisorFeatureScores,
   AdvisorInput,
   AdvisorWeights,
+  PricedAdvisorCandidate,
   RankedAdvisorCandidate,
 } from "modules/advisor/advisor.schema";
 
@@ -113,19 +113,22 @@ const priceFit = (price: number, budgetMax: number) =>
   Math.max(0, Math.min(1, (budgetMax - price) / budgetMax));
 
 export const featureScoresFor = (
-  product: AdvisorCandidate,
+  candidate: PricedAdvisorCandidate,
   input: AdvisorInput,
-): AdvisorFeatureScores => ({
-  cpu: HARDWARE_TIER_SCORE[hardwareTier("cpu", product.cpu)],
-  gpu: HARDWARE_TIER_SCORE[hardwareTier("gpu", product.gpu)],
-  ramStorage: (ramScore(product.ramGb) + storageScore(product.storageGb)) / 2,
-  battery: batteryScore(product.batteryWh),
-  portability: portabilityScore(product.weightGrams),
-  display: (resolutionScore(product.screenResolution) + refreshScore(product.refreshRateHz)) / 2,
-  value:
-    0.7 * priceFit(product.price, input.budgetMax) +
-    0.3 * Math.min((product.warrantyMonths ?? 0) / 36, 1),
-});
+): AdvisorFeatureScores => {
+  const product = candidate.product;
+  return {
+    cpu: HARDWARE_TIER_SCORE[hardwareTier("cpu", product.cpu)],
+    gpu: HARDWARE_TIER_SCORE[hardwareTier("gpu", product.gpu)],
+    ramStorage: (ramScore(product.ramGb) + storageScore(product.storageGb)) / 2,
+    battery: batteryScore(product.batteryWh),
+    portability: portabilityScore(product.weightGrams),
+    display: (resolutionScore(product.screenResolution) + refreshScore(product.refreshRateHz)) / 2,
+    value:
+      0.7 * priceFit(candidate.effectivePrice, input.budgetMax) +
+      0.3 * Math.min((product.warrantyMonths ?? 0) / 36, 1),
+  };
+};
 
 const evidenceKey = (prefix: string, value: string | number) =>
   `${prefix}-${String(value)
@@ -133,7 +136,8 @@ const evidenceKey = (prefix: string, value: string | number) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "")}`;
 
-const buildEvidence = (product: AdvisorCandidate): AdvisorEvidence[] => {
+const buildEvidence = (candidate: PricedAdvisorCandidate): AdvisorEvidence[] => {
+  const product = candidate.product;
   const evidence: AdvisorEvidence[] = [];
   if (product.cpu && hardwareTier("cpu", product.cpu) !== "unknown")
     evidence.push({ key: evidenceKey("cpu", product.cpu), text: `CPU ${product.cpu}` });
@@ -168,32 +172,46 @@ const buildEvidence = (product: AdvisorCandidate): AdvisorEvidence[] => {
       key: `warranty-${product.warrantyMonths}months`,
       text: `Bảo hành ${product.warrantyMonths} tháng`,
     });
+  evidence.push({
+    key: `price-${candidate.effectivePrice}`,
+    text: `Giá tư vấn ${candidate.effectivePrice.toLocaleString("vi-VN")} đồng`,
+  });
   return evidence;
 };
 
-export const rankCandidates = (
-  candidates: AdvisorCandidate[],
+export const scoreAdvisorCandidate = (
+  candidate: PricedAdvisorCandidate,
   input: AdvisorInput,
-): RankedAdvisorCandidate[] => {
+): RankedAdvisorCandidate => {
   const weights = weightsFor(input);
-  return candidates
-    .map((product) => {
-      const features = featureScoresFor(product, input);
-      const rawScore = FEATURES.reduce(
-        (sum, feature) => sum + features[feature] * weights[feature],
-        0,
-      );
-      return {
-        product,
-        rawScore,
-        matchScore: Math.round(rawScore * 100),
-        features,
-        evidence: buildEvidence(product),
-      } satisfies RankedAdvisorCandidate;
-    })
-    .sort(
-      (a, b) =>
-        b.rawScore - a.rawScore || a.product.price - b.product.price || a.product.id - b.product.id,
-    )
-    .slice(0, 3);
+  const features = featureScoresFor(candidate, input);
+  const rawScore = FEATURES.reduce((sum, feature) => sum + features[feature] * weights[feature], 0);
+  return {
+    product: candidate.product,
+    effectivePrice: candidate.effectivePrice,
+    automaticPromotion: candidate.automaticPromotion,
+    rawScore,
+    matchScore: Math.round(rawScore * 100),
+    features,
+    evidence: buildEvidence(candidate),
+  };
 };
+
+const compareRankedCandidates = (a: RankedAdvisorCandidate, b: RankedAdvisorCandidate) =>
+  b.rawScore - a.rawScore || a.effectivePrice - b.effectivePrice || a.product.id - b.product.id;
+
+export const selectTopAdvisorCandidates = (
+  current: RankedAdvisorCandidate[],
+  incoming: RankedAdvisorCandidate[],
+  limit = 3,
+): RankedAdvisorCandidate[] =>
+  [...current, ...incoming].sort(compareRankedCandidates).slice(0, limit);
+
+export const rankCandidates = (
+  candidates: PricedAdvisorCandidate[],
+  input: AdvisorInput,
+): RankedAdvisorCandidate[] =>
+  selectTopAdvisorCandidates(
+    [],
+    candidates.map((candidate) => scoreAdvisorCandidate(candidate, input)),
+  );

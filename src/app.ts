@@ -17,7 +17,7 @@ import { paymentWebhookRoutes } from "modules/payments/payments.routes";
 import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
 import {
   createAdvisorService,
-  decorateAdvisorProducts,
+  priceAdvisorCandidates,
   type AdvisorService,
 } from "modules/advisor/advisor.service";
 import { createReviewImageStorage } from "lib/storage/s3-review-image-storage";
@@ -77,7 +77,8 @@ export const createApp = (deps: AppDeps = {}): Express => {
     ({
       service: createAdvisorService({
         repository: new PrismaAdvisorRepository(),
-        priceProducts: decorateAdvisorProducts,
+        priceCandidates: priceAdvisorCandidates,
+        candidateBatchSize: env.ADVISOR_CANDIDATE_BATCH_SIZE,
       }),
       identitySecret: env.JWT_SECRET,
     } as const);
