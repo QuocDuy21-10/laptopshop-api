@@ -314,6 +314,17 @@ describe("Flash Sale checkout", () => {
     await expect(
       prisma.order.findUniqueOrThrow({ where: { id: first.order.id } }),
     ).resolves.toMatchObject({ status: "CANCELLED" });
+    await expect(
+      prisma.order.findFirstOrThrow({ where: { userId: checkoutUser.id } }),
+    ).resolves.toMatchObject({ status: "PENDING" });
+    await expect(
+      prisma.flashSaleAllocation.count({
+        where: { promotionId: promotion.id, status: "RELEASED" },
+      }),
+    ).resolves.toBe(1);
+    await expect(
+      prisma.flashSaleAllocation.count({ where: { promotionId: promotion.id, status: "CLAIMED" } }),
+    ).resolves.toBe(1);
     await expectFlashSaleInvariants(promotion.id, [{ id: product.id, initialQuantity: 3 }], 2);
   });
 
@@ -365,6 +376,20 @@ describe("Flash Sale checkout", () => {
     ]);
 
     expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(2);
+    await expect(
+      prisma.order.findUniqueOrThrow({ where: { id: first.order.id } }),
+    ).resolves.toMatchObject({ status: "CANCELLED" });
+    await expect(
+      prisma.order.findFirstOrThrow({ where: { userId: checkoutUser.id } }),
+    ).resolves.toMatchObject({ status: "PENDING" });
+    await expect(
+      prisma.flashSaleAllocation.count({
+        where: { promotionId: promotion.id, status: "RELEASED" },
+      }),
+    ).resolves.toBe(2);
+    await expect(
+      prisma.flashSaleAllocation.count({ where: { promotionId: promotion.id, status: "CLAIMED" } }),
+    ).resolves.toBe(2);
     await expectFlashSaleInvariants(
       promotion.id,
       [

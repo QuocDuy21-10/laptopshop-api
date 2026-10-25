@@ -112,6 +112,9 @@ describe("cancellation under concurrency", () => {
 
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
     expect(rejectedCodes(results)).toEqual(["INVALID_STATUS_TRANSITION"]);
+    await expect(
+      prisma.order.findUniqueOrThrow({ where: { id: order.id } }),
+    ).resolves.toMatchObject({ status: "CANCELLED" });
     const after = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
     expect(after.quantity).toBe(5);
     expect(after.sold).toBe(0);
