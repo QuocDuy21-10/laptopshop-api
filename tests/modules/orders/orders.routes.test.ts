@@ -140,6 +140,10 @@ const post = () =>
 
 beforeEach(() => {
   resetPrisma();
+  prismaMock.$queryRaw.mockResolvedValue([
+    { id: 1, price: 50, isActive: true, warrantyMonths: 24 },
+    { id: 2, price: 100, isActive: true, warrantyMonths: null },
+  ]);
   prismaMock.stockMovement.create.mockResolvedValue({ id: 900 });
   prismaMock.product.update.mockResolvedValue({ quantity: 2 });
   prismaMock.product.findUniqueOrThrow.mockResolvedValue({ quantity: 0 });
@@ -249,8 +253,8 @@ describe("POST /api/v1/orders", () => {
 
   it("locks sorted product ids and reloads authoritative product values before pricing", async () => {
     const reloadedLines = [
-      { productId: 1, quantity: 2, product: { price: 60, isActive: true, warrantyMonths: 24 } },
-      { productId: 2, quantity: 1, product: { price: 100, isActive: true } },
+      { productId: 1, quantity: 2 },
+      { productId: 2, quantity: 1 },
     ];
     const repricedFingerprint = createPricingFingerprint({
       lines: [
@@ -302,7 +306,10 @@ describe("POST /api/v1/orders", () => {
     prismaMock.cartDetail.findMany
       .mockResolvedValueOnce([{ productId: 2 }, { productId: 1 }])
       .mockResolvedValueOnce(reloadedLines);
-    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.$queryRaw.mockResolvedValue([
+      { id: 1, price: 60, isActive: true, warrantyMonths: 24 },
+      { id: 2, price: 100, isActive: true, warrantyMonths: null },
+    ]);
     prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.order.create.mockResolvedValue(reloadedOrder);
     prismaMock.order.findUniqueOrThrow.mockResolvedValue(reloadedOrder);
@@ -317,9 +324,7 @@ describe("POST /api/v1/orders", () => {
       orderBy: { productId: "asc" },
     });
     expect(prismaMock.cartDetail.findMany.mock.calls[1][0]).toMatchObject({
-      include: {
-        product: { select: { price: true, isActive: true, warrantyMonths: true } },
-      },
+      select: { productId: true, quantity: true },
     });
     const [lockStatement] = prismaMock.$queryRaw.mock.calls[0];
     expect(lockStatement.values).toEqual([1, 2]);
@@ -344,7 +349,9 @@ describe("POST /api/v1/orders", () => {
         product: { price: 1_000, isActive: true, warrantyMonths: 24 },
       },
     ]);
-    prismaMock.$queryRaw.mockResolvedValue([]);
+    prismaMock.$queryRaw.mockResolvedValue([
+      { id: 1, price: 1_000, isActive: true, warrantyMonths: 24 },
+    ]);
     prismaMock.promotion.findMany.mockResolvedValue([flashPromotionRow]);
 
     const res = await post().send({
@@ -436,15 +443,17 @@ describe("POST /api/v1/orders", () => {
       },
       products: [],
     });
-    prismaMock.$queryRaw.mockResolvedValueOnce([]).mockResolvedValueOnce([
-      {
-        id: 10,
-        state: "ACTIVE",
-        startsAt: flashWinner.startsAt,
-        endsAt: flashWinner.endsAt,
-        pricingVersion: 1,
-      },
-    ]);
+    prismaMock.$queryRaw
+      .mockResolvedValueOnce([{ id: 1, price: 1_000, isActive: true, warrantyMonths: 24 }])
+      .mockResolvedValueOnce([
+        {
+          id: 10,
+          state: "ACTIVE",
+          startsAt: flashWinner.startsAt,
+          endsAt: flashWinner.endsAt,
+          pricingVersion: 1,
+        },
+      ]);
     prismaMock.couponPolicy.findUnique.mockResolvedValue({
       promotionId: 20,
       maxUses: 10,
@@ -509,7 +518,6 @@ describe("POST /api/v1/orders", () => {
   it("retries only the transaction operation after a deadlock", async () => {
     prismaMock.order.findUnique.mockResolvedValue(null);
     prismaMock.cartDetail.findMany.mockResolvedValue(lines);
-    prismaMock.$queryRaw.mockResolvedValue([]);
     prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
     prismaMock.order.create.mockResolvedValue(orderRow());
     prismaMock.$transaction
@@ -527,6 +535,10 @@ describe("POST /api/v1/orders", () => {
     prismaMock.cartDetail.findMany.mockResolvedValue([
       lines[0],
       { ...lines[1], product: { price: 100, isActive: false } },
+    ]);
+    prismaMock.$queryRaw.mockResolvedValue([
+      { id: 1, price: 50, isActive: true, warrantyMonths: 24 },
+      { id: 2, price: 100, isActive: false, warrantyMonths: null },
     ]);
     prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
     const res = await post().send(receiver);
@@ -568,6 +580,18 @@ describe("POST /api/v1/orders", () => {
     const res = await post().send(receiver);
     expect(res.status).toBe(200);
     expect(res.body.data.id).toBe(50);
+  });
+
+  it("rejects a concurrent winner created from a different payload", async () => {
+    prismaMock.order.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(orderRow({ requestHash: "f".repeat(64) }));
+    prismaMock.$transaction.mockRejectedValue(prismaError("P2002"));
+
+    const res = await post().send(receiver);
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("IDEMPOTENCY_KEY_REUSED");
   });
 });
 

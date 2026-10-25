@@ -102,23 +102,24 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
             orderBy: { productId: "asc" },
           });
           if (cartProductIds.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
-          await lockProductRows(
+          const lockedProducts = await lockProductRows(
             tx,
             cartProductIds.map((line) => line.productId),
           );
+          const productsById = new Map(lockedProducts.map((product) => [product.id, product]));
 
           const now = new Date();
-          const lines = await tx.cartDetail.findMany({
+          const cartLines = await tx.cartDetail.findMany({
             where: { cart: { userId } },
-            include: {
-              product: { select: { price: true, isActive: true, warrantyMonths: true } },
-            },
+            select: { productId: true, quantity: true },
             orderBy: { productId: "asc" },
           });
-          if (lines.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
-          for (const line of lines) {
-            if (!line.product.isActive) throw productUnavailable(line.productId);
-          }
+          if (cartLines.length === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
+          const lines = cartLines.map((line) => {
+            const product = productsById.get(line.productId);
+            if (!product?.isActive) throw productUnavailable(line.productId);
+            return { ...line, product };
+          });
           const promotions = await resolveProductPromotions(
             tx,
             lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
@@ -308,7 +309,10 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
     if (e instanceof AppError && e.code === "IDEMPOTENCY_KEY_REUSED") throw e;
     // a concurrent request with the same key may have won (P2002, OUT_OF_STOCK or CART_EMPTY here)
     const winner = await findByKey(userId, key);
-    if (winner) return { order: toOrderDto(winner), created: false };
+    if (winner) {
+      assertReplayMatches(winner, requestHash);
+      return { order: toOrderDto(winner), created: false };
+    }
     throw e;
   }
 };

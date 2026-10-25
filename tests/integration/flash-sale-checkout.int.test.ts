@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
 import { changeStatus, getMyOrder, placeOrder } from "modules/orders/orders.service";
 import { quoteOrder } from "modules/promotions/promotions.service";
@@ -7,6 +8,11 @@ beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
 
 describe("Flash Sale checkout", () => {
+  const activeWindow = () => ({
+    startsAt: new Date(Date.now() - 60_000),
+    endsAt: new Date(Date.now() + 10 * 60_000),
+  });
+
   it("claims the entire quoted cart quantity atomically", async () => {
     const product = await createProduct(5, 1_000);
     const user = await createUser();
@@ -17,8 +23,7 @@ describe("Flash Sale checkout", () => {
         name: "Flash",
         discountKind: "PERCENT",
         discountValue: 20,
-        startsAt: new Date("2026-10-01"),
-        endsAt: new Date("2026-11-01"),
+        ...activeWindow(),
         createdById: user.id,
         updatedById: user.id,
         flashSalePolicy: { create: { priority: 10, stackableWithCoupon: true } },
@@ -75,8 +80,7 @@ describe("Flash Sale checkout", () => {
         name: "Flash",
         discountKind: "PERCENT",
         discountValue: 20,
-        startsAt: new Date("2026-10-01"),
-        endsAt: new Date("2026-11-01"),
+        ...activeWindow(),
         createdById: user.id,
         updatedById: user.id,
         flashSalePolicy: { create: { priority: 10, stackableWithCoupon: true } },
@@ -94,8 +98,7 @@ describe("Flash Sale checkout", () => {
         name: "New winner",
         discountKind: "PERCENT",
         discountValue: 5,
-        startsAt: new Date("2026-10-01"),
-        endsAt: new Date("2026-11-01"),
+        ...activeWindow(),
         createdById: user.id,
         updatedById: user.id,
         automaticPolicy: { create: { priority: 20, stackableWithCoupon: true } },
@@ -134,8 +137,7 @@ describe("Flash Sale checkout", () => {
         name: "Flash response",
         discountKind: "PERCENT",
         discountValue: 20,
-        startsAt: new Date("2026-10-01"),
-        endsAt: new Date("2026-11-01"),
+        ...activeWindow(),
         createdById: user.id,
         updatedById: user.id,
         flashSalePolicy: { create: { priority: 10, stackableWithCoupon: true } },
@@ -164,5 +166,39 @@ describe("Flash Sale checkout", () => {
       },
     });
     expect(created.order.items[0]).toEqual(fetched.items[0]);
+  });
+
+  it("rejects a quote when a price change commits while checkout waits for the product lock", async () => {
+    const product = await createProduct(5, 1_000);
+    const user = await createUser();
+    await putInCart(user.id, product.id, 1);
+    const quote = await quoteOrder(user.id);
+
+    let signalUpdated!: () => void;
+    const updated = new Promise<void>((resolve) => {
+      signalUpdated = resolve;
+    });
+    const blocker = prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM products WHERE id = ${product.id} FOR UPDATE`);
+      await tx.product.update({ where: { id: product.id }, data: { price: 1_200 } });
+      signalUpdated();
+      await tx.$queryRaw(Prisma.sql`SELECT SLEEP(1)`);
+    });
+    await updated;
+
+    const checkout = placeOrder(user.id, "price-changed-during-lock", {
+      receiverName: "R",
+      receiverAddress: "A",
+      receiverPhone: "0900000000",
+      paymentMethod: "COD",
+      pricingFingerprint: quote.pricingFingerprint,
+    });
+    await blocker;
+
+    await expect(checkout).rejects.toMatchObject({ code: "PROMOTION_CHANGED" });
+    await expect(
+      prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+    ).resolves.toMatchObject({ price: 1_200, quantity: 5, sold: 0 });
+    await expect(prisma.order.count({ where: { userId: user.id } })).resolves.toBe(0);
   });
 });

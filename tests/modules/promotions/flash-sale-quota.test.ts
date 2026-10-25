@@ -75,19 +75,56 @@ describe("flash sale quota service", () => {
     ],
   ])("normalizes a locked promotion %s change to PROMOTION_CHANGED", async (_field, row) => {
     const tx = txMock();
-    tx.$queryRaw.mockResolvedValueOnce([row]);
+    jest.useFakeTimers().setSystemTime(now);
+    try {
+      tx.$queryRaw.mockResolvedValueOnce([row]);
 
-    await expect(
-      claimFlashSaleQuotas(tx as never, {
-        userId: 7,
-        now,
-        claims: [{ promotionId: 1, productId: 3, quantity: 1, pricingVersion: 1 }],
-      }),
-    ).rejects.toMatchObject({
-      code: "PROMOTION_CHANGED",
-      details: { promotionId: 1 },
-    });
-    expect(tx.flashSaleProductQuota.findUnique).not.toHaveBeenCalled();
+      await expect(
+        claimFlashSaleQuotas(tx as never, {
+          userId: 7,
+          now,
+          claims: [{ promotionId: 1, productId: 3, quantity: 1, pricingVersion: 1 }],
+        }),
+      ).rejects.toMatchObject({
+        code: "PROMOTION_CHANGED",
+        details: { promotionId: 1 },
+      });
+      expect(tx.flashSaleProductQuota.findUnique).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("validates the campaign time after waiting for its row lock", async () => {
+    const beforeLock = new Date("2026-10-22T00:00:00.000Z");
+    const afterLock = new Date("2026-10-22T00:00:02.000Z");
+    const tx = txMock();
+    jest.useFakeTimers().setSystemTime(beforeLock);
+    try {
+      tx.$queryRaw.mockImplementationOnce(async () => {
+        jest.setSystemTime(afterLock);
+        return [
+          {
+            id: 1,
+            state: "ACTIVE",
+            startsAt: new Date("2026-10-21T00:00:00.000Z"),
+            endsAt: new Date("2026-10-22T00:00:01.000Z"),
+            pricingVersion: 1,
+          },
+        ];
+      });
+
+      await expect(
+        claimFlashSaleQuotas(tx as never, {
+          userId: 7,
+          now: beforeLock,
+          claims: [{ promotionId: 1, productId: 3, quantity: 1, pricingVersion: 1 }],
+        }),
+      ).rejects.toMatchObject({ code: "PROMOTION_CHANGED", details: { promotionId: 1 } });
+      expect(tx.flashSaleProductQuota.findUnique).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("locks promotions, quotas and user usages in deterministic tuple order", async () => {

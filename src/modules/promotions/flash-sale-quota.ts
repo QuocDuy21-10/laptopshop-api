@@ -65,9 +65,10 @@ export const claimFlashSaleQuotas = async (
     tx,
     [...new Set(claims.map((claim) => claim.promotionId))].sort((a, b) => a - b),
   );
+  const lockedAt = new Date();
 
   for (const claim of claims) {
-    validatePromotion(promotions.get(claim.promotionId), claim, input.now);
+    validatePromotion(promotions.get(claim.promotionId), claim, lockedAt);
     const quota = await tx.flashSaleProductQuota.findUnique({
       where: {
         promotionId_productId: { promotionId: claim.promotionId, productId: claim.productId },
