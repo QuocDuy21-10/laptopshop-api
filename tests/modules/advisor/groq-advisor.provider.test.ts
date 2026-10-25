@@ -36,6 +36,8 @@ const input = (over: Partial<ProviderRequest> = {}): ProviderRequest => ({
         warrantyMonths: 24,
       },
       matchScore: 80,
+      effectivePrice: 18_000_000,
+      automaticPromotion: null,
       rawScore: 0.8,
       features: {
         cpu: 0.75,
@@ -132,15 +134,13 @@ describe("GroqAdvisorProvider", () => {
         },
       ],
     });
-    const fetchImpl = jest
-      .fn()
-      .mockResolvedValue(
-        responseFor({
-          recommendations: [
-            { productId: 1, reason: "CPU rất mạnh", evidenceKeys: ["ram-16gb"], tradeoffs: [] },
-          ],
-        }),
-      );
+    const fetchImpl = jest.fn().mockResolvedValue(
+      responseFor({
+        recommendations: [
+          { productId: 1, reason: "CPU rất mạnh", evidenceKeys: ["ram-16gb"], tradeoffs: [] },
+        ],
+      }),
+    );
     const provider = new GroqAdvisorProvider(
       {
         apiKey: "secret",
@@ -176,20 +176,18 @@ describe("GroqAdvisorProvider", () => {
         },
       ],
     });
-    const fetchImpl = jest
-      .fn()
-      .mockResolvedValue(
-        responseFor({
-          recommendations: [
-            {
-              productId: 1,
-              reason: "Trọng lượng 2300 g",
-              evidenceKeys: ["ram-16gb"],
-              tradeoffs: [],
-            },
-          ],
-        }),
-      );
+    const fetchImpl = jest.fn().mockResolvedValue(
+      responseFor({
+        recommendations: [
+          {
+            productId: 1,
+            reason: "Trọng lượng 2300 g",
+            evidenceKeys: ["ram-16gb"],
+            tradeoffs: [],
+          },
+        ],
+      }),
+    );
     const provider = new GroqAdvisorProvider(
       {
         apiKey: "secret",

@@ -32,20 +32,27 @@ const advisorProductSelect = {
 } satisfies Prisma.ProductSelect;
 
 export interface AdvisorRepository {
-  findCandidates(input: AdvisorInput): Promise<AdvisorCandidate[]>;
+  findCandidateBatch(
+    input: AdvisorInput,
+    page: { afterId: number; limit: number },
+  ): Promise<AdvisorCandidate[]>;
 }
 
 export class PrismaAdvisorRepository implements AdvisorRepository {
-  async findCandidates(input: AdvisorInput): Promise<AdvisorCandidate[]> {
+  async findCandidateBatch(
+    input: AdvisorInput,
+    page: { afterId: number; limit: number },
+  ): Promise<AdvisorCandidate[]> {
     const where: Prisma.ProductWhereInput = {
       isActive: true,
       quantity: { gt: 0 },
-      price: { lte: input.budgetMax },
+      id: { gt: page.afterId },
       ...(input.minRamGb === undefined ? {} : { ramGb: { gte: input.minRamGb } }),
     };
     const rows = await prisma.product.findMany({
       where,
       orderBy: { id: "asc" },
+      take: page.limit,
       select: advisorProductSelect,
     });
     return rows as AdvisorCandidate[];

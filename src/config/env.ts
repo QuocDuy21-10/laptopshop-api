@@ -131,6 +131,7 @@ const schema = z
     ADVISOR_GUEST_DAILY_LIMIT: z.coerce.number().int().positive().default(5),
     ADVISOR_USER_DAILY_LIMIT: z.coerce.number().int().positive().default(10),
     ADVISOR_GLOBAL_DAILY_LIMIT: z.coerce.number().int().positive().default(30),
+    ADVISOR_CANDIDATE_BATCH_SIZE: z.coerce.number().int().min(25).max(1000).default(200),
     REVIEW_IMAGES_ENABLED: z
       .enum(["true", "false"])
       .default("false")

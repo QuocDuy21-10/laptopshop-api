@@ -1,6 +1,7 @@
 import type { Product } from "@prisma/client";
 import { z } from "zod";
-import type { ProductDto } from "modules/products/products.mapper";
+import type { PricedProductDto } from "modules/products/products.mapper";
+import type { ResolvedAutomaticPromotion } from "modules/promotions/promotion-resolver";
 
 export const ADVISOR_USAGES = ["CODING", "GAMING", "OFFICE", "CREATIVE"] as const;
 export const ADVISOR_PRIORITIES = [
@@ -81,8 +82,16 @@ export type AdvisorFeatureScores = Record<AdvisorFeature, number>;
 export type AdvisorWeights = Record<AdvisorFeature, number>;
 export type AdvisorEvidence = { key: string; text: string };
 
+export type PricedAdvisorCandidate = {
+  product: AdvisorCandidate;
+  effectivePrice: number;
+  automaticPromotion: ResolvedAutomaticPromotion | null;
+};
+
 export type RankedAdvisorCandidate = {
   product: AdvisorCandidate;
+  effectivePrice: number;
+  automaticPromotion: ResolvedAutomaticPromotion | null;
   matchScore: number;
   rawScore: number;
   features: AdvisorFeatureScores;
@@ -90,7 +99,7 @@ export type RankedAdvisorCandidate = {
 };
 
 export type AdvisorRecommendation = {
-  product: ProductDto;
+  product: PricedProductDto;
   matchScore: number;
   highlights: string[];
   reason: string;

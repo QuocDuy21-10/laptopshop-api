@@ -1,6 +1,10 @@
 import { featureScoresFor, rankCandidates, weightsFor } from "modules/advisor/advisor.ranking";
 import { hardwareTier } from "modules/advisor/advisor.hardware-profile";
-import type { AdvisorCandidate, AdvisorInput } from "modules/advisor/advisor.schema";
+import type {
+  AdvisorCandidate,
+  AdvisorInput,
+  PricedAdvisorCandidate,
+} from "modules/advisor/advisor.schema";
 
 const candidate = (over: Partial<AdvisorCandidate> = {}): AdvisorCandidate => ({
   id: 1,
@@ -25,6 +29,15 @@ const candidate = (over: Partial<AdvisorCandidate> = {}): AdvisorCandidate => ({
   weightGrams: 2300,
   warrantyMonths: 24,
   ...over,
+});
+
+const priced = (
+  over: Partial<AdvisorCandidate> = {},
+  effectivePrice = over.price ?? 20_000_000,
+): PricedAdvisorCandidate => ({
+  product: candidate(over),
+  effectivePrice,
+  automaticPromotion: null,
 });
 
 const input: AdvisorInput = {
@@ -69,7 +82,7 @@ describe("hardwareTier", () => {
 describe("advisor ranking", () => {
   it("uses the fixed normalization thresholds", () => {
     const scores = featureScoresFor(
-      candidate({
+      priced({
         ramGb: 16,
         storageGb: 512,
         batteryWh: 48,
@@ -99,10 +112,10 @@ describe("advisor ranking", () => {
   it("sorts by score, then price, then id and returns at most three", () => {
     const ranked = rankCandidates(
       [
-        candidate({ id: 3, price: 19_000_000, ramGb: 32 }),
-        candidate({ id: 2, price: 18_000_000, ramGb: 32 }),
-        candidate({ id: 1, price: 20_000_000, ramGb: 8 }),
-        candidate({ id: 4, price: 17_000_000, ramGb: 8 }),
+        priced({ id: 3, price: 19_000_000, ramGb: 32 }),
+        priced({ id: 2, price: 18_000_000, ramGb: 32 }),
+        priced({ id: 1, price: 20_000_000, ramGb: 8 }),
+        priced({ id: 4, price: 17_000_000, ramGb: 8 }),
       ],
       { ...input, priorities: [] },
     );
@@ -111,15 +124,12 @@ describe("advisor ranking", () => {
   });
 
   it("does not change existing scores when an unrelated candidate is added", () => {
-    const base = rankCandidates(
-      [candidate({ id: 1 }), candidate({ id: 2, price: 19_000_000 })],
-      input,
-    );
+    const base = rankCandidates([priced({ id: 1 }), priced({ id: 2, price: 19_000_000 })], input);
     const expanded = rankCandidates(
       [
-        candidate({ id: 1 }),
-        candidate({ id: 2, price: 19_000_000 }),
-        candidate({
+        priced({ id: 1 }),
+        priced({ id: 2, price: 19_000_000 }),
+        priced({
           id: 9,
           price: 20_000_000,
           cpu: "Intel Core i7-6500U",
@@ -139,8 +149,8 @@ describe("advisor ranking", () => {
   });
 
   it("ignores note changes and omits evidence for unknown hardware", () => {
-    const first = rankCandidates([candidate({ cpu: null, gpu: "Unknown GPU" })], input)[0];
-    const second = rankCandidates([candidate({ cpu: null, gpu: "Unknown GPU" })], {
+    const first = rankCandidates([priced({ cpu: null, gpu: "Unknown GPU" })], input)[0];
+    const second = rankCandidates([priced({ cpu: null, gpu: "Unknown GPU" })], {
       ...input,
       note: "gaming",
     })[0];
@@ -150,5 +160,20 @@ describe("advisor ranking", () => {
     );
     expect(first.features.cpu).toBe(0);
     expect(first.features.gpu).toBe(0);
+  });
+
+  it("uses effective price for value scoring and deterministic tie breaks", () => {
+    const discounted = rankCandidates(
+      [
+        priced({ id: 1, price: 23_000_000 }, 19_000_000),
+        priced({ id: 2, price: 18_000_000 }, 18_000_000),
+      ],
+      { ...input, priorities: [] },
+    );
+    const discountedOne = discounted.find((item) => item.product.id === 1)!;
+    expect(discountedOne.effectivePrice).toBe(19_000_000);
+    expect(discountedOne.features.value).toBeCloseTo(
+      0.7 * ((20_000_000 - 19_000_000) / 20_000_000) + 0.3 * (24 / 36),
+    );
   });
 });

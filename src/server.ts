@@ -7,7 +7,7 @@ import { logger } from "lib/logger";
 import { registerDocs } from "docs/openapi";
 import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
 import { RedisAdvisorQuota } from "modules/advisor/advisor.quota";
-import { createAdvisorService, decorateAdvisorProducts } from "modules/advisor/advisor.service";
+import { createAdvisorService, priceAdvisorCandidates } from "modules/advisor/advisor.service";
 import { GroqAdvisorProvider } from "modules/advisor/providers/groq-advisor.provider";
 import { createApp } from "./app";
 
@@ -34,7 +34,8 @@ const main = async () => {
           }),
           logger,
           model: env.GROQ_MODEL,
-          priceProducts: decorateAdvisorProducts,
+          priceCandidates: priceAdvisorCandidates,
+          candidateBatchSize: env.ADVISOR_CANDIDATE_BATCH_SIZE,
         }),
       }
     : undefined;

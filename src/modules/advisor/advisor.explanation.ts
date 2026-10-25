@@ -1,5 +1,5 @@
 import type { Product } from "@prisma/client";
-import { toProductDto } from "modules/products/products.mapper";
+import { toProductDto, withProductPricingDto } from "modules/products/products.mapper";
 import type {
   AdvisorInput,
   AdvisorRecommendation,
@@ -35,14 +35,17 @@ export const buildRuleBasedRecommendation = (
     tradeoffs.push("Chưa có thông tin dung lượng pin.");
   }
   return {
-    product: toProductDto({
-      ...ranked.product,
-      cpuBrand: ranked.product.cpuBrand ?? null,
-      gpuBrand: ranked.product.gpuBrand ?? null,
-      gpuType: ranked.product.gpuType ?? null,
-      resolutionTier: ranked.product.resolutionTier ?? null,
-      panelType: ranked.product.panelType ?? null,
-    } as Product),
+    product: withProductPricingDto(
+      toProductDto({
+        ...ranked.product,
+        cpuBrand: ranked.product.cpuBrand ?? null,
+        gpuBrand: ranked.product.gpuBrand ?? null,
+        gpuType: ranked.product.gpuType ?? null,
+        resolutionTier: ranked.product.resolutionTier ?? null,
+        panelType: ranked.product.panelType ?? null,
+      } as Product),
+      ranked.automaticPromotion,
+    ),
     matchScore: ranked.matchScore,
     highlights,
     reason,
