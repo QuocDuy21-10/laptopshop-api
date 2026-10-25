@@ -1,4 +1,5 @@
 import { buildRuleBasedResult } from "modules/advisor/advisor.explanation";
+import { inspectAdvisorProviderInput } from "modules/advisor/advisor.input-guard";
 import { priceAdvisorCandidates } from "modules/advisor/advisor.pricing";
 import type { AdvisorRepository } from "modules/advisor/advisor.repository";
 import { rankCandidates, selectTopAdvisorCandidates } from "modules/advisor/advisor.ranking";
@@ -115,6 +116,11 @@ export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService =
     };
     const fallback = () => finish(buildRuleBasedResult(ranked, input));
     if (!deps.provider || !deps.quota || ranked.length === 0) return fallback();
+    const guard = inspectAdvisorProviderInput({ preferences: input, candidates: ranked });
+    if (!guard.safe) {
+      deps.logger?.warn({ category: "input_guard" }, "advisor input guard fallback");
+      return fallback();
+    }
     try {
       if (!(await deps.quota.tryReserve(requester))) {
         deps.logger?.warn({ category: "quota" }, "advisor quota fallback");
