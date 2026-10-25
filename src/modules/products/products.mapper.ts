@@ -27,7 +27,7 @@ export const toPricedProductDto = (
         name: resolution.winner.name,
         endsAt: resolution.winner.endsAt,
         kind: resolution.winner.kind,
-        eligibility: resolution.eligibility,
+        eligibility: resolution.winner.kind === "AUTOMATIC" ? "EXACT" : resolution.eligibility,
       }
     : null,
 });
@@ -46,7 +46,7 @@ export const withProductPricingDto = (
         name: promotion.name,
         endsAt: promotion.endsAt,
         kind: "AUTOMATIC" as const,
-        eligibility: "POTENTIAL" as const,
+        eligibility: "EXACT" as const,
       }
     : null,
 });

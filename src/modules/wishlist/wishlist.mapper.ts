@@ -33,7 +33,7 @@ export const toWishlistItemDto = (
               name: promotion.name,
               endsAt: promotion.endsAt,
               kind: "AUTOMATIC" as const,
-              eligibility: "POTENTIAL" as const,
+              eligibility: "EXACT" as const,
             }
           : null,
       }

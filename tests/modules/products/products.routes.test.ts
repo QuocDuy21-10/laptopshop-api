@@ -79,6 +79,37 @@ describe("GET /api/v1/products", () => {
     );
   });
 
+  it("marks an anonymous catalog automatic promotion as exact", async () => {
+    prismaMock.product.count.mockResolvedValue(1);
+    prismaMock.product.findMany.mockResolvedValue([product]);
+    (resolveProductPromotions as jest.Mock).mockResolvedValue(
+      new Map([
+        [
+          product.id,
+          {
+            winner: {
+              id: 13,
+              name: "Automatic",
+              kind: "AUTOMATIC",
+              endsAt: new Date("2026-10-26T00:00:00.000Z"),
+              unitDiscount: 490_000,
+            },
+            eligibility: "POTENTIAL",
+            fallback: null,
+          },
+        ],
+      ]),
+    );
+
+    const res = await request(buildApp()).get("/api/v1/products");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data[0]).toMatchObject({
+      salePrice: 17_000_000,
+      promotion: { kind: "AUTOMATIC", eligibility: "EXACT" },
+    });
+  });
+
   it("applies factory, target, price and sort filters", async () => {
     prismaMock.product.count.mockResolvedValue(0);
     prismaMock.product.findMany.mockResolvedValue([]);
