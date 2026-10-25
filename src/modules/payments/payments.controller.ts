@@ -67,13 +67,15 @@ export const listPaymentEventsHandler: RequestHandler = async (_req, res) => {
   res.json({ data: items, meta });
 };
 
-export const getPaymentEventHandler: RequestHandler = async (req, res) => {
-  res.json({ data: await getPaymentEvent(req.params.id) });
+export const getPaymentEventHandler: RequestHandler = async (_req, res) => {
+  const { id } = res.locals.params as { id: string };
+  res.json({ data: await getPaymentEvent(id) });
 };
 
 export const resolvePaymentEventHandler: RequestHandler = async (req, res) => {
+  const { id } = res.locals.params as { id: string };
   const body = resolvePaymentEventBody.parse(req.body);
-  res.json({ data: await resolvePaymentEvent(req.params.id, req.auth!.id, body.note) });
+  res.json({ data: await resolvePaymentEvent(id, req.auth!.id, body.note) });
 };
 
 export const listPaymentReviewCasesHandler: RequestHandler = async (_req, res) => {
@@ -81,26 +83,29 @@ export const listPaymentReviewCasesHandler: RequestHandler = async (_req, res) =
   res.json({ data: items, meta });
 };
 
-export const getPaymentReviewCaseHandler: RequestHandler = async (req, res) => {
-  res.json({ data: await getPaymentReviewCase(req.params.id) });
+export const getPaymentReviewCaseHandler: RequestHandler = async (_req, res) => {
+  const { id } = res.locals.params as { id: string };
+  res.json({ data: await getPaymentReviewCase(id) });
 };
 
 export const extendPaymentReviewCaseHandler: RequestHandler = async (req, res) => {
+  const { id } = res.locals.params as { id: string };
   const body = extendPaymentReviewCaseBody.parse(req.body) as {
     note: string;
     holdUntil: string;
     version: number;
   };
-  res.json({ data: await extendPaymentReviewCase(req.params.id, req.auth!.id, body) });
+  res.json({ data: await extendPaymentReviewCase(id, req.auth!.id, body) });
 };
 
 export const releasePaymentReviewCaseHandler: RequestHandler = async (req, res) => {
+  const { id } = res.locals.params as { id: string };
   const body = releasePaymentReviewCaseBody.parse(req.body) as {
     note: string;
     confirmation: "RELEASE_STOCK";
     version: number;
   };
-  res.json({ data: await releasePaymentReviewCase(req.params.id, req.auth!.id, body) });
+  res.json({ data: await releasePaymentReviewCase(id, req.auth!.id, body) });
 };
 
 export const parseOrderId = (params: unknown) => idParams.parse(params).id;
