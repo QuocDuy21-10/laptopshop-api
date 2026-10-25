@@ -1,6 +1,10 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
+jest.mock("modules/promotions/promotion-resolver", () => ({
+  resolveProductPromotions: jest.fn().mockResolvedValue(new Map()),
+}));
 
 import request from "supertest";
+import { resolveProductPromotions } from "modules/promotions/promotion-resolver";
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { USER, cookieFor } from "../../helpers/auth";
@@ -21,6 +25,7 @@ const auth = () => cookieFor(USER);
 
 beforeEach(() => {
   resetPrisma();
+  (resolveProductPromotions as jest.Mock).mockResolvedValue(new Map());
   prismaMock.cartDetail.findMany.mockResolvedValue([{ id: 7, quantity: 2, product }]);
 });
 
@@ -39,6 +44,88 @@ describe("GET /api/v1/cart", () => {
     });
     expect(prismaMock.cartDetail.findMany.mock.calls[0][0].where).toEqual({
       cart: { userId: USER.id },
+    });
+  });
+
+  it("falls an authenticated cart line back when user quota is exhausted", async () => {
+    prismaMock.cartDetail.findMany.mockResolvedValue([
+      { id: 7, quantity: 3, product: { ...product, price: 20_000_000 } },
+    ]);
+    (resolveProductPromotions as jest.Mock).mockResolvedValue(
+      new Map([
+        [
+          product.id,
+          {
+            winner: {
+              id: 13,
+              name: "Automatic",
+              kind: "AUTOMATIC",
+              endsAt: new Date("2026-10-26T00:00:00.000Z"),
+              unitDiscount: 1_000_000,
+            },
+            eligibility: "EXACT",
+            fallback: {
+              promotionId: 14,
+              reason: "USER_QUOTA",
+              requestedQuantity: 3,
+              globalRemaining: 10,
+              userRemaining: 0,
+              availableQuantity: 0,
+              appliedPromotionKind: "AUTOMATIC",
+            },
+          },
+        ],
+      ]),
+    );
+
+    const res = await request(buildApp()).get("/api/v1/cart").set("Cookie", auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items[0]).toMatchObject({
+      lineTotal: 57_000_000,
+      product: { salePrice: 19_000_000, promotion: { kind: "AUTOMATIC", eligibility: "EXACT" } },
+      promotionFallback: {
+        reason: "USER_QUOTA",
+        requestedQuantity: 3,
+        availableQuantity: 0,
+        appliedPromotionKind: "AUTOMATIC",
+      },
+    });
+    expect(resolveProductPromotions).toHaveBeenCalledWith(
+      prismaMock,
+      [{ productId: product.id, quantity: 3 }],
+      expect.objectContaining({ eligibilityMode: "EXACT", userId: USER.id }),
+    );
+  });
+
+  it("keeps the list price when global quota has no fallback winner", async () => {
+    (resolveProductPromotions as jest.Mock).mockResolvedValue(
+      new Map([
+        [
+          product.id,
+          {
+            winner: null,
+            eligibility: "EXACT",
+            fallback: {
+              promotionId: 14,
+              reason: "GLOBAL_QUOTA",
+              requestedQuantity: 2,
+              globalRemaining: 0,
+              availableQuantity: 0,
+              appliedPromotionKind: null,
+            },
+          },
+        ],
+      ]),
+    );
+
+    const res = await request(buildApp()).get("/api/v1/cart").set("Cookie", auth());
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.items[0]).toMatchObject({
+      lineTotal: 200,
+      product: { salePrice: 100, promotion: null },
+      promotionFallback: { reason: "GLOBAL_QUOTA", appliedPromotionKind: null },
     });
   });
 });

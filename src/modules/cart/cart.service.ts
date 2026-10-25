@@ -3,7 +3,11 @@ import { prisma } from "config/client";
 import { AppError, notFound } from "lib/errors";
 import { AddItemBody } from "modules/cart/cart.schema";
 import { toPricedProductDto } from "modules/products/products.mapper";
-import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
+import {
+  resolveProductPromotions,
+  type ProductPromotionResolution,
+} from "modules/promotions/promotion-resolver";
+import { toPublicPromotionFallback } from "modules/promotions/promotion-selection";
 
 export const outOfStock = (productId: number) =>
   new AppError("Not enough stock", 409, "OUT_OF_STOCK", { productId });
@@ -13,18 +17,20 @@ export const productUnavailable = (productId: number) =>
 
 type Line = { id: number; quantity: number; product: Product };
 
-const toCartDto = (
-  lines: Line[],
-  promotions: Awaited<ReturnType<typeof resolveAutomaticPromotions>>,
-) => {
-  const items = lines.map((l) => ({
-    id: l.id,
-    quantity: l.quantity,
-    listLineTotal: l.product.price * l.quantity,
-    productDiscountAmount: (promotions.get(l.product.id)?.unitDiscount ?? 0) * l.quantity,
-    lineTotal: (l.product.price - (promotions.get(l.product.id)?.unitDiscount ?? 0)) * l.quantity,
-    product: toPricedProductDto(l.product, promotions.get(l.product.id) ?? null),
-  }));
+const toCartDto = (lines: Line[], promotions: Map<number, ProductPromotionResolution>) => {
+  const items = lines.map((l) => {
+    const resolution = promotions.get(l.product.id) ?? null;
+    const unitDiscount = resolution?.winner?.unitDiscount ?? 0;
+    return {
+      id: l.id,
+      quantity: l.quantity,
+      listLineTotal: l.product.price * l.quantity,
+      productDiscountAmount: unitDiscount * l.quantity,
+      lineTotal: (l.product.price - unitDiscount) * l.quantity,
+      product: toPricedProductDto(l.product, resolution),
+      promotionFallback: toPublicPromotionFallback(resolution?.fallback ?? null),
+    };
+  });
   const subtotal = items.reduce((n, i) => n + i.listLineTotal, 0);
   const productDiscount = items.reduce((n, i) => n + i.productDiscountAmount, 0);
   return {
@@ -43,10 +49,10 @@ export const getCart = async (userId: number) => {
     select: { id: true, quantity: true, product: true },
     orderBy: { id: "asc" },
   });
-  const promotions = await resolveAutomaticPromotions(
+  const promotions = await resolveProductPromotions(
     prisma,
-    lines.map((line) => line.product.id),
-    new Date(),
+    lines.map((line) => ({ productId: line.product.id, quantity: line.quantity })),
+    { now: new Date(), userId, eligibilityMode: "EXACT" },
   );
   return toCartDto(lines, promotions);
 };

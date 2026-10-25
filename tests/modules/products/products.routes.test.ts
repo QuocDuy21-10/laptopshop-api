@@ -1,6 +1,10 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
+jest.mock("modules/promotions/promotion-resolver", () => ({
+  resolveProductPromotions: jest.fn().mockResolvedValue(new Map()),
+}));
 
 import request from "supertest";
+import { resolveProductPromotions } from "modules/promotions/promotion-resolver";
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 
@@ -18,7 +22,10 @@ const product = {
   isActive: true,
 };
 
-beforeEach(resetPrisma);
+beforeEach(() => {
+  resetPrisma();
+  (resolveProductPromotions as jest.Mock).mockResolvedValue(new Map());
+});
 
 describe("GET /api/v1/products", () => {
   it("returns a page with meta and public image paths", async () => {
@@ -34,6 +41,42 @@ describe("GET /api/v1/products", () => {
       skip: 0,
       take: 10,
     });
+  });
+
+  it("marks an anonymous catalog flash sale as potential", async () => {
+    prismaMock.product.count.mockResolvedValue(1);
+    prismaMock.product.findMany.mockResolvedValue([{ ...product, price: 20_000_000 }]);
+    (resolveProductPromotions as jest.Mock).mockResolvedValue(
+      new Map([
+        [
+          product.id,
+          {
+            winner: {
+              id: 12,
+              name: "Flash sale",
+              kind: "FLASH_SALE",
+              endsAt: new Date("2026-10-26T00:00:00.000Z"),
+              unitDiscount: 3_000_000,
+            },
+            eligibility: "POTENTIAL",
+            fallback: null,
+          },
+        ],
+      ]),
+    );
+
+    const res = await request(buildApp()).get("/api/v1/products");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data[0]).toMatchObject({
+      salePrice: 17_000_000,
+      promotion: { kind: "FLASH_SALE", eligibility: "POTENTIAL" },
+    });
+    expect(resolveProductPromotions).toHaveBeenCalledWith(
+      prismaMock,
+      [{ productId: product.id, quantity: 1 }],
+      expect.objectContaining({ eligibilityMode: "POTENTIAL" }),
+    );
   });
 
   it("applies factory, target, price and sort filters", async () => {
@@ -110,6 +153,17 @@ describe("GET /api/v1/products/:id", () => {
     expect(res.body.data.reviewSummary).toEqual({ averageRating: null, totalReviews: 0 });
   });
 
+  it("resolves product detail pricing at quantity one", async () => {
+    prismaMock.product.findUnique.mockResolvedValue(product);
+    await request(buildApp()).get("/api/v1/products/1");
+
+    expect(resolveProductPromotions).toHaveBeenCalledWith(
+      prismaMock,
+      [{ productId: product.id, quantity: 1 }],
+      expect.objectContaining({ eligibilityMode: "POTENTIAL" }),
+    );
+  });
+
   it("returns 404 for a hidden product", async () => {
     prismaMock.product.findUnique.mockResolvedValue({ ...product, isActive: false });
     const res = await request(buildApp()).get("/api/v1/products/1");
@@ -176,6 +230,15 @@ describe("GET /api/v1/products/compare", () => {
     expect(prismaMock.product.findMany).toHaveBeenCalledWith({
       where: { id: { in: [7, 1, 2] }, isActive: true },
     });
+    expect(resolveProductPromotions).toHaveBeenCalledWith(
+      prismaMock,
+      [
+        { productId: 7, quantity: 1 },
+        { productId: 1, quantity: 1 },
+        { productId: 2, quantity: 1 },
+      ],
+      expect.objectContaining({ eligibilityMode: "POTENTIAL" }),
+    );
   });
 
   it("accepts spaces around ids", async () => {
