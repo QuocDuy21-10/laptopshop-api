@@ -13,6 +13,14 @@ export type FlashSaleAvailabilityDto = {
   endsAt: Date;
 };
 
+export const isFlashSaleAvailabilityEligible = (input: {
+  quota: { totalQuota: number; claimedUnits: number; maxUnitsPerUser: number };
+  userClaimedUnits?: number;
+  userId?: number;
+}) =>
+  input.quota.totalQuota - input.quota.claimedUnits > 0 &&
+  (input.userId === undefined || input.quota.maxUnitsPerUser - (input.userClaimedUnits ?? 0) > 0);
+
 export const toFlashSaleAvailabilityDto = (input: {
   promotion: { id: number; name: string; state: "ACTIVE"; startsAt: Date; endsAt: Date };
   quota: { productId: number; totalQuota: number; claimedUnits: number; maxUnitsPerUser: number };
@@ -37,7 +45,7 @@ export const toFlashSaleAvailabilityDto = (input: {
     promotionId: input.promotion.id,
     name: input.promotion.name,
     state: state === "SCHEDULED" || state === "RUNNING" ? state : "RUNNING",
-    available: remainingQuota > 0 && (userRemainingQuota === undefined || userRemainingQuota > 0),
+    available: isFlashSaleAvailabilityEligible(input),
     remainingQuota: input.showRemainingQuota ? remainingQuota : null,
     maxUnitsPerUser: input.quota.maxUnitsPerUser,
     ...(userRemainingQuota === undefined ? {} : { userRemainingQuota }),

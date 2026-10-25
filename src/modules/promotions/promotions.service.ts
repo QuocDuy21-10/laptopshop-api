@@ -438,21 +438,26 @@ export const getPromotionSummary = async (id: number) => {
       where: { promotionId: id },
       select: { productId: true, totalQuota: true, claimedUnits: true },
     });
-    const [allocationAggregate, releasedAggregate, completedAggregate] = await Promise.all([
-      prisma.flashSaleAllocation.aggregate({
-        where: { promotionId: id },
-        _sum: { quantity: true, discountAmount: true },
-        _count: { _all: true },
-      }),
-      prisma.flashSaleAllocation.aggregate({
-        where: { promotionId: id, status: "RELEASED" },
-        _sum: { quantity: true },
-      }),
-      prisma.flashSaleAllocation.aggregate({
-        where: { promotionId: id, status: "CLAIMED", order: { status: "COMPLETED" } },
-        _sum: { quantity: true },
-      }),
-    ]);
+    const [allocationAggregate, claimedDiscountAggregate, releasedAggregate, completedAggregate] =
+      await Promise.all([
+        prisma.flashSaleAllocation.aggregate({
+          where: { promotionId: id },
+          _sum: { quantity: true },
+          _count: { _all: true },
+        }),
+        prisma.flashSaleAllocation.aggregate({
+          where: { promotionId: id, status: "CLAIMED" },
+          _sum: { discountAmount: true },
+        }),
+        prisma.flashSaleAllocation.aggregate({
+          where: { promotionId: id, status: "RELEASED" },
+          _sum: { quantity: true },
+        }),
+        prisma.flashSaleAllocation.aggregate({
+          where: { promotionId: id, status: "CLAIMED", order: { status: "COMPLETED" } },
+          _sum: { quantity: true },
+        }),
+      ]);
     const totalQuota = quotas.reduce((sum, quota) => sum + quota.totalQuota, 0);
     const claimedUnits = quotas.reduce((sum, quota) => sum + quota.claimedUnits, 0);
     return {
@@ -464,7 +469,7 @@ export const getPromotionSummary = async (id: number) => {
       releasedUnits: releasedAggregate._sum.quantity ?? 0,
       completedUnits: completedAggregate._sum.quantity ?? 0,
       allocationCount: allocationAggregate._count._all,
-      totalDiscountAmount: allocationAggregate._sum.discountAmount ?? 0,
+      totalDiscountAmount: claimedDiscountAggregate._sum.discountAmount ?? 0,
       breakdown: quotas.map((quota) => ({
         productId: quota.productId,
         totalQuota: quota.totalQuota,
