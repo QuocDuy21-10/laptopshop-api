@@ -15,6 +15,7 @@ export type PromotionCandidateKind = "AUTOMATIC" | "FLASH_SALE";
 
 export type PromotionPricingCandidate = AutomaticPromotionInput & {
   kind?: PromotionCandidateKind;
+  unitDiscount?: number;
   totalQuota?: number;
   claimedUnits?: number;
   remainingQuota?: number;
@@ -25,7 +26,7 @@ export type PromotionPricingCandidate = AutomaticPromotionInput & {
 };
 
 export type ResolvedAutomaticPromotion = AutomaticPromotionInput & {
-  kind?: "AUTOMATIC";
+  kind: "AUTOMATIC";
   startsAt: Date;
   endsAt: Date;
   unitDiscount: number;

@@ -16,7 +16,9 @@ export const comparePromotionCandidates = (
 ): number => {
   const priority = b.priority - a.priority;
   if (priority !== 0) return priority;
-  const discount = automaticDiscountPerUnit(b, listPrice) - automaticDiscountPerUnit(a, listPrice);
+  const discount =
+    (b.unitDiscount ?? automaticDiscountPerUnit(b, listPrice)) -
+    (a.unitDiscount ?? automaticDiscountPerUnit(a, listPrice));
   return discount !== 0 ? discount : a.id - b.id;
 };
 

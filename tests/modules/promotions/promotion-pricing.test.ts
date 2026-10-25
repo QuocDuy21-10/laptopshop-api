@@ -58,6 +58,18 @@ describe("promotion pricing", () => {
     expect(winner?.id).toBe(2);
   });
 
+  it("uses the actual list price when comparing fixed and percentage discounts", () => {
+    const winner = selectAutomaticPromotion(
+      [
+        automatic({ id: 1, priority: 2, discountKind: "PERCENT", discountValue: 10 }),
+        automatic({ id: 2, priority: 2, discountKind: "FIXED", discountValue: 500 }),
+      ],
+      1_000,
+    );
+
+    expect(winner?.id).toBe(2);
+  });
+
   it("rounds automatic percentage discounts on one unit before multiplying quantity", () => {
     const result = calculatePromotionPricing({
       lines: [{ productId: 1, quantity: 3, listPrice: 99, automaticCandidates: [automatic()] }],
