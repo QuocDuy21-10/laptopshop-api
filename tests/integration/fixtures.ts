@@ -1,4 +1,5 @@
 import { prisma } from "config/client";
+import { quoteOrder } from "modules/promotions/promotions.service";
 
 export const resetDb = async () => {
   await prisma.workerCheckpoint.deleteMany();
@@ -109,6 +110,12 @@ export const receiver = {
   receiverPhone: "0900000000",
   pricingFingerprint: "a".repeat(64),
 };
+
+// checkout verifies the pricing fingerprint, so a fixed one only works for what was quoted
+export const quotedReceiver = async (userId: number) => ({
+  ...receiver,
+  pricingFingerprint: (await quoteOrder(userId)).pricingFingerprint,
+});
 
 export const createCompletedOrderItem = async (userId: number, productId: number) => {
   const order = await prisma.order.create({

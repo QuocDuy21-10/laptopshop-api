@@ -1,7 +1,14 @@
 import { prisma } from "config/client";
 import { adjustStock, moveStock } from "modules/inventory/inventory.service";
 import { changeStatus, placeOrder } from "modules/orders/orders.service";
-import { createProduct, createUser, ledgerMatches, putInCart, receiver, resetDb } from "./fixtures";
+import {
+  createProduct,
+  createUser,
+  ledgerMatches,
+  putInCart,
+  quotedReceiver,
+  resetDb,
+} from "./fixtures";
 
 beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
@@ -42,7 +49,7 @@ describe("stock ledger", () => {
     for (const u of users) await putInCart(u.id, product.id, 1);
 
     const results = await Promise.allSettled(
-      users.map((u, i) => placeOrder(u.id, `l-${i}`, receiver)),
+      users.map(async (u, i) => placeOrder(u.id, `l-${i}`, await quotedReceiver(u.id))),
     );
     const placed = results.filter(
       (r): r is PromiseFulfilledResult<Awaited<ReturnType<typeof placeOrder>>> =>

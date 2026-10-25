@@ -1,6 +1,6 @@
 import { prisma } from "config/client";
 import { placeOrder } from "modules/orders/orders.service";
-import { createProduct, createUser, putInCart, receiver, resetDb } from "./fixtures";
+import { createProduct, createUser, putInCart, quotedReceiver, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
@@ -12,7 +12,7 @@ describe("payment safety schema", () => {
     await putInCart(user.id, product.id, 1);
 
     const { order } = await placeOrder(user.id, "schema-payment", {
-      ...receiver,
+      ...(await quotedReceiver(user.id)),
       paymentMethod: "BANK_TRANSFER",
     });
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
@@ -26,7 +26,7 @@ describe("payment safety schema", () => {
     const user = await createUser();
     await putInCart(user.id, product.id, 1);
     const { order } = await placeOrder(user.id, "schema-review", {
-      ...receiver,
+      ...(await quotedReceiver(user.id)),
       paymentMethod: "BANK_TRANSFER",
     });
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
