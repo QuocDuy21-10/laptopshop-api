@@ -44,6 +44,8 @@ services:
         condition: service_healthy
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     command: ["node", "dist/workers/payment-worker.js"]
     healthcheck:
@@ -110,6 +112,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
     command: ["node", "dist/workers/outbox-dispatcher.js"]
     healthcheck:
       disable: true
@@ -131,6 +134,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    restart: unless-stopped
     command: ["node", "dist/workers/notification-worker.js"]
     healthcheck:
       disable: true
@@ -150,6 +154,9 @@ services:
         condition: service_healthy
       mysql:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
     command: ["node", "dist/workers/notification-maintenance-worker.js"]
     healthcheck:
       disable: true
