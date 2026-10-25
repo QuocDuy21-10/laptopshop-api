@@ -24,6 +24,61 @@ export type PromotionPricingCandidate = AutomaticPromotionInput & {
   userRemainingQuota?: number;
 };
 
+export type ResolvedAutomaticPromotion = AutomaticPromotionInput & {
+  kind?: "AUTOMATIC";
+  startsAt: Date;
+  endsAt: Date;
+  unitDiscount: number;
+};
+
+export type ResolvedFlashSale = AutomaticPromotionInput & {
+  kind: "FLASH_SALE";
+  startsAt: Date;
+  endsAt: Date;
+  unitDiscount: number;
+  totalQuota: number;
+  claimedUnits: number;
+  remainingQuota: number;
+  maxUnitsPerUser: number;
+  showRemainingQuota: boolean;
+  userClaimedUnits?: number;
+  userRemainingQuota?: number;
+};
+
+export type ResolvedPromotion =
+  (ResolvedAutomaticPromotion & { kind: "AUTOMATIC" }) | ResolvedFlashSale;
+
+export type PromotionEligibilityMode = "POTENTIAL" | "EXACT";
+export type PromotionFallbackReason = "GLOBAL_QUOTA" | "USER_QUOTA" | "GLOBAL_AND_USER_QUOTA";
+export type PromotionResolutionLine = { productId: number; quantity: number };
+export type PromotionResolutionContext = {
+  now: Date;
+  userId?: number;
+  eligibilityMode: PromotionEligibilityMode;
+};
+export type FlashSaleFallback = {
+  promotionId: number;
+  reason: PromotionFallbackReason;
+  requestedQuantity: number;
+  globalRemaining: number;
+  userRemaining?: number;
+  availableQuantity: number;
+  appliedPromotionKind: "AUTOMATIC" | null;
+};
+export type PublicPromotionFallback = {
+  skippedKind: "FLASH_SALE";
+  promotionId: number;
+  reason: PromotionFallbackReason;
+  requestedQuantity: number;
+  availableQuantity: number;
+  appliedPromotionKind: "AUTOMATIC" | null;
+};
+export type ProductPromotionResolution = {
+  winner: ResolvedPromotion | null;
+  eligibility: PromotionEligibilityMode;
+  fallback: FlashSaleFallback | null;
+};
+
 export type CouponInput = {
   id: number;
   code: string;

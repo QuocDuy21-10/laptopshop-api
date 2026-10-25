@@ -6,6 +6,7 @@ import type {
   PromotionPricingResult,
   PromotionPricingCandidate,
 } from "modules/promotions/promotions.types";
+import { comparePromotionCandidates } from "modules/promotions/promotion-selection";
 
 export const automaticDiscountPerUnit = (promotion: AutomaticPromotionInput, listPrice: number) =>
   promotion.discountKind === "PERCENT"
@@ -16,15 +17,7 @@ export const selectAutomaticPromotion = (
   candidates: PromotionPricingCandidate[],
   listPrice: number,
 ): PromotionPricingCandidate | null =>
-  [...candidates]
-    .sort((a, b) => {
-      const priority = b.priority - a.priority;
-      if (priority !== 0) return priority;
-      const discount =
-        automaticDiscountPerUnit(b, listPrice) - automaticDiscountPerUnit(a, listPrice);
-      return discount !== 0 ? discount : a.id - b.id;
-    })
-    .at(0) ?? null;
+  [...candidates].sort((a, b) => comparePromotionCandidates(a, b, listPrice)).at(0) ?? null;
 
 const couponAppliesToLine = (coupon: CouponInput, line: PromotionPricingLineResult) =>
   line.postProductLineTotal > 0 &&

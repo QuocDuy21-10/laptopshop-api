@@ -3,6 +3,10 @@ import {
   selectAutomaticPromotion,
 } from "modules/promotions/promotion-pricing";
 import type { AutomaticPromotionInput } from "modules/promotions/promotions.types";
+import type {
+  ResolvedAutomaticPromotion,
+  ResolvedPromotion,
+} from "modules/promotions/promotions.types";
 
 export type PrismaClientLike = {
   promotion: {
@@ -10,25 +14,11 @@ export type PrismaClientLike = {
   };
 };
 
-export type ResolvedAutomaticPromotion = AutomaticPromotionInput & {
-  startsAt: Date;
-  endsAt: Date;
-  unitDiscount: number;
-};
-
-export type ResolvedFlashSale = ResolvedAutomaticPromotion & {
-  kind: "FLASH_SALE";
-  totalQuota: number;
-  claimedUnits: number;
-  remainingQuota: number;
-  maxUnitsPerUser: number;
-  showRemainingQuota: boolean;
-  userClaimedUnits?: number;
-  userRemainingQuota?: number;
-};
-
-export type ResolvedPromotion =
-  (ResolvedAutomaticPromotion & { kind: "AUTOMATIC" }) | ResolvedFlashSale;
+export type {
+  ResolvedAutomaticPromotion,
+  ResolvedFlashSale,
+  ResolvedPromotion,
+} from "modules/promotions/promotions.types";
 
 type PromotionRow = {
   id: number;
@@ -254,6 +244,7 @@ export const resolveAutomaticPromotions = async (
       Number.MAX_SAFE_INTEGER;
     result.set(productId, {
       ...winner,
+      kind: "AUTOMATIC",
       startsAt: row.startsAt,
       endsAt: row.endsAt,
       unitDiscount: automaticDiscountPerUnit(winner, listPrice),
