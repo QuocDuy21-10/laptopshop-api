@@ -17,7 +17,10 @@ const containsControlPattern = (value: string) =>
 export const inspectAdvisorProviderInput = (input: ProviderRequest): AdvisorInputGuardResult => {
   const values = [
     input.preferences.note,
-    ...input.candidates.flatMap((candidate) => candidate.evidence.map((fact) => fact.text)),
+    ...input.candidates.flatMap((candidate) => [
+      candidate.automaticPromotion?.name,
+      ...candidate.evidence.map((fact) => fact.text),
+    ]),
   ].filter((value): value is string => Boolean(value));
   return values.some(containsControlPattern)
     ? { safe: false, category: "prompt_control" }

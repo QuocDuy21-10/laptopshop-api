@@ -34,6 +34,34 @@ describe("Redis advisor admission", () => {
     );
   });
 
+  it("keeps requester and global quota counters atomic under concurrent callers", async () => {
+    const quotaPrefix = `${prefix}:${randomUUID()}`;
+    const admission = new RedisAdvisorAdmission(client, {
+      ...config,
+      guestLimit: 2,
+      globalLimit: 3,
+      concurrencyLimit: 100,
+      keyPrefix: quotaPrefix,
+    });
+    const sameRequester = await Promise.all(
+      Array.from({ length: 10 }, () => admission.acquire({ kind: "guest", key: "same" })),
+    );
+    const otherRequesters = await Promise.all(
+      Array.from({ length: 10 }, (_, index) =>
+        admission.acquire({ kind: "guest", key: `other-${index}` }),
+      ),
+    );
+    const acquired = [...sameRequester, ...otherRequesters].filter(
+      (result) => result.status === "acquired",
+    );
+    expect(acquired).toHaveLength(3);
+    await Promise.all(
+      acquired.map((result) => (result.status === "acquired" ? result.lease.release() : false)),
+    );
+    const keys = await client.keys(`${quotaPrefix}:*`);
+    if (keys.length) await client.del(keys);
+  });
+
   it("does not burn daily quota when concurrency rejects a request", async () => {
     const admission = new RedisAdvisorAdmission(client, { ...config, concurrencyLimit: 1 });
     const requester = { kind: "guest" as const, key: "same-requester" };

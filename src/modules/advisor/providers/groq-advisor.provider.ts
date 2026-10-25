@@ -95,7 +95,6 @@ export class GroqAdvisorProvider implements AdvisorProvider {
         automaticPromotion: automaticPromotion
           ? {
               id: automaticPromotion.id,
-              name: automaticPromotion.name,
               endsAt: automaticPromotion.endsAt,
             }
           : null,
@@ -155,7 +154,13 @@ export class GroqAdvisorProvider implements AdvisorProvider {
     let body: unknown;
     try {
       body = await response.json();
-    } catch {
+    } catch (error) {
+      if (
+        (error as { name?: string })?.name === "AbortError" ||
+        (error as { name?: string })?.name === "TimeoutError"
+      ) {
+        throw new AdvisorProviderError("timeout", "Groq response timed out");
+      }
       throw invalid("Groq response was not JSON");
     }
     const choice = (
@@ -168,7 +173,11 @@ export class GroqAdvisorProvider implements AdvisorProvider {
     ).choices?.[0];
     if (choice?.finish_reason !== "stop")
       throw new AdvisorProviderError("incomplete_output", "Groq response was incomplete");
-    if (typeof choice.message?.refusal === "string" && choice.message.refusal.trim())
+    const refusal = choice.message?.refusal;
+    if (
+      (typeof refusal === "string" && refusal.trim()) ||
+      (refusal !== undefined && refusal !== null && typeof refusal !== "string")
+    )
       throw new AdvisorProviderError("incomplete_output", "Groq refused the request");
     const content = choice.message?.content;
     if (typeof content !== "string") throw invalid("Groq response did not contain message content");
@@ -211,6 +220,12 @@ export class GroqAdvisorProvider implements AdvisorProvider {
       if (prose.some((token) => !allowedNumbers.has(token)))
         throw invalid("Groq introduced an unsupported number");
       const allProse = [item.reason, ...item.tradeoffs].join(" ");
+      if (
+        /giá|price|sale|khuyến mãi|giảm/i.test(allProse) &&
+        !item.evidenceKeys.some((key) => key.startsWith("price-"))
+      ) {
+        throw invalid("Groq made an unsupported price claim");
+      }
       const featureClaims: Array<{
         feature: string;
         pattern: RegExp;

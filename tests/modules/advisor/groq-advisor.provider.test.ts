@@ -237,6 +237,39 @@ describe("GroqAdvisorProvider", () => {
     });
   });
 
+  it("requires pricing evidence for price claims even when the budget has the same number", async () => {
+    const numericInput = input({
+      candidates: [
+        { ...input().candidates[0], evidence: [{ key: "ram-16gb", text: "RAM 16 GB" }] },
+      ],
+    });
+    const fetchImpl = jest.fn().mockResolvedValue(
+      responseFor({
+        recommendations: [
+          {
+            productId: 1,
+            reason: "Giá 20000000 phù hợp.",
+            evidenceKeys: ["ram-16gb"],
+            tradeoffs: [],
+          },
+        ],
+      }),
+    );
+    const provider = new GroqAdvisorProvider(
+      {
+        apiKey: "secret",
+        model: "model",
+        timeoutMs: 10_000,
+        maxOutputTokens: 500,
+        structuredOutputMode: "json_object",
+      },
+      fetchImpl,
+    );
+    await expect(provider.explain(numericInput)).rejects.toMatchObject({
+      category: "invalid_output",
+    });
+  });
+
   it("rejects duplicate, missing or reordered product ids", async () => {
     const fetchImpl = jest.fn().mockResolvedValue(
       responseFor({
@@ -277,6 +310,48 @@ describe("GroqAdvisorProvider", () => {
     await expect(provider.explain(input())).rejects.toMatchObject({
       category: "incomplete_output",
     });
+    await expect(provider.explain(input())).rejects.toMatchObject({
+      category: "incomplete_output",
+    });
+  });
+
+  it("maps an abort while reading the response body to timeout", async () => {
+    const fetchImpl = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: jest
+        .fn()
+        .mockRejectedValue(Object.assign(new Error("aborted"), { name: "AbortError" })),
+    });
+    const provider = new GroqAdvisorProvider(
+      {
+        apiKey: "secret",
+        model: "model",
+        timeoutMs: 10_000,
+        maxOutputTokens: 500,
+        structuredOutputMode: "json_object",
+      },
+      fetchImpl,
+    );
+    await expect(provider.explain(input())).rejects.toMatchObject({ category: "timeout" });
+  });
+
+  it("rejects a non-string refusal value", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValue(
+        responseFor(validBody, undefined, { message: { refusal: { reason: "unsafe" } } }),
+      );
+    const provider = new GroqAdvisorProvider(
+      {
+        apiKey: "secret",
+        model: "model",
+        timeoutMs: 10_000,
+        maxOutputTokens: 500,
+        structuredOutputMode: "json_object",
+      },
+      fetchImpl,
+    );
     await expect(provider.explain(input())).rejects.toMatchObject({
       category: "incomplete_output",
     });

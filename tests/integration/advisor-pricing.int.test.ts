@@ -103,9 +103,15 @@ describe("Advisor pricing pipeline", () => {
     expect(recommendations.map(({ product }) => product.id)).toEqual(
       expect.arrayContaining([discounted.id, regular.id]),
     );
-    expect(recommendations.map(({ product }) => product.id)).not.toEqual(
-      expect.arrayContaining([flashSaleOnly.id, expired.id, lowRam.id, inactive.id, outOfStock.id]),
-    );
+    for (const excludedId of [
+      flashSaleOnly.id,
+      expired.id,
+      lowRam.id,
+      inactive.id,
+      outOfStock.id,
+    ]) {
+      expect(recommendations.map(({ product }) => product.id)).not.toContain(excludedId);
+    }
     expect(
       recommendations.find(({ product }) => product.id === discounted.id)?.product,
     ).toMatchObject({
