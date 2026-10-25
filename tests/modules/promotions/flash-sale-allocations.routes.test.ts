@@ -57,13 +57,13 @@ describe("admin Flash Sale allocations", () => {
 
     expect(response.status).toBe(200);
     expect(response.body.meta).toMatchObject({ page: 2, pageSize: 10, total: 1 });
-    expect(response.body.items[0]).toMatchObject({
+    expect(response.body.data[0]).toMatchObject({
       promotionId: 42,
       productId: 3,
       quantity: 1,
       status: "CLAIMED",
     });
-    expect(response.body.items[0]).not.toHaveProperty("password");
+    expect(response.body.data[0]).not.toHaveProperty("password");
   });
 
   it("returns Flash Sale quota summary derived from current quotas and allocation history", async () => {

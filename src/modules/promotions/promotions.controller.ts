@@ -101,5 +101,5 @@ export const listFlashSaleAllocationsHandler: RequestHandler = async (_req, res)
     (res.locals.params as PromotionIdParams).id,
     res.locals.query as FlashSaleAllocationQuery,
   );
-  res.json(result);
+  res.json({ data: result.items, meta: result.meta });
 };
