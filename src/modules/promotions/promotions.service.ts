@@ -288,7 +288,7 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
       ];
       await requestPricingReevaluation(tx, {
         productIds,
-        eventVersion: String(updated.pricingVersion),
+        eventVersion: `${id}-${updated.pricingVersion}`,
         availableAt: body.startsAt && body.startsAt > new Date() ? body.startsAt : undefined,
       });
     }
@@ -342,7 +342,7 @@ export const transitionPromotion = async (
     ];
     await requestPricingReevaluation(tx, {
       productIds,
-      eventVersion: String(promotion.pricingVersion),
+      eventVersion: `${id}-${promotion.pricingVersion}`,
       availableAt:
         ["ACTIVATE", "RESUME"].includes(action) && current.startsAt > now
           ? current.startsAt

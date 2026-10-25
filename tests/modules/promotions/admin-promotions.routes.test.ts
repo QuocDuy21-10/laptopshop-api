@@ -168,6 +168,36 @@ describe("admin promotion routes", () => {
     expect(locked.body.error.code).toBe("PROMOTION_FIELD_LOCKED");
   });
 
+  it("keeps pricing reevaluation events distinct for promotions that share a product", async () => {
+    const target = {
+      ...promotion,
+      products: [{ productId: 3, product: { id: 3, name: "Laptop", image: null } }],
+    };
+    const dedupeKeys: string[] = [];
+    prismaMock.outboxEvent.create.mockImplementation(
+      async ({ data }: { data: { dedupeKey: string } }) => {
+        dedupeKeys.push(data.dedupeKey);
+        return data;
+      },
+    );
+    for (const id of [10, 11]) {
+      prismaMock.promotion.findUnique.mockResolvedValue({ ...target, id });
+      prismaMock.promotion.update.mockResolvedValue({
+        ...target,
+        id,
+        state: "ACTIVE",
+        pricingVersion: 2,
+      });
+      const response = await request(buildApp())
+        .patch(`${endpoint}/${id}/state`)
+        .set("Cookie", cookieFor(ADMIN))
+        .send({ action: "ACTIVATE" });
+      expect(response.status).toBe(200);
+    }
+    expect(dedupeKeys).toHaveLength(2);
+    expect(new Set(dedupeKeys).size).toBe(2);
+  });
+
   it("allows only an active Flash Sale quota increase without bumping pricingVersion", async () => {
     const activeFlash = {
       ...promotion,
