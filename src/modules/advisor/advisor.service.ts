@@ -1,5 +1,6 @@
 import { buildRuleBasedResult } from "modules/advisor/advisor.explanation";
 import { inspectAdvisorProviderInput } from "modules/advisor/advisor.input-guard";
+import type { AdvisorAdmission } from "modules/advisor/advisor.admission";
 import { priceAdvisorCandidates } from "modules/advisor/advisor.pricing";
 import type { AdvisorRepository } from "modules/advisor/advisor.repository";
 import { rankCandidates, selectTopAdvisorCandidates } from "modules/advisor/advisor.ranking";
@@ -20,14 +21,10 @@ import {
 
 export type AdvisorRequester = { kind: "guest" | "user"; key: string };
 
-export interface AdvisorQuota {
-  tryReserve(requester: AdvisorRequester): Promise<boolean>;
-}
-
 export type AdvisorServiceDeps = {
   repository: AdvisorRepository;
   provider?: AdvisorProvider;
-  quota?: AdvisorQuota;
+  admission?: AdvisorAdmission;
   logger?: {
     warn: (object: unknown, message?: string) => void;
     info?: (object: unknown, message?: string) => void;
@@ -115,19 +112,22 @@ export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService =
       return result;
     };
     const fallback = () => finish(buildRuleBasedResult(ranked, input));
-    if (!deps.provider || !deps.quota || ranked.length === 0) return fallback();
+    if (!deps.provider || !deps.admission || ranked.length === 0) return fallback();
     const guard = inspectAdvisorProviderInput({ preferences: input, candidates: ranked });
     if (!guard.safe) {
       deps.logger?.warn({ category: "input_guard" }, "advisor input guard fallback");
       return fallback();
     }
+    let lease: { release: () => Promise<boolean> } | undefined;
     try {
-      if (!(await deps.quota.tryReserve(requester))) {
-        deps.logger?.warn({ category: "quota" }, "advisor quota fallback");
+      const admission = await deps.admission.acquire(requester);
+      if (admission.status !== "acquired") {
+        deps.logger?.warn({ category: admission.status }, "advisor admission fallback");
         return fallback();
       }
+      lease = admission.lease;
     } catch {
-      deps.logger?.warn({ category: "redis_error" }, "advisor quota fallback");
+      deps.logger?.warn({ category: "redis_error" }, "advisor admission fallback");
       return fallback();
     }
     try {
@@ -138,6 +138,19 @@ export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService =
       const category = error instanceof AdvisorProviderError ? error.category : "provider_5xx";
       deps.logger?.warn({ category }, "advisor provider fallback");
       return fallback();
+    } finally {
+      try {
+        if (lease && !(await lease.release()))
+          deps.logger?.warn(
+            { category: "admission_release_error" },
+            "advisor admission release failed",
+          );
+      } catch {
+        deps.logger?.warn(
+          { category: "admission_release_error" },
+          "advisor admission release failed",
+        );
+      }
     }
   },
 });

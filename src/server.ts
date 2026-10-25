@@ -6,7 +6,7 @@ import { createRedisLimitStore } from "middlewares/rate-limit";
 import { logger } from "lib/logger";
 import { registerDocs } from "docs/openapi";
 import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
-import { RedisAdvisorQuota } from "modules/advisor/advisor.quota";
+import { RedisAdvisorAdmission } from "modules/advisor/advisor.admission";
 import { createAdvisorService, priceAdvisorCandidates } from "modules/advisor/advisor.service";
 import { GroqAdvisorProvider } from "modules/advisor/providers/groq-advisor.provider";
 import { createApp } from "./app";
@@ -27,10 +27,12 @@ const main = async () => {
             maxOutputTokens: env.ADVISOR_AI_MAX_OUTPUT_TOKENS,
             structuredOutputMode: env.GROQ_STRUCTURED_OUTPUT_MODE,
           }),
-          quota: new RedisAdvisorQuota(redis, {
+          admission: new RedisAdvisorAdmission(redis, {
             guestLimit: env.ADVISOR_GUEST_DAILY_LIMIT,
             userLimit: env.ADVISOR_USER_DAILY_LIMIT,
             globalLimit: env.ADVISOR_GLOBAL_DAILY_LIMIT,
+            concurrencyLimit: env.ADVISOR_AI_CONCURRENCY_LIMIT,
+            leaseMs: env.ADVISOR_AI_CONCURRENCY_LEASE_MS,
           }),
           logger,
           model: env.GROQ_MODEL,

@@ -132,6 +132,8 @@ const schema = z
     ADVISOR_USER_DAILY_LIMIT: z.coerce.number().int().positive().default(10),
     ADVISOR_GLOBAL_DAILY_LIMIT: z.coerce.number().int().positive().default(30),
     ADVISOR_CANDIDATE_BATCH_SIZE: z.coerce.number().int().min(25).max(1000).default(200),
+    ADVISOR_AI_CONCURRENCY_LIMIT: z.coerce.number().int().min(1).max(20).default(2),
+    ADVISOR_AI_CONCURRENCY_LEASE_MS: z.coerce.number().int().min(1_000).max(60_000).default(15_000),
     REVIEW_IMAGES_ENABLED: z
       .enum(["true", "false"])
       .default("false")
@@ -269,6 +271,13 @@ const schema = z
           path: ["GROQ_MODEL"],
           message: "GROQ_MODEL is required when ADVISOR_AI_ENABLED=true",
         });
+    }
+    if (e.ADVISOR_AI_CONCURRENCY_LEASE_MS < e.ADVISOR_AI_TIMEOUT_MS + 2_000) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ADVISOR_AI_CONCURRENCY_LEASE_MS"],
+        message: "ADVISOR_AI_CONCURRENCY_LEASE_MS must exceed timeout by 2000ms",
+      });
     }
     if (e.REVIEW_IMAGES_ENABLED) {
       if (!e.REVIEW_IMAGE_S3_REGION)
