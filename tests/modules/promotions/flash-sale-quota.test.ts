@@ -163,21 +163,79 @@ describe("flash sale quota service", () => {
     expect(tx.flashSaleUserUsage.upsert).not.toHaveBeenCalled();
   });
 
-  it("only decrements counters after a claimed allocation transitions to released", async () => {
+  it("does not decrement counters when the allocation transition loses the race", async () => {
     const tx = txMock();
     tx.flashSaleAllocation.findMany.mockResolvedValue([
       { id: 1, promotionId: 1, productId: 3, userId: 7, quantity: 2, status: "CLAIMED" },
-      { id: 2, promotionId: 1, productId: 4, userId: 7, quantity: 1, status: "CLAIMED" },
     ]);
-    tx.flashSaleAllocation.updateMany
-      .mockResolvedValueOnce({ count: 0 })
-      .mockResolvedValueOnce({ count: 1 });
+    tx.flashSaleAllocation.updateMany.mockResolvedValueOnce({ count: 0 });
 
     await expect(
       releaseFlashSaleAllocations(tx as never, { orderId: 5, reason: "CANCELLED", now }),
-    ).resolves.toBe(1);
+    ).resolves.toBe(0);
+    expect(tx.flashSaleProductQuota.updateMany).not.toHaveBeenCalled();
+    expect(tx.flashSaleUserUsage.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects release when the global quota decrement does not update one row", async () => {
+    const tx = txMock();
+    tx.flashSaleAllocation.findMany.mockResolvedValue([
+      { id: 1, promotionId: 1, productId: 3, userId: 7, quantity: 2, status: "CLAIMED" },
+    ]);
+    tx.flashSaleAllocation.updateMany.mockResolvedValueOnce({ count: 1 });
+    tx.flashSaleProductQuota.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      releaseFlashSaleAllocations(tx as never, { orderId: 5, reason: "CANCELLED", now }),
+    ).rejects.toMatchObject({
+      message: "Flash Sale quota counter mismatch",
+      code: "FLASH_SALE_COUNTER_MISMATCH",
+      details: { promotionId: 1, productId: 3, userId: 7, quantity: 2 },
+    });
+    expect(tx.flashSaleUserUsage.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("rejects release when the user quota decrement does not update one row", async () => {
+    const tx = txMock();
+    tx.flashSaleAllocation.findMany.mockResolvedValue([
+      { id: 1, promotionId: 1, productId: 3, userId: 7, quantity: 2, status: "CLAIMED" },
+    ]);
+    tx.flashSaleAllocation.updateMany.mockResolvedValueOnce({ count: 1 });
+    tx.flashSaleProductQuota.updateMany.mockResolvedValueOnce({ count: 1 });
+    tx.flashSaleUserUsage.updateMany.mockResolvedValueOnce({ count: 0 });
+
+    await expect(
+      releaseFlashSaleAllocations(tx as never, { orderId: 5, reason: "CANCELLED", now }),
+    ).rejects.toMatchObject({
+      code: "FLASH_SALE_COUNTER_MISMATCH",
+      details: { promotionId: 1, productId: 3, userId: 7, quantity: 2 },
+    });
+  });
+
+  it("increments released units only after both quota counters decrement", async () => {
+    const tx = txMock();
+    tx.flashSaleAllocation.findMany.mockResolvedValue([
+      { id: 1, promotionId: 1, productId: 3, userId: 7, quantity: 2, status: "CLAIMED" },
+    ]);
+    tx.flashSaleAllocation.updateMany.mockResolvedValueOnce({ count: 1 });
+
+    await expect(
+      releaseFlashSaleAllocations(tx as never, { orderId: 5, reason: "CANCELLED", now }),
+    ).resolves.toBe(2);
     expect(tx.flashSaleProductQuota.updateMany).toHaveBeenCalledTimes(1);
     expect(tx.flashSaleUserUsage.updateMany).toHaveBeenCalledTimes(1);
+  });
+
+  it("loads claimed allocations in promotion, product and allocation order", async () => {
+    const tx = txMock();
+    tx.flashSaleAllocation.findMany.mockResolvedValue([]);
+
+    await releaseFlashSaleAllocations(tx as never, { orderId: 5, reason: "CANCELLED", now });
+
+    expect(tx.flashSaleAllocation.findMany).toHaveBeenCalledWith({
+      where: { orderId: 5, status: "CLAIMED" },
+      orderBy: [{ promotionId: "asc" }, { productId: "asc" }, { id: "asc" }],
+    });
   });
 
   it("returns a stable per-user limit conflict after the global claim succeeds", async () => {

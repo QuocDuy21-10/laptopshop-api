@@ -3,7 +3,8 @@ import { AppError } from "lib/errors";
 import { changeStatus, placeOrder } from "modules/orders/orders.service";
 import { ingestPaymentTransaction } from "modules/payments/payment-ingestion.service";
 import { runPaymentMaintenance } from "modules/payments/payment-maintenance.service";
-import { createProduct, createUser, putInCart, receiver, resetDb } from "./fixtures";
+import { quoteOrder } from "modules/promotions/promotions.service";
+import { createProduct, createUser, ledgerMatches, putInCart, receiver, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
@@ -13,15 +14,24 @@ const rejectedCodes = (results: PromiseSettledResult<unknown>[]) =>
     .filter((r): r is PromiseRejectedResult => r.status === "rejected")
     .map((r) => (r.reason instanceof AppError ? r.reason.code : String(r.reason)));
 
+const currentReceiver = async (
+  userId: number,
+  overrides: Partial<typeof receiver> & { paymentMethod?: "BANK_TRANSFER" } = {},
+) => {
+  const quote = await quoteOrder(userId);
+  return { ...receiver, ...overrides, pricingFingerprint: quote.pricingFingerprint };
+};
+
 describe("checkout under concurrency", () => {
   it("never sells more than the stock", async () => {
     const product = await createProduct(2);
     const users = [];
     for (let i = 0; i < 4; i++) users.push(await createUser());
     for (const u of users) await putInCart(u.id, product.id, 1);
+    const inputs = await Promise.all(users.map((user) => currentReceiver(user.id)));
 
     const results = await Promise.allSettled(
-      users.map((u, i) => placeOrder(u.id, `key-${i}`, receiver)),
+      users.map((u, i) => placeOrder(u.id, `key-${i}`, inputs[i])),
     );
 
     expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(2);
@@ -36,9 +46,10 @@ describe("checkout under concurrency", () => {
     const product = await createProduct(5, 300);
     const user = await createUser();
     await putInCart(user.id, product.id, 2);
+    const input = await currentReceiver(user.id);
 
-    const first = await placeOrder(user.id, "same", receiver);
-    const second = await placeOrder(user.id, "same", receiver);
+    const first = await placeOrder(user.id, "same", input);
+    const second = await placeOrder(user.id, "same", input);
 
     expect(first.created).toBe(true);
     expect(first.order.totalPrice).toBe(600);
@@ -52,10 +63,11 @@ describe("checkout under concurrency", () => {
     const product = await createProduct(1);
     const user = await createUser();
     await putInCart(user.id, product.id, 1);
+    const input = await currentReceiver(user.id);
 
     const [a, b] = await Promise.all([
-      placeOrder(user.id, "same", receiver),
-      placeOrder(user.id, "same", receiver),
+      placeOrder(user.id, "same", input),
+      placeOrder(user.id, "same", input),
     ]);
 
     expect(a.order.id).toBe(b.order.id);
@@ -68,11 +80,30 @@ describe("checkout under concurrency", () => {
 });
 
 describe("cancellation under concurrency", () => {
-  it("restocks once when an order is cancelled twice at the same time", async () => {
+  it("releases Flash Sale quota and restocks once when an order is cancelled twice", async () => {
     const product = await createProduct(5);
     const user = await createUser();
+    const promotion = await prisma.promotion.create({
+      data: {
+        kind: "FLASH_SALE",
+        state: "ACTIVE",
+        name: "Flash double cancel",
+        discountKind: "PERCENT",
+        discountValue: 20,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 10 * 60_000),
+        createdById: user.id,
+        updatedById: user.id,
+        flashSalePolicy: { create: { priority: 10, stackableWithCoupon: true } },
+        flashSaleQuotas: { create: { productId: product.id, totalQuota: 5, maxUnitsPerUser: 5 } },
+      },
+    });
     await putInCart(user.id, product.id, 2);
-    const { order } = await placeOrder(user.id, "k", receiver);
+    const quote = await quoteOrder(user.id);
+    const { order } = await placeOrder(user.id, "k", {
+      ...receiver,
+      pricingFingerprint: quote.pricingFingerprint,
+    });
 
     const results = await Promise.allSettled([
       changeStatus(order.id, "CANCELLED", { actorId: user.id }),
@@ -84,6 +115,34 @@ describe("cancellation under concurrency", () => {
     const after = await prisma.product.findUniqueOrThrow({ where: { id: product.id } });
     expect(after.quantity).toBe(5);
     expect(after.sold).toBe(0);
+    await expect(ledgerMatches(product.id)).resolves.toBe(true);
+    await expect(
+      prisma.flashSaleProductQuota.findUniqueOrThrow({
+        where: { promotionId_productId: { promotionId: promotion.id, productId: product.id } },
+      }),
+    ).resolves.toMatchObject({ claimedUnits: 0 });
+    await expect(
+      prisma.flashSaleUserUsage.findUniqueOrThrow({
+        where: {
+          promotionId_productId_userId: {
+            promotionId: promotion.id,
+            productId: product.id,
+            userId: user.id,
+          },
+        },
+      }),
+    ).resolves.toMatchObject({ claimedUnits: 0 });
+    await expect(
+      prisma.flashSaleAllocation.findFirstOrThrow({ where: { orderId: order.id } }),
+    ).resolves.toMatchObject({ status: "RELEASED", quantity: 2 });
+    await expect(
+      prisma.orderDetail.findFirstOrThrow({
+        where: { orderId: order.id, automaticPromotionId: promotion.id },
+        include: { flashSaleAllocation: true },
+      }),
+    ).resolves.toMatchObject({
+      flashSaleAllocation: { status: "RELEASED", quantity: 2 },
+    });
   });
 });
 
@@ -92,9 +151,10 @@ describe("hidden products", () => {
     const product = await createProduct(3);
     const user = await createUser();
     await putInCart(user.id, product.id, 1);
+    const input = await currentReceiver(user.id);
     await prisma.product.update({ where: { id: product.id }, data: { isActive: false } });
 
-    await expect(placeOrder(user.id, "k", receiver)).rejects.toMatchObject({
+    await expect(placeOrder(user.id, "k", input)).rejects.toMatchObject({
       code: "PRODUCT_UNAVAILABLE",
     });
     expect((await prisma.product.findUniqueOrThrow({ where: { id: product.id } })).quantity).toBe(
@@ -109,10 +169,11 @@ describe("bank transfer payments", () => {
     const product = await createProduct(3, 1000);
     const user = await createUser();
     await putInCart(user.id, product.id, 2);
-    const { order } = await placeOrder(user.id, "qr-1", {
-      ...receiver,
-      paymentMethod: "BANK_TRANSFER",
-    });
+    const { order } = await placeOrder(
+      user.id,
+      "qr-1",
+      await currentReceiver(user.id, { paymentMethod: "BANK_TRANSFER" }),
+    );
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
     expect(payment.status).toBe("PENDING");
     expect(payment.transferCode).toMatch(/^LS[A-Z0-9]{12}$/);
@@ -124,10 +185,11 @@ describe("bank transfer payments", () => {
     const product = await createProduct(3, 1000);
     const user = await createUser();
     await putInCart(user.id, product.id, 1);
-    const { order } = await placeOrder(user.id, "qr-2", {
-      ...receiver,
-      paymentMethod: "BANK_TRANSFER",
-    });
+    const { order } = await placeOrder(
+      user.id,
+      "qr-2",
+      await currentReceiver(user.id, { paymentMethod: "BANK_TRANSFER" }),
+    );
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
     const transaction = {
       providerEventId: "event-1",
@@ -161,10 +223,11 @@ describe("bank transfer payments", () => {
     const product = await createProduct(2, 1000);
     const user = await createUser();
     await putInCart(user.id, product.id, 1);
-    const { order } = await placeOrder(user.id, "qr-3", {
-      ...receiver,
-      paymentMethod: "BANK_TRANSFER",
-    });
+    const { order } = await placeOrder(
+      user.id,
+      "qr-3",
+      await currentReceiver(user.id, { paymentMethod: "BANK_TRANSFER" }),
+    );
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
     const verifyingAt = new Date(payment.expiresAt.getTime() + 1);
     expect(await runPaymentMaintenance(verifyingAt)).toMatchObject({ verifying: 1, expired: 0 });
@@ -195,10 +258,11 @@ describe("bank transfer payments", () => {
     const product = await createProduct(2, 1000);
     const user = await createUser();
     await putInCart(user.id, product.id, 1);
-    const { order } = await placeOrder(user.id, "qr-race", {
-      ...receiver,
-      paymentMethod: "BANK_TRANSFER",
-    });
+    const { order } = await placeOrder(
+      user.id,
+      "qr-race",
+      await currentReceiver(user.id, { paymentMethod: "BANK_TRANSFER" }),
+    );
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
     const now = new Date(payment.expiresAt.getTime() + 1);
     const transaction = {
@@ -230,10 +294,11 @@ describe("bank transfer payments", () => {
     const product = await createProduct(2, 1000);
     const user = await createUser();
     await putInCart(user.id, product.id, 1);
-    const { order } = await placeOrder(user.id, "qr-workers", {
-      ...receiver,
-      paymentMethod: "BANK_TRANSFER",
-    });
+    const { order } = await placeOrder(
+      user.id,
+      "qr-workers",
+      await currentReceiver(user.id, { paymentMethod: "BANK_TRANSFER" }),
+    );
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
     const verifyingAt = new Date(payment.expiresAt.getTime() + 1);
     await runPaymentMaintenance(verifyingAt);
@@ -260,10 +325,11 @@ describe("bank transfer payments", () => {
     const product = await createProduct(2, 1000);
     const user = await createUser();
     await putInCart(user.id, product.id, 1);
-    const { order } = await placeOrder(user.id, "qr-4", {
-      ...receiver,
-      paymentMethod: "BANK_TRANSFER",
-    });
+    const { order } = await placeOrder(
+      user.id,
+      "qr-4",
+      await currentReceiver(user.id, { paymentMethod: "BANK_TRANSFER" }),
+    );
     await prisma.order.update({ where: { id: order.id }, data: { status: "SHIPPING" } });
     const payment = await prisma.payment.findUniqueOrThrow({ where: { orderId: order.id } });
     expect(await runPaymentMaintenance(new Date(payment.cancelAfter.getTime() + 1))).toMatchObject({
@@ -281,7 +347,7 @@ describe("order status history", () => {
     const product = await createProduct(5);
     const user = await createUser();
     await putInCart(user.id, product.id, 1);
-    const { order } = await placeOrder(user.id, "h", receiver);
+    const { order } = await placeOrder(user.id, "h", await currentReceiver(user.id));
     await changeStatus(order.id, "SHIPPING", { actorId: user.id });
     await changeStatus(order.id, "COMPLETED", { actorId: user.id });
 

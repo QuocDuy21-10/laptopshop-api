@@ -199,7 +199,7 @@ export const releaseFlashSaleAllocations = async (
       data: { status: "RELEASED", releasedAt: input.now, releaseReason: input.reason.slice(0, 50) },
     });
     if (transitioned.count !== 1) continue;
-    await tx.flashSaleProductQuota.updateMany({
+    const globalResult = await tx.flashSaleProductQuota.updateMany({
       where: {
         promotionId: allocation.promotionId,
         productId: allocation.productId,
@@ -207,7 +207,15 @@ export const releaseFlashSaleAllocations = async (
       },
       data: { claimedUnits: { decrement: allocation.quantity } },
     });
-    await tx.flashSaleUserUsage.updateMany({
+    if (globalResult.count !== 1) {
+      throw new AppError("Flash Sale quota counter mismatch", 409, "FLASH_SALE_COUNTER_MISMATCH", {
+        promotionId: allocation.promotionId,
+        productId: allocation.productId,
+        userId: allocation.userId,
+        quantity: allocation.quantity,
+      });
+    }
+    const userResult = await tx.flashSaleUserUsage.updateMany({
       where: {
         promotionId: allocation.promotionId,
         productId: allocation.productId,
@@ -216,6 +224,14 @@ export const releaseFlashSaleAllocations = async (
       },
       data: { claimedUnits: { decrement: allocation.quantity } },
     });
+    if (userResult.count !== 1) {
+      throw new AppError("Flash Sale quota counter mismatch", 409, "FLASH_SALE_COUNTER_MISMATCH", {
+        promotionId: allocation.promotionId,
+        productId: allocation.productId,
+        userId: allocation.userId,
+        quantity: allocation.quantity,
+      });
+    }
     releasedUnits += allocation.quantity;
   }
   return releasedUnits;

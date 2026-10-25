@@ -342,77 +342,82 @@ export const changeStatus = async (
   to: OrderStatus,
   scope: { actorId?: number; userId?: number; from?: OrderStatus[]; reason?: string },
 ) =>
-  prisma.$transaction(async (tx) => {
-    if (to === ORDER_STATUS.CANCELLED) {
-      return cancelOrder(tx, {
-        orderId,
-        actorId: scope.actorId,
-        userId: scope.userId,
-        from: scope.from ?? ["PENDING", "SHIPPING"],
-        reason: scope.reason,
-        paymentDisposition: "CANCEL",
-        now: new Date(),
-      });
-    }
-    const order = await tx.order.findFirst({
-      where: { id: orderId, ...(scope.userId ? { userId: scope.userId } : {}) },
-      select: {
-        status: true,
-        paymentMethod: true,
-        paymentStatus: true,
-        orderDetails: { select: { id: true, warrantyMonthsSnapshot: true } },
-      },
-    });
-    if (!order) throw notFound("Order");
-    const allowedFrom = !scope.from || scope.from.includes(order.status as OrderStatus);
-    if (!allowedFrom || !canTransition(order.status, to)) throw invalidTransition(order.status, to);
-    if (
-      order.paymentMethod === "BANK_TRANSFER" &&
-      (to === ORDER_STATUS.SHIPPING || to === ORDER_STATUS.COMPLETED) &&
-      order.paymentStatus !== PAYMENT_STATUS.SUCCESS
-    ) {
-      throw new AppError("Payment is required before fulfillment", 409, "PAYMENT_REQUIRED");
-    }
-    const completedAt = to === ORDER_STATUS.COMPLETED ? new Date() : null;
-    // conditional on the status we read, so two concurrent changes cannot both apply (no double restock)
-    const { count } = await tx.order.updateMany({
-      where: { id: orderId, status: order.status },
-      data: {
-        status: to,
-        ...(to === ORDER_STATUS.COMPLETED && order.paymentMethod !== "BANK_TRANSFER"
-          ? { paymentStatus: PAYMENT_STATUS.SUCCESS, completedAt }
-          : to === ORDER_STATUS.COMPLETED
-            ? { completedAt }
-            : {}),
-      },
-    });
-    if (count === 0) throw invalidTransition(order.status, to);
-    if (completedAt) {
-      for (const detail of order.orderDetails ?? []) {
-        const warranty = warrantySnapshotForCompletion({
-          months: detail.warrantyMonthsSnapshot,
-          completedAt,
+  withPrismaTransactionRetry(
+    () =>
+      prisma.$transaction(async (tx) => {
+        if (to === ORDER_STATUS.CANCELLED) {
+          return cancelOrder(tx, {
+            orderId,
+            actorId: scope.actorId,
+            userId: scope.userId,
+            from: scope.from ?? ["PENDING", "SHIPPING"],
+            reason: scope.reason,
+            paymentDisposition: "CANCEL",
+            now: new Date(),
+          });
+        }
+        const order = await tx.order.findFirst({
+          where: { id: orderId, ...(scope.userId ? { userId: scope.userId } : {}) },
+          select: {
+            status: true,
+            paymentMethod: true,
+            paymentStatus: true,
+            orderDetails: { select: { id: true, warrantyMonthsSnapshot: true } },
+          },
         });
-        await tx.orderDetail.update({
-          where: { id: detail.id },
-          data: { warrantyStartAt: warranty.startAt, warrantyEndAt: warranty.endAt },
+        if (!order) throw notFound("Order");
+        const allowedFrom = !scope.from || scope.from.includes(order.status as OrderStatus);
+        if (!allowedFrom || !canTransition(order.status, to))
+          throw invalidTransition(order.status, to);
+        if (
+          order.paymentMethod === "BANK_TRANSFER" &&
+          (to === ORDER_STATUS.SHIPPING || to === ORDER_STATUS.COMPLETED) &&
+          order.paymentStatus !== PAYMENT_STATUS.SUCCESS
+        ) {
+          throw new AppError("Payment is required before fulfillment", 409, "PAYMENT_REQUIRED");
+        }
+        const completedAt = to === ORDER_STATUS.COMPLETED ? new Date() : null;
+        // conditional on the status we read, so two concurrent changes cannot both apply (no double restock)
+        const { count } = await tx.order.updateMany({
+          where: { id: orderId, status: order.status },
+          data: {
+            status: to,
+            ...(to === ORDER_STATUS.COMPLETED && order.paymentMethod !== "BANK_TRANSFER"
+              ? { paymentStatus: PAYMENT_STATUS.SUCCESS, completedAt }
+              : to === ORDER_STATUS.COMPLETED
+                ? { completedAt }
+                : {}),
+          },
         });
-      }
-    }
-    // same transaction as the status change, so history never misses or invents a transition
-    await tx.orderStatusHistory.create({
-      data: {
-        orderId,
-        fromStatus: order.status,
-        toStatus: to,
-        actorId: scope.actorId,
-        ...(scope.reason ? { reason: scope.reason } : {}),
-      },
-    });
-    return toOrderDto(
-      await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: orderInclude }),
-    );
-  });
+        if (count === 0) throw invalidTransition(order.status, to);
+        if (completedAt) {
+          for (const detail of order.orderDetails ?? []) {
+            const warranty = warrantySnapshotForCompletion({
+              months: detail.warrantyMonthsSnapshot,
+              completedAt,
+            });
+            await tx.orderDetail.update({
+              where: { id: detail.id },
+              data: { warrantyStartAt: warranty.startAt, warrantyEndAt: warranty.endAt },
+            });
+          }
+        }
+        // same transaction as the status change, so history never misses or invents a transition
+        await tx.orderStatusHistory.create({
+          data: {
+            orderId,
+            fromStatus: order.status,
+            toStatus: to,
+            actorId: scope.actorId,
+            ...(scope.reason ? { reason: scope.reason } : {}),
+          },
+        });
+        return toOrderDto(
+          await tx.order.findUniqueOrThrow({ where: { id: orderId }, include: orderInclude }),
+        );
+      }),
+    3,
+  );
 
 export const cancelMyOrder = (userId: number, orderId: number) =>
   changeStatus(orderId, ORDER_STATUS.CANCELLED, {

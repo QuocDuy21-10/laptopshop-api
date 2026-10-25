@@ -665,6 +665,48 @@ describe("POST /api/v1/orders/me/:id/cancel", () => {
     });
   });
 
+  it("restocks sorted products before releasing Flash Sale quota", async () => {
+    prismaMock.order.findFirst.mockResolvedValue({ status: "PENDING" });
+    prismaMock.order.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.orderDetail.findMany.mockResolvedValue([
+      { productId: 1, quantity: 2 },
+      { productId: 2, quantity: 1 },
+    ]);
+    prismaMock.flashSaleAllocation.findMany.mockResolvedValue([
+      { id: 9, promotionId: 10, productId: 1, userId: USER.id, quantity: 2 },
+    ]);
+    prismaMock.flashSaleAllocation.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.flashSaleProductQuota.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.flashSaleUserUsage.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.order.findUniqueOrThrow.mockResolvedValue(orderRow({ status: "CANCELLED" }));
+
+    const res = await cancel();
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.orderDetail.findMany).toHaveBeenCalledWith({
+      where: { orderId: 50 },
+      orderBy: { productId: "asc" },
+    });
+    expect(prismaMock.product.update.mock.invocationCallOrder.at(-1)).toBeLessThan(
+      prismaMock.flashSaleAllocation.updateMany.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("retries the complete cancellation transaction after a deadlock", async () => {
+    prismaMock.order.findFirst.mockResolvedValue({ status: "PENDING" });
+    prismaMock.order.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.orderDetail.findMany.mockResolvedValue([]);
+    prismaMock.order.findUniqueOrThrow.mockResolvedValue(orderRow({ status: "CANCELLED" }));
+    prismaMock.$transaction
+      .mockRejectedValueOnce(prismaError("P2034"))
+      .mockImplementationOnce(async (operation: (tx: unknown) => unknown) => operation(prismaMock));
+
+    const res = await cancel();
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(2);
+  });
+
   it("returns 409 when another request changed the status first", async () => {
     prismaMock.order.findFirst.mockResolvedValue({ status: "PENDING" });
     prismaMock.order.updateMany.mockResolvedValue({ count: 0 });

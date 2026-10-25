@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
 import { AppError, notFound } from "lib/errors";
 import { pageArgs, pageMeta } from "lib/http";
+import { withPrismaTransactionRetry } from "lib/prisma-retry";
 import { cancelOrder } from "modules/orders/order-cancellation.service";
 import { ORDER_STATUS } from "modules/orders/order-status";
 import { PaymentReviewCaseQuery } from "modules/payments/payments.schema";
@@ -96,35 +97,39 @@ export const releasePaymentReviewCase = async (
   actorId: number,
   input: { note: string; confirmation: "RELEASE_STOCK"; version: number },
 ) => {
-  await prisma.$transaction(async (tx) => {
-    const row = await tx.paymentReviewCase.findUnique({
-      where: { id },
-      include: reviewInclude,
-    });
-    if (!row || row.status !== "OPEN" || row.version !== input.version) throw versionConflict();
-    const marked = await tx.paymentReviewCase.updateMany({
-      where: { id, status: "OPEN", version: input.version },
-      data: {
-        status: "RESOLVED",
-        resolution: "RELEASED_UNVERIFIED",
-        resolvedAt: new Date(),
-        resolvedById: actorId,
-        version: { increment: 1 },
-      },
-    });
-    if (marked.count !== 1) throw versionConflict();
-    await cancelOrder(tx, {
-      orderId: row.payment.orderId,
-      actorId,
-      from: [ORDER_STATUS.PENDING],
-      paymentDisposition: "CANCEL",
-      allowVerificationCancel: true,
-      reason: "PAYMENT_REVIEW_RELEASED",
-      now: new Date(),
-    });
-    await tx.paymentReviewAction.create({
-      data: { reviewCaseId: id, actorId, action: "RELEASE_STOCK", note: input.note },
-    });
-  });
+  await withPrismaTransactionRetry(
+    () =>
+      prisma.$transaction(async (tx) => {
+        const row = await tx.paymentReviewCase.findUnique({
+          where: { id },
+          include: reviewInclude,
+        });
+        if (!row || row.status !== "OPEN" || row.version !== input.version) throw versionConflict();
+        const marked = await tx.paymentReviewCase.updateMany({
+          where: { id, status: "OPEN", version: input.version },
+          data: {
+            status: "RESOLVED",
+            resolution: "RELEASED_UNVERIFIED",
+            resolvedAt: new Date(),
+            resolvedById: actorId,
+            version: { increment: 1 },
+          },
+        });
+        if (marked.count !== 1) throw versionConflict();
+        await cancelOrder(tx, {
+          orderId: row.payment.orderId,
+          actorId,
+          from: [ORDER_STATUS.PENDING],
+          paymentDisposition: "CANCEL",
+          allowVerificationCancel: true,
+          reason: "PAYMENT_REVIEW_RELEASED",
+          now: new Date(),
+        });
+        await tx.paymentReviewAction.create({
+          data: { reviewCaseId: id, actorId, action: "RELEASE_STOCK", note: input.note },
+        });
+      }),
+    3,
+  );
   return getPaymentReviewCase(id);
 };

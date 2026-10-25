@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
 import { changeStatus, getMyOrder, placeOrder } from "modules/orders/orders.service";
 import { quoteOrder } from "modules/promotions/promotions.service";
-import { createProduct, createUser, putInCart, resetDb } from "./fixtures";
+import { createProduct, createUser, ledgerMatches, putInCart, resetDb } from "./fixtures";
 
 beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
@@ -12,6 +12,75 @@ describe("Flash Sale checkout", () => {
     startsAt: new Date(Date.now() - 60_000),
     endsAt: new Date(Date.now() + 10 * 60_000),
   });
+
+  const expectFlashSaleInvariants = async (
+    promotionId: number,
+    products: Array<{ id: number; initialQuantity: number }>,
+    expectedFlashLineCount: number,
+  ) => {
+    const allocations = await prisma.flashSaleAllocation.findMany({ where: { promotionId } });
+    const usages = await prisma.flashSaleUserUsage.findMany({ where: { promotionId } });
+    const lines = await prisma.orderDetail.findMany({
+      where: { automaticPromotionId: promotionId },
+      include: {
+        flashSaleAllocation: true,
+        order: { select: { status: true } },
+      },
+    });
+
+    expect(lines).toHaveLength(expectedFlashLineCount);
+    for (const line of lines) {
+      expect(line.flashSaleAllocation).not.toBeNull();
+      expect(line.flashSaleAllocation?.status).toBe(
+        line.order.status === "CANCELLED" ? "RELEASED" : "CLAIMED",
+      );
+    }
+    for (const allocation of allocations.filter((row) => row.status === "CLAIMED")) {
+      expect(
+        usages.some(
+          (usage) => usage.productId === allocation.productId && usage.userId === allocation.userId,
+        ),
+      ).toBe(true);
+    }
+    for (const product of products) {
+      const quota = await prisma.flashSaleProductQuota.findUniqueOrThrow({
+        where: { promotionId_productId: { promotionId, productId: product.id } },
+      });
+      const claimed = allocations
+        .filter(
+          (allocation) => allocation.productId === product.id && allocation.status === "CLAIMED",
+        )
+        .reduce((sum, allocation) => sum + allocation.quantity, 0);
+      expect(quota.claimedUnits).toBe(claimed);
+      expect(quota.claimedUnits).toBeGreaterThanOrEqual(0);
+      expect(quota.claimedUnits).toBeLessThanOrEqual(quota.totalQuota);
+
+      for (const usage of usages.filter((row) => row.productId === product.id)) {
+        const userClaimed = allocations
+          .filter(
+            (allocation) =>
+              allocation.productId === product.id &&
+              allocation.userId === usage.userId &&
+              allocation.status === "CLAIMED",
+          )
+          .reduce((sum, allocation) => sum + allocation.quantity, 0);
+        expect(usage.claimedUnits).toBe(userClaimed);
+        expect(usage.claimedUnits).toBeGreaterThanOrEqual(0);
+        expect(usage.claimedUnits).toBeLessThanOrEqual(quota.maxUnitsPerUser);
+      }
+
+      const activeQuantity = lines
+        .filter((line) => line.productId === product.id && line.order.status !== "CANCELLED")
+        .reduce((sum, line) => sum + line.quantity, 0);
+      await expect(
+        prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
+      ).resolves.toMatchObject({
+        quantity: product.initialQuantity - activeQuantity,
+        sold: activeQuantity,
+      });
+      await expect(ledgerMatches(product.id)).resolves.toBe(true);
+    }
+  };
 
   it("claims the entire quoted cart quantity atomically", async () => {
     const product = await createProduct(5, 1_000);
@@ -200,5 +269,109 @@ describe("Flash Sale checkout", () => {
       prisma.product.findUniqueOrThrow({ where: { id: product.id } }),
     ).resolves.toMatchObject({ price: 1_200, quantity: 5, sold: 0 });
     await expect(prisma.order.count({ where: { userId: user.id } })).resolves.toBe(0);
+  });
+
+  it("preserves quota, allocation and stock invariants when checkout races cancellation", async () => {
+    const product = await createProduct(3, 1_000);
+    const cancellingUser = await createUser();
+    const checkoutUser = await createUser();
+    const promotion = await prisma.promotion.create({
+      data: {
+        kind: "FLASH_SALE",
+        state: "ACTIVE",
+        name: "Flash single race",
+        discountKind: "PERCENT",
+        discountValue: 20,
+        ...activeWindow(),
+        createdById: cancellingUser.id,
+        updatedById: cancellingUser.id,
+        flashSalePolicy: { create: { priority: 10, stackableWithCoupon: true } },
+        flashSaleQuotas: { create: { productId: product.id, totalQuota: 2, maxUnitsPerUser: 2 } },
+      },
+    });
+    await putInCart(cancellingUser.id, product.id, 1);
+    const firstQuote = await quoteOrder(cancellingUser.id);
+    const first = await placeOrder(cancellingUser.id, "flash-race-existing", {
+      receiverName: "R",
+      receiverAddress: "A",
+      receiverPhone: "0900000000",
+      pricingFingerprint: firstQuote.pricingFingerprint,
+    });
+    await putInCart(checkoutUser.id, product.id, 1);
+    const nextQuote = await quoteOrder(checkoutUser.id);
+
+    const results = await Promise.allSettled([
+      changeStatus(first.order.id, "CANCELLED", { actorId: cancellingUser.id }),
+      placeOrder(checkoutUser.id, "flash-race-next", {
+        receiverName: "R",
+        receiverAddress: "A",
+        receiverPhone: "0900000000",
+        pricingFingerprint: nextQuote.pricingFingerprint,
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(2);
+    await expect(
+      prisma.order.findUniqueOrThrow({ where: { id: first.order.id } }),
+    ).resolves.toMatchObject({ status: "CANCELLED" });
+    await expectFlashSaleInvariants(promotion.id, [{ id: product.id, initialQuantity: 3 }], 2);
+  });
+
+  it("keeps tuple ordering and invariants for opposite-order multi-product races", async () => {
+    const productA = await createProduct(3, 1_000);
+    const productB = await createProduct(3, 1_200);
+    const cancellingUser = await createUser();
+    const checkoutUser = await createUser();
+    const promotion = await prisma.promotion.create({
+      data: {
+        kind: "FLASH_SALE",
+        state: "ACTIVE",
+        name: "Flash multi race",
+        discountKind: "PERCENT",
+        discountValue: 20,
+        ...activeWindow(),
+        createdById: cancellingUser.id,
+        updatedById: cancellingUser.id,
+        flashSalePolicy: { create: { priority: 10, stackableWithCoupon: true } },
+        flashSaleQuotas: {
+          create: [
+            { productId: productA.id, totalQuota: 2, maxUnitsPerUser: 2 },
+            { productId: productB.id, totalQuota: 2, maxUnitsPerUser: 2 },
+          ],
+        },
+      },
+    });
+    await putInCart(cancellingUser.id, productA.id, 1);
+    await putInCart(cancellingUser.id, productB.id, 1);
+    const firstQuote = await quoteOrder(cancellingUser.id);
+    const first = await placeOrder(cancellingUser.id, "flash-multi-existing", {
+      receiverName: "R",
+      receiverAddress: "A",
+      receiverPhone: "0900000000",
+      pricingFingerprint: firstQuote.pricingFingerprint,
+    });
+    await putInCart(checkoutUser.id, productB.id, 1);
+    await putInCart(checkoutUser.id, productA.id, 1);
+    const nextQuote = await quoteOrder(checkoutUser.id);
+
+    const results = await Promise.allSettled([
+      changeStatus(first.order.id, "CANCELLED", { actorId: cancellingUser.id }),
+      placeOrder(checkoutUser.id, "flash-multi-next", {
+        receiverName: "R",
+        receiverAddress: "A",
+        receiverPhone: "0900000000",
+        pricingFingerprint: nextQuote.pricingFingerprint,
+      }),
+    ]);
+
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(2);
+    await expectFlashSaleInvariants(
+      promotion.id,
+      [
+        { id: productA.id, initialQuantity: 3 },
+        { id: productB.id, initialQuantity: 3 },
+      ],
+      4,
+    );
   });
 });
