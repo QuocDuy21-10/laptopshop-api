@@ -139,7 +139,9 @@ describe("createAdvisorService", () => {
     givenCandidates([product(1)]);
     const logger = { warn: jest.fn() };
     const provider = {
-      explain: jest.fn().mockRejectedValue(new AdvisorProviderError("provider_429", "quota")),
+      explain: jest
+        .fn()
+        .mockRejectedValue(new AdvisorProviderError("provider_rate_limited", "quota")),
     };
     const quota = { tryReserve: jest.fn().mockResolvedValue(true) };
     const result = await createAdvisorService({ repository, provider, quota, logger }).recommend(
@@ -147,7 +149,10 @@ describe("createAdvisorService", () => {
       { kind: "guest", key: "private-key" },
     );
     expect(result.mode).toBe("rule_based");
-    expect(logger.warn).toHaveBeenCalledWith({ category: "provider_429" }, expect.any(String));
+    expect(logger.warn).toHaveBeenCalledWith(
+      { category: "provider_rate_limited" },
+      expect.any(String),
+    );
     expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("private note");
     expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("private-key");
 

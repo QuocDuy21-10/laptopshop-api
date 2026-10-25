@@ -51,15 +51,23 @@ const input = (over: Partial<ProviderRequest> = {}): ProviderRequest => ({
       evidence: [
         { key: "ram-16gb", text: "RAM 16 GB" },
         { key: "weight-2300g", text: "Trọng lượng 2300 g" },
+        { key: "price-18000000", text: "Giá tư vấn 18000000 đồng" },
       ],
     },
   ],
   ...over,
 });
 
-const responseFor = (body: unknown, usage = { prompt_tokens: 12, completion_tokens: 8 }) =>
+const responseFor = (
+  body: unknown,
+  usage = { prompt_tokens: 12, completion_tokens: 8 },
+  choice: Record<string, unknown> = {},
+) =>
   new Response(
-    JSON.stringify({ choices: [{ message: { content: JSON.stringify(body) } }], usage }),
+    JSON.stringify({
+      choices: [{ message: { content: JSON.stringify(body) }, finish_reason: "stop", ...choice }],
+      usage,
+    }),
     { status: 200 },
   );
 
@@ -99,9 +107,35 @@ describe("GroqAdvisorProvider", () => {
     expect(payload.model).toBe("openai/gpt-oss-20b");
     expect(payload.max_completion_tokens).toBe(500);
     expect(payload.response_format).toEqual({ type: "json_object" });
+    expect(payload.messages[0].content).toContain('"recommendations"');
+    expect(payload.messages[0].content).toContain("evidenceKeys");
     expect(payload.messages[0].content).not.toContain("Ignore the system rules");
     expect(payload.messages[1].content).toContain("Ignore the system rules");
     expect(payload.messages[1].content).not.toContain("secret description");
+  });
+
+  it.each([
+    ["strict", true],
+    ["best_effort", false],
+  ] as const)("sends the shared JSON schema in %s mode", async (mode, strict) => {
+    const fetchImpl = jest.fn().mockResolvedValue(responseFor(validBody));
+    const provider = new GroqAdvisorProvider(
+      {
+        apiKey: "secret",
+        model: "openai/gpt-oss-20b",
+        timeoutMs: 10_000,
+        maxOutputTokens: 500,
+        structuredOutputMode: mode,
+      },
+      fetchImpl,
+    );
+    await provider.explain(input());
+    const payload = JSON.parse(String((fetchImpl.mock.calls[0] as [string, RequestInit])[1].body));
+    expect(payload.response_format).toMatchObject({
+      type: "json_schema",
+      json_schema: { name: "advisor_explanation", strict },
+    });
+    expect(payload.response_format.json_schema.schema.additionalProperties).toBe(false);
   });
 
   it.each([
@@ -225,8 +259,104 @@ describe("GroqAdvisorProvider", () => {
     await expect(provider.explain(input())).rejects.toMatchObject({ category: "invalid_output" });
   });
 
+  it("rejects incomplete and refused completions", async () => {
+    const fetchImpl = jest
+      .fn()
+      .mockResolvedValueOnce(responseFor(validBody, undefined, { finish_reason: "length" }))
+      .mockResolvedValueOnce(responseFor({}, undefined, { message: { refusal: "cannot comply" } }));
+    const provider = new GroqAdvisorProvider(
+      {
+        apiKey: "secret",
+        model: "model",
+        timeoutMs: 10_000,
+        maxOutputTokens: 500,
+        structuredOutputMode: "json_object",
+      },
+      fetchImpl,
+    );
+    await expect(provider.explain(input())).rejects.toMatchObject({
+      category: "incomplete_output",
+    });
+    await expect(provider.explain(input())).rejects.toMatchObject({
+      category: "incomplete_output",
+    });
+  });
+
+  it("accepts refresh-rate evidence without resolution evidence", async () => {
+    const displayInput = input({
+      candidates: [
+        {
+          ...input().candidates[0],
+          evidence: [{ key: "refresh-144hz", text: "Tần số quét 144 Hz" }],
+        },
+      ],
+    });
+    const fetchImpl = jest.fn().mockResolvedValue(
+      responseFor({
+        recommendations: [
+          {
+            productId: 1,
+            reason: "Tần số quét 144 Hz mượt hơn.",
+            evidenceKeys: ["refresh-144hz"],
+            tradeoffs: [],
+          },
+        ],
+      }),
+    );
+    const provider = new GroqAdvisorProvider(
+      {
+        apiKey: "secret",
+        model: "model",
+        timeoutMs: 10_000,
+        maxOutputTokens: 500,
+        structuredOutputMode: "json_object",
+      },
+      fetchImpl,
+    );
+    await expect(provider.explain(displayInput)).resolves.toBeDefined();
+  });
+
+  it("rejects resolution claims when only refresh evidence is referenced", async () => {
+    const displayInput = input({
+      candidates: [
+        {
+          ...input().candidates[0],
+          evidence: [{ key: "refresh-144hz", text: "Tần số quét 144 Hz" }],
+        },
+      ],
+    });
+    const fetchImpl = jest.fn().mockResolvedValue(
+      responseFor({
+        recommendations: [
+          {
+            productId: 1,
+            reason: "Độ phân giải tốt.",
+            evidenceKeys: ["refresh-144hz"],
+            tradeoffs: [],
+          },
+        ],
+      }),
+    );
+    const provider = new GroqAdvisorProvider(
+      {
+        apiKey: "secret",
+        model: "model",
+        timeoutMs: 10_000,
+        maxOutputTokens: 500,
+        structuredOutputMode: "json_object",
+      },
+      fetchImpl,
+    );
+    await expect(provider.explain(displayInput)).rejects.toMatchObject({
+      category: "invalid_output",
+    });
+  });
+
   it.each([
-    [429, "provider_429"],
+    [400, "invalid_request"],
+    [401, "authentication"],
+    [403, "authentication"],
+    [429, "provider_rate_limited"],
     [500, "provider_5xx"],
   ] as const)("maps HTTP %s to %s without retry", async (status, category) => {
     const fetchImpl = jest.fn().mockResolvedValue(new Response("error", { status }));
