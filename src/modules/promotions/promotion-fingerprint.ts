@@ -14,15 +14,15 @@ export const createPricingFingerprint = (input: PricingFingerprintInput) =>
         productId: line.productId,
         quantity: line.quantity,
         listPrice: line.listPrice,
-        promotionId: line.promotionId ?? line.automaticPromotionId,
-        promotionKind:
-          line.promotionKind ?? (line.automaticPromotionId === null ? null : "AUTOMATIC"),
-        pricingVersion: line.pricingVersion,
-        discountKind: line.discountKind ?? null,
-        discountValue: line.discountValue ?? null,
-        priority: line.priority ?? null,
-        stackableWithCoupon: line.stackableWithCoupon ?? null,
-        maxUnitsPerUser: line.maxUnitsPerUser ?? null,
+        promotionId: line.promotion?.id ?? null,
+        promotionKind: line.promotion?.kind ?? null,
+        pricingVersion: line.promotion?.pricingVersion ?? null,
+        discountKind: line.promotion?.discountKind ?? null,
+        discountValue: line.promotion?.discountValue ?? null,
+        priority: line.promotion?.priority ?? null,
+        stackableWithCoupon: line.promotion?.stackableWithCoupon ?? null,
+        maxUnitsPerUser:
+          line.promotion?.kind === "FLASH_SALE" ? line.promotion.maxUnitsPerUser : null,
       })),
     input.coupon
       ? {
@@ -30,7 +30,13 @@ export const createPricingFingerprint = (input: PricingFingerprintInput) =>
           targetProductIds: [...input.coupon.targetProductIds].sort((a, b) => a - b),
         }
       : null,
-    input.totals,
+    {
+      subtotalPrice: input.totals.subtotalPrice,
+      productDiscountAmount: input.totals.productDiscountAmount,
+      couponEligibleSubtotal: input.totals.couponEligibleSubtotal,
+      couponDiscountAmount: input.totals.couponDiscountAmount,
+      totalPrice: input.totals.totalPrice,
+    },
   ]);
 
 export const createCheckoutRequestHash = (input: CheckoutRequestHashInput) =>

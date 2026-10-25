@@ -278,6 +278,18 @@ describe("openapi document", () => {
         FlashSaleAvailability: expect.anything(),
       }),
     );
+    const quoteLine = (doc.components?.schemas?.PricingQuote as any).properties.lines.items;
+    expect(quoteLine.properties.promotionFallback.nullable).toBe(true);
+    expect(quoteLine.properties.promotionFallback.properties).toEqual(
+      expect.objectContaining({
+        skippedKind: expect.anything(),
+        promotionId: expect.anything(),
+        reason: expect.anything(),
+        requestedQuantity: expect.anything(),
+        availableQuantity: expect.anything(),
+        appliedPromotionKind: expect.anything(),
+      }),
+    );
     expect(op("/api/v1/promotions/flash-sales/availability", "get").security).toBeUndefined();
   });
 

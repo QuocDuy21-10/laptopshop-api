@@ -358,7 +358,22 @@ const PricingQuote = registry.register(
     couponEligibleSubtotal: z.number(),
     couponDiscount: z.number(),
     total: z.number(),
-    lines: z.array(z.record(z.unknown())),
+    lines: z.array(
+      z
+        .object({
+          promotionFallback: z
+            .object({
+              skippedKind: z.literal("FLASH_SALE"),
+              promotionId: z.number(),
+              reason: z.enum(["GLOBAL_QUOTA", "USER_QUOTA", "GLOBAL_AND_USER_QUOTA"]),
+              requestedQuantity: z.number(),
+              availableQuantity: z.number(),
+              appliedPromotionKind: z.enum(["AUTOMATIC"]).nullable(),
+            })
+            .nullable(),
+        })
+        .passthrough(),
+    ),
     coupon: z
       .object({ id: z.number(), code: z.string(), name: z.string(), valid: z.literal(true) })
       .nullable(),

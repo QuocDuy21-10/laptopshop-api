@@ -111,7 +111,8 @@ export type PricingLineInput = {
   productId: number;
   quantity: number;
   listPrice: number;
-  automaticCandidates?: PromotionPricingCandidate[];
+  promotion: ResolvedPromotion | null;
+  promotionFallback: FlashSaleFallback | null;
 };
 
 export type PromotionPricingInput = {
@@ -124,8 +125,9 @@ export type PromotionPricingLineResult = {
   quantity: number;
   listPrice: number;
   lineSubtotal: number;
-  automaticPromotion: PromotionPricingCandidate | null;
+  automaticPromotion: ResolvedPromotion | null;
   promotionKind: PromotionCandidateKind | null;
+  promotionFallback: PublicPromotionFallback | null;
   flashSale: {
     remainingQuota: number | null;
     maxUnitsPerUser: number;
@@ -154,19 +156,7 @@ export type PricingFingerprintLineInput = {
   productId: number;
   quantity: number;
   listPrice: number;
-  automaticPromotionId: number | null;
-  pricingVersion: number | null;
-  promotionId?: number | null;
-  promotionKind?: PromotionCandidateKind | null;
-  discountKind?: DiscountKind | null;
-  discountValue?: number | null;
-  priority?: number | null;
-  stackableWithCoupon?: boolean | null;
-  maxUnitsPerUser?: number | null;
-  totalQuota?: number | null;
-  claimedUnits?: number | null;
-  remainingQuota?: number | null;
-  showRemainingQuota?: boolean | null;
+  promotion: ResolvedPromotion | null;
 };
 
 export type PricingFingerprintInput = {

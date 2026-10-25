@@ -5,18 +5,49 @@ import {
 import type {
   CheckoutRequestHashInput,
   PricingFingerprintInput,
+  ResolvedAutomaticPromotion,
+  ResolvedFlashSale,
 } from "modules/promotions/promotions.types";
+
+const automatic = (
+  overrides: Partial<ResolvedAutomaticPromotion> = {},
+): ResolvedAutomaticPromotion => ({
+  id: 8,
+  name: "Automatic",
+  kind: "AUTOMATIC",
+  discountKind: "FIXED",
+  discountValue: 2,
+  priority: 1,
+  stackableWithCoupon: true,
+  pricingVersion: 3,
+  startsAt: new Date("2026-10-01T00:00:00Z"),
+  endsAt: new Date("2026-11-01T00:00:00Z"),
+  unitDiscount: 2,
+  ...overrides,
+});
+
+const flash = (overrides: Partial<ResolvedFlashSale> = {}): ResolvedFlashSale => ({
+  ...automatic(),
+  kind: "FLASH_SALE",
+  totalQuota: 10,
+  claimedUnits: 2,
+  remainingQuota: 8,
+  maxUnitsPerUser: 2,
+  showRemainingQuota: true,
+  userClaimedUnits: 1,
+  userRemainingQuota: 1,
+  ...overrides,
+});
 
 const fingerprintInput = (reverse = false): PricingFingerprintInput => ({
   lines: reverse
     ? [
-        { productId: 2, quantity: 1, listPrice: 20, automaticPromotionId: 8, pricingVersion: 3 },
+        { productId: 2, quantity: 1, listPrice: 20, promotion: automatic() },
         {
           productId: 1,
           quantity: 2,
           listPrice: 10,
-          automaticPromotionId: null,
-          pricingVersion: null,
+          promotion: null,
         },
       ]
     : [
@@ -24,10 +55,9 @@ const fingerprintInput = (reverse = false): PricingFingerprintInput => ({
           productId: 1,
           quantity: 2,
           listPrice: 10,
-          automaticPromotionId: null,
-          pricingVersion: null,
+          promotion: null,
         },
-        { productId: 2, quantity: 1, listPrice: 20, automaticPromotionId: 8, pricingVersion: 3 },
+        { productId: 2, quantity: 1, listPrice: 20, promotion: automatic() },
       ],
   coupon: {
     id: 9,
@@ -60,27 +90,18 @@ describe("promotion fingerprints", () => {
       createPricingFingerprint({
         ...base,
         lines: base.lines.map((line) =>
-          line.productId === 2 ? { ...line, pricingVersion: 4 } : line,
+          line.productId === 2 ? { ...line, promotion: automatic({ pricingVersion: 4 }) } : line,
         ),
       }),
     );
   });
 
-  it("ignores mutable Flash Sale counters and visibility but includes pricing config", () => {
+  it("keeps a Flash Sale fingerprint stable when only mutable counters change", () => {
     const base = {
       ...fingerprintInput(),
       lines: fingerprintInput().lines.map((line) => ({
         ...line,
-        promotionKind: "FLASH_SALE" as const,
-        discountKind: "PERCENT" as const,
-        discountValue: 20,
-        priority: 3,
-        stackableWithCoupon: true,
-        maxUnitsPerUser: 2,
-        totalQuota: 10,
-        claimedUnits: 2,
-        remainingQuota: 8,
-        showRemainingQuota: true,
+        promotion: flash({ discountKind: "PERCENT", discountValue: 20, priority: 3 }),
       })),
     };
     expect(createPricingFingerprint(base)).toBe(
@@ -88,23 +109,38 @@ describe("promotion fingerprints", () => {
         ...base,
         lines: base.lines.map((line) => ({
           ...line,
-          totalQuota: 100,
-          claimedUnits: 99,
-          remainingQuota: 1,
-          showRemainingQuota: false,
+          promotion: flash({
+            discountKind: "PERCENT",
+            discountValue: 20,
+            priority: 3,
+            totalQuota: 100,
+            claimedUnits: 99,
+            remainingQuota: 1,
+            showRemainingQuota: false,
+          }),
         })),
       }),
     );
     expect(createPricingFingerprint(base)).not.toBe(
       createPricingFingerprint({
         ...base,
-        lines: base.lines.map((line) => ({ ...line, discountValue: 25 })),
+        lines: base.lines.map((line) => ({
+          ...line,
+          promotion: flash({ discountKind: "PERCENT", discountValue: 25, priority: 3 }),
+        })),
       }),
     );
+  });
+
+  it("changes when quota fallback switches the resolved winner from Flash Sale to Automatic", () => {
+    const base = {
+      ...fingerprintInput(),
+      lines: fingerprintInput().lines.map((line) => ({ ...line, promotion: flash() })),
+    };
     expect(createPricingFingerprint(base)).not.toBe(
       createPricingFingerprint({
         ...base,
-        lines: base.lines.map((line) => ({ ...line, maxUnitsPerUser: 1 })),
+        lines: base.lines.map((line) => ({ ...line, promotion: automatic() })),
       }),
     );
   });

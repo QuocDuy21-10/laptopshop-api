@@ -6,7 +6,10 @@ import type {
   PromotionPricingResult,
   PromotionPricingCandidate,
 } from "modules/promotions/promotions.types";
-import { comparePromotionCandidates } from "modules/promotions/promotion-selection";
+import {
+  comparePromotionCandidates,
+  toPublicPromotionFallback,
+} from "modules/promotions/promotion-selection";
 
 export const automaticDiscountPerUnit = (promotion: AutomaticPromotionInput, listPrice: number) =>
   promotion.discountKind === "PERCENT"
@@ -55,13 +58,10 @@ export const calculatePromotionPricing = (input: PromotionPricingInput): Promoti
   const lines = [...input.lines]
     .sort((a, b) => a.productId - b.productId)
     .map((line): PromotionPricingLineResult => {
-      const automaticPromotion = selectAutomaticPromotion(
-        line.automaticCandidates ?? [],
-        line.listPrice,
-      );
+      const automaticPromotion = line.promotion;
       const lineSubtotal = line.listPrice * line.quantity;
       const productDiscountAmount = automaticPromotion
-        ? automaticDiscountPerUnit(automaticPromotion, line.listPrice) * line.quantity
+        ? automaticPromotion.unitDiscount * line.quantity
         : 0;
       const postProductLineTotal = lineSubtotal - productDiscountAmount;
       const couponEligible =
@@ -74,7 +74,8 @@ export const calculatePromotionPricing = (input: PromotionPricingInput): Promoti
         listPrice: line.listPrice,
         lineSubtotal,
         automaticPromotion,
-        promotionKind: automaticPromotion?.kind ?? (automaticPromotion ? "AUTOMATIC" : null),
+        promotionKind: automaticPromotion?.kind ?? null,
+        promotionFallback: toPublicPromotionFallback(line.promotionFallback),
         flashSale:
           automaticPromotion?.kind === "FLASH_SALE"
             ? {

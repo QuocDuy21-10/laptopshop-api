@@ -91,17 +91,15 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
       }
       const promotions = await resolveProductPromotions(
         tx,
-        lines.map((line) => line.productId),
-        now,
-        userId,
+        lines.map((line) => ({ productId: line.productId, quantity: line.quantity })),
+        { now, userId, eligibilityMode: "EXACT" },
       );
       const pricingLines: PricingLineInput[] = lines.map((line) => ({
         productId: line.productId,
         quantity: line.quantity,
         listPrice: line.product.price,
-        automaticCandidates: promotions.has(line.productId)
-          ? [promotions.get(line.productId)!]
-          : [],
+        promotion: promotions.get(line.productId)?.winner ?? null,
+        promotionFallback: promotions.get(line.productId)?.fallback ?? null,
       }));
       const coupon = receiver.couponCode
         ? await resolveCoupon(tx, receiver.couponCode, userId, pricingLines, now)
@@ -119,15 +117,7 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
           productId: line.productId,
           quantity: line.quantity,
           listPrice: line.listPrice,
-          automaticPromotionId: line.automaticCandidates?.[0]?.id ?? null,
-          pricingVersion: line.automaticCandidates?.[0]?.pricingVersion ?? null,
-          promotionId: line.automaticCandidates?.[0]?.id ?? null,
-          promotionKind: line.automaticCandidates?.[0]?.kind ?? null,
-          discountKind: line.automaticCandidates?.[0]?.discountKind ?? null,
-          discountValue: line.automaticCandidates?.[0]?.discountValue ?? null,
-          priority: line.automaticCandidates?.[0]?.priority ?? null,
-          stackableWithCoupon: line.automaticCandidates?.[0]?.stackableWithCoupon ?? null,
-          maxUnitsPerUser: line.automaticCandidates?.[0]?.maxUnitsPerUser ?? null,
+          promotion: line.promotion,
         })),
         coupon: coupon
           ? {
@@ -143,7 +133,7 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
         throw new AppError("Promotion pricing changed", 409, "PROMOTION_CHANGED");
       }
       const flashClaims = pricingLines.flatMap((line) => {
-        const promotion = line.automaticCandidates?.[0];
+        const promotion = line.promotion;
         return promotion?.kind === "FLASH_SALE"
           ? [
               {
