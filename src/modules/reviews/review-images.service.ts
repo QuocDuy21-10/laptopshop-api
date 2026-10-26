@@ -142,7 +142,7 @@ export const addReviewImages = async (
         SELECT id FROM reviews WHERE id = ${reviewId} AND deletedAt IS NULL FOR UPDATE
       `;
       if (!reviewRows.length) return { count: 0 };
-      return tx.reviewImage.updateMany({
+      const result = await tx.reviewImage.updateMany({
         where: {
           id: { in: reservations.map((row) => row.id) },
           status: "PENDING",
@@ -150,6 +150,12 @@ export const addReviewImages = async (
         },
         data: { status: "READY" },
       });
+      if (result.count === reservations.length)
+        await tx.review.update({
+          where: { id: reviewId },
+          data: { imageVersion: { increment: 1 } },
+        });
+      return result;
     });
     finalized = result.count;
   }
@@ -200,11 +206,15 @@ export const reorderReviewImages = async (
         "REVIEW_IMAGE_ORDER_INVALID",
       );
 
+    const changed = existing.some((row, position) => row.id !== imageIds[position]);
+
     await Promise.all(
       imageIds.map((id, position) =>
         tx.reviewImage.update({ where: { id }, data: { position }, select: reviewImageSelect }),
       ),
     );
+    if (changed)
+      await tx.review.update({ where: { id: reviewId }, data: { imageVersion: { increment: 1 } } });
     const reordered = await tx.reviewImage.findMany({
       where: { reviewId, status: "READY", deletedAt: null },
       orderBy: { position: "asc" },
@@ -244,6 +254,7 @@ export const deleteReviewImage = async (
         tx.reviewImage.update({ where: { id: item.id }, data: { position }, select: { id: true } }),
       ),
     );
+    await tx.review.update({ where: { id: reviewId }, data: { imageVersion: { increment: 1 } } });
     return image;
   });
   if (!reservation) return;

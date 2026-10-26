@@ -74,6 +74,11 @@ describe("review image lifecycle service", () => {
     await expect(addReviewImages(storage(), 7, 18, [file("one")])).resolves.toEqual([
       expect.objectContaining({ id: 21, url: "https://signed.example/image.webp" }),
     ]);
+    expect(prismaMock.review.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ imageVersion: { increment: 1 } }),
+      }),
+    );
   });
 
   it("enforces the three-image limit inside the reservation", async () => {
@@ -183,6 +188,35 @@ describe("review image lifecycle service", () => {
         urlExpiresAt: "2026-10-21T01:01:00.000Z",
       }),
     ]);
+  });
+
+  it("does not increment the image version for a reorder no-op", async () => {
+    const deps = storage();
+    prismaMock.review.findFirst.mockResolvedValue(review);
+    prismaMock.reviewImage.findMany.mockResolvedValue([image()]);
+    prismaMock.reviewImage.update.mockResolvedValue(image());
+
+    await reorderReviewImages(deps, 7, 18, [21]);
+
+    expect(prismaMock.review.update).not.toHaveBeenCalled();
+  });
+
+  it("increments the image version for an active image delete", async () => {
+    const deps = storage();
+    prismaMock.review.findFirst.mockResolvedValue(review);
+    prismaMock.reviewImage.findFirst.mockResolvedValue(image());
+    prismaMock.reviewImage.findMany.mockResolvedValue([]);
+    prismaMock.reviewImage.update.mockResolvedValue(
+      image({ status: "DELETING", deletedAt: new Date() }),
+    );
+
+    await deleteReviewImage(deps, 7, 18, 21);
+
+    expect(prismaMock.review.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ imageVersion: { increment: 1 } }),
+      }),
+    );
   });
 
   it("makes deleting an already deleted image idempotent", async () => {
