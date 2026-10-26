@@ -11,6 +11,9 @@ export const reviewImageSelect = {
   status: true,
   deletedAt: true,
   storageDeletedAt: true,
+  syncOperationId: true,
+  syncClientId: true,
+  purgeAfter: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.ReviewImageSelect;
