@@ -2,7 +2,7 @@ import { Prisma, type ReviewImageSyncOperation } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { env } from "config/env";
 import { prisma } from "config/client";
-import { AppError, isUniqueViolation } from "lib/errors";
+import { AppError } from "lib/errors";
 import { createReviewImageSyncFingerprint } from "modules/reviews/review-image-sync.fingerprint";
 import {
   snapshotFromJson,
