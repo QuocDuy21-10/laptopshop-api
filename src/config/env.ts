@@ -148,6 +148,19 @@ const schema = z
       .default("false")
       .transform((v) => v === "true"),
     REVIEW_IMAGE_URL_TTL_SECONDS: z.coerce.number().int().min(60).max(3600).default(900),
+    REVIEW_IMAGE_SYNC_LEASE_MS: z.coerce.number().int().min(1_000).max(900_000).default(120_000),
+    REVIEW_IMAGE_SYNC_RETRY_TTL_MS: z.coerce
+      .number()
+      .int()
+      .min(60_000)
+      .max(86_400_000)
+      .default(3_600_000),
+    REVIEW_IMAGE_IDEMPOTENCY_RETENTION_MS: z.coerce
+      .number()
+      .int()
+      .min(3_600_000)
+      .max(604_800_000)
+      .default(86_400_000),
     AFTER_SALES_IMAGES_ENABLED: z
       .enum(["true", "false"])
       .default("false")
@@ -298,6 +311,13 @@ const schema = z
         code: z.ZodIssueCode.custom,
         path: ["REVIEW_IMAGE_S3_ACCESS_KEY_ID"],
         message: "Review image S3 access key and secret must be configured together",
+      });
+    }
+    if (e.REVIEW_IMAGE_IDEMPOTENCY_RETENTION_MS < e.REVIEW_IMAGE_SYNC_RETRY_TTL_MS) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["REVIEW_IMAGE_IDEMPOTENCY_RETENTION_MS"],
+        message: "Review image idempotency retention must cover the retry TTL",
       });
     }
     if (e.AFTER_SALES_IMAGES_ENABLED) {

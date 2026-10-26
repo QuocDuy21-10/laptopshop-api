@@ -38,6 +38,9 @@ describe("parseEnv", () => {
     expect(e.REVIEW_IMAGE_S3_BUCKET).toBeUndefined();
     expect(e.REVIEW_IMAGE_S3_FORCE_PATH_STYLE).toBe(false);
     expect(e.REVIEW_IMAGE_URL_TTL_SECONDS).toBe(900);
+    expect(e.REVIEW_IMAGE_SYNC_LEASE_MS).toBe(120_000);
+    expect(e.REVIEW_IMAGE_SYNC_RETRY_TTL_MS).toBe(3_600_000);
+    expect(e.REVIEW_IMAGE_IDEMPOTENCY_RETENTION_MS).toBe(86_400_000);
     expect(e.PRICE_ALERT_INTERVAL_MS).toBe(300_000);
     expect(e.PRICE_ALERT_PRODUCT_BATCH_SIZE).toBe(100);
     expect(e.PRICE_ALERT_ITEM_BATCH_SIZE).toBe(500);
@@ -270,6 +273,14 @@ describe("parseEnv", () => {
         ...values,
       }),
     ).toThrow();
+  });
+
+  it.each([
+    ["lease too short", { REVIEW_IMAGE_SYNC_LEASE_MS: "999" }],
+    ["retry ttl too short", { REVIEW_IMAGE_SYNC_RETRY_TTL_MS: "59999" }],
+    ["retention too short", { REVIEW_IMAGE_IDEMPOTENCY_RETENTION_MS: "59999" }],
+  ])("rejects invalid review image sync configuration: %s", (_label, values) => {
+    expect(() => parseEnv({ ...base, ...values })).toThrow();
   });
 
   it.each([
