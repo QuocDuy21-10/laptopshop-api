@@ -45,6 +45,7 @@ describe("review image routes", () => {
       {
         id: 21,
         url: "https://signed.test/21.webp",
+        urlExpiresAt: "2026-10-21T01:15:00.000Z",
         mimeType: "image/webp",
         width: 10,
         height: 10,

@@ -3,20 +3,10 @@ import { idParams } from "lib/http";
 import { authenticate } from "middlewares/authenticate";
 import { validate } from "middlewares/validate";
 import {
-  createReviewHandler,
-  getAdminReviewHandler,
-  getAdminReviewSummaryHandler,
-  getProductReviewSummaryHandler,
-  getReviewEligibilityHandler,
-  listAdminReviewsHandler,
-  listProductReviewsHandler,
-  moderateReviewHandler,
-  updateMyReviewHandler,
-  deleteMyReviewHandler,
   createReviewHelpfulHandlers,
-  putOfficialReplyHandler,
-  deleteOfficialReplyHandler,
+  createReviewHandlers,
 } from "modules/reviews/reviews.controller";
+import type { ReviewImageRuntime } from "modules/reviews/review-image-runtime";
 import {
   adminListReviewsQuery,
   createReviewBody,
@@ -42,55 +32,67 @@ export const createReviewHelpfulRoutes = (limiter?: RequestHandler) => {
   return router;
 };
 
-export const productReviewRoutes = Router();
+export const createProductReviewRoutes = (runtime?: ReviewImageRuntime) => {
+  const router = Router();
+  const handlers = createReviewHandlers(runtime);
+  router.get(
+    "/:id/reviews/eligibility",
+    authenticate,
+    validate({ params: idParams }),
+    handlers.getReviewEligibility,
+  );
+  router.post(
+    "/:id/reviews",
+    authenticate,
+    validate({ params: idParams, body: createReviewBody }),
+    handlers.createReview,
+  );
+  router.get(
+    "/:id/reviews/summary",
+    validate({ params: idParams }),
+    handlers.getProductReviewSummary,
+  );
+  router.get(
+    "/:id/reviews",
+    validate({ params: idParams, query: listProductReviewsQuery }),
+    handlers.listProductReviews,
+  );
+  return router;
+};
 
-productReviewRoutes.get(
-  "/:id/reviews/eligibility",
-  authenticate,
-  validate({ params: idParams }),
-  getReviewEligibilityHandler,
-);
-productReviewRoutes.post(
-  "/:id/reviews",
-  authenticate,
-  validate({ params: idParams, body: createReviewBody }),
-  createReviewHandler,
-);
-productReviewRoutes.get(
-  "/:id/reviews/summary",
-  validate({ params: idParams }),
-  getProductReviewSummaryHandler,
-);
-productReviewRoutes.get(
-  "/:id/reviews",
-  validate({ params: idParams, query: listProductReviewsQuery }),
-  listProductReviewsHandler,
-);
+export const createReviewRoutes = (runtime?: ReviewImageRuntime) => {
+  const router = Router();
+  const handlers = createReviewHandlers(runtime);
+  router.patch(
+    "/:id",
+    authenticate,
+    validate({ params: idParams, body: updateReviewBody }),
+    handlers.updateMyReview,
+  );
+  router.delete("/:id", authenticate, validate({ params: idParams }), handlers.deleteMyReview);
+  return router;
+};
 
-export const reviewRoutes = Router();
-reviewRoutes.patch(
-  "/:id",
-  authenticate,
-  validate({ params: idParams, body: updateReviewBody }),
-  updateMyReviewHandler,
-);
-reviewRoutes.delete("/:id", authenticate, validate({ params: idParams }), deleteMyReviewHandler);
-export const adminReviewRoutes = Router();
-adminReviewRoutes.get("/summary", getAdminReviewSummaryHandler);
-adminReviewRoutes.get("/", validate({ query: adminListReviewsQuery }), listAdminReviewsHandler);
-adminReviewRoutes.get("/:id", validate({ params: idParams }), getAdminReviewHandler);
-adminReviewRoutes.patch(
-  "/:id/moderation",
-  validate({ params: idParams, body: moderateReviewBody }),
-  moderateReviewHandler,
-);
-adminReviewRoutes.put(
-  "/:id/reply",
-  validate({ params: idParams, body: putReviewReplyBody }),
-  putOfficialReplyHandler,
-);
-adminReviewRoutes.delete(
-  "/:id/reply",
-  validate({ params: idParams }),
-  deleteOfficialReplyHandler,
-);
+export const createAdminReviewRoutes = (runtime?: ReviewImageRuntime) => {
+  const router = Router();
+  const handlers = createReviewHandlers(runtime);
+  router.get("/summary", handlers.getAdminReviewSummary);
+  router.get("/", validate({ query: adminListReviewsQuery }), handlers.listAdminReviews);
+  router.get("/:id", validate({ params: idParams }), handlers.getAdminReview);
+  router.patch(
+    "/:id/moderation",
+    validate({ params: idParams, body: moderateReviewBody }),
+    handlers.moderateReview,
+  );
+  router.put(
+    "/:id/reply",
+    validate({ params: idParams, body: putReviewReplyBody }),
+    handlers.putOfficialReply,
+  );
+  router.delete("/:id/reply", validate({ params: idParams }), handlers.deleteOfficialReply);
+  return router;
+};
+
+export const productReviewRoutes = createProductReviewRoutes();
+export const reviewRoutes = createReviewRoutes();
+export const adminReviewRoutes = createAdminReviewRoutes();

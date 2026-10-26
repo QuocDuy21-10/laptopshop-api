@@ -58,6 +58,7 @@ describe("toPublicReviewDto", () => {
       {
         id: 22,
         url: "https://signed.example/22.webp",
+        urlExpiresAt: "2026-10-21T04:15:00.000Z",
         mimeType: "image/webp",
         width: 100,
         height: 50,

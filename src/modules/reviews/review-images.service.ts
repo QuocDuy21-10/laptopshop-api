@@ -1,9 +1,10 @@
 import { Prisma } from "@prisma/client";
 import { v4 as uuid } from "uuid";
+import { env } from "config/env";
 import { prisma } from "config/client";
 import { AppError } from "lib/errors";
 import { logger } from "lib/logger";
-import type { ReviewImageStorage } from "lib/storage/review-image-storage";
+import type { ObjectStorage } from "lib/storage/object-storage";
 import {
   processReviewImage,
   type ProcessedReviewImage,
@@ -14,12 +15,18 @@ import {
   type OwnerReviewImageDto,
   type ReviewImageRow,
 } from "modules/reviews/review-images.mapper";
+import {
+  reviewImageNow,
+  reviewImageTtl,
+  type ReviewImageRuntime,
+} from "modules/reviews/review-image-runtime";
 
 const MAX_REVIEW_IMAGES = 3;
 
-export type ReviewImageDeps = { storage: ReviewImageStorage; now?: () => Date };
+export type ReviewImageDeps = ReviewImageRuntime & { storage: ObjectStorage };
 
-const nowOf = (deps: ReviewImageDeps) => deps.now?.() ?? new Date();
+const nowOf = (deps: ReviewImageDeps) => reviewImageNow(deps);
+const ttlOf = (deps: ReviewImageDeps) => reviewImageTtl(deps, env.REVIEW_IMAGE_URL_TTL_SECONDS);
 const reviewNotFound = () => new AppError("Review not found", 404, "REVIEW_NOT_FOUND");
 
 const lockOwnedReview = async (tx: Prisma.TransactionClient, userId: number, reviewId: number) => {
@@ -88,6 +95,19 @@ const markFailedReservations = async (ids: number[], now: Date) => {
   });
 };
 
+const toSignedOwnerImage = async (
+  deps: ReviewImageDeps,
+  row: ReviewImageRow,
+  now = nowOf(deps),
+) => {
+  const ttl = ttlOf(deps);
+  return toOwnerReviewImageDto(
+    row,
+    await deps.storage.getSignedReadUrl(row.objectKey, ttl),
+    new Date(now.getTime() + ttl * 1000).toISOString(),
+  );
+};
+
 export const addReviewImages = async (
   deps: ReviewImageDeps,
   userId: number,
@@ -110,6 +130,7 @@ export const addReviewImages = async (
         key: row.objectKey,
         body: processed[index].buffer,
         contentLength: processed[index].byteSize,
+        contentType: processed[index].mimeType,
       }),
     ),
   );
@@ -150,11 +171,7 @@ export const addReviewImages = async (
     orderBy: { position: "asc" },
     select: reviewImageSelect,
   });
-  return Promise.all(
-    (ready as ReviewImageRow[]).map(async (row) =>
-      toOwnerReviewImageDto(row, await deps.storage.getSignedReadUrl(row.objectKey, 900)),
-    ),
-  );
+  return Promise.all((ready as ReviewImageRow[]).map((row) => toSignedOwnerImage(deps, row)));
 };
 
 export const reorderReviewImages = async (
@@ -163,7 +180,7 @@ export const reorderReviewImages = async (
   reviewId: number,
   imageIds: number[],
 ): Promise<OwnerReviewImageDto[]> => {
-  return prisma.$transaction(async (tx) => {
+  const reordered = await prisma.$transaction(async (tx) => {
     await lockOwnedReview(tx, userId, reviewId);
     const existing = (await tx.reviewImage.findMany({
       where: { reviewId, status: "READY", deletedAt: null },
@@ -193,12 +210,9 @@ export const reorderReviewImages = async (
       orderBy: { position: "asc" },
       select: reviewImageSelect,
     });
-    return Promise.all(
-      (reordered as ReviewImageRow[]).map(async (row) =>
-        toOwnerReviewImageDto(row, await deps.storage.getSignedReadUrl(row.objectKey, 900)),
-      ),
-    );
+    return reordered as ReviewImageRow[];
   });
+  return Promise.all((reordered as ReviewImageRow[]).map((row) => toSignedOwnerImage(deps, row)));
 };
 
 export const deleteReviewImage = async (

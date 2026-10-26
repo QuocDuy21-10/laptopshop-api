@@ -155,6 +155,36 @@ describe("review image lifecycle service", () => {
     expect(prismaMock.reviewImage.update).not.toHaveBeenCalled();
   });
 
+  it("uses the injected signed URL TTL and signs only after reorder commits", async () => {
+    const deps = storage();
+    deps.urlTtlSeconds = 60;
+    const events: string[] = [];
+    prismaMock.$transaction.mockImplementation(
+      async (callback: (tx: unknown) => Promise<unknown>) => {
+        const result = await callback(prismaMock);
+        events.push("commit");
+        return result;
+      },
+    );
+    const getSignedReadUrl = deps.storage.getSignedReadUrl as jest.Mock;
+    getSignedReadUrl.mockImplementation(async (_key: string, ttl: number) => {
+      expect(events).toEqual(["commit"]);
+      expect(ttl).toBe(60);
+      return "https://signed.example/image.webp";
+    });
+    prismaMock.review.findFirst.mockResolvedValue(review);
+    prismaMock.reviewImage.findMany.mockResolvedValue([image()]);
+    prismaMock.reviewImage.update.mockResolvedValue(image());
+
+    await expect(reorderReviewImages(deps, 7, 18, [21])).resolves.toEqual([
+      expect.objectContaining({
+        id: 21,
+        url: "https://signed.example/image.webp",
+        urlExpiresAt: "2026-10-21T01:01:00.000Z",
+      }),
+    ]);
+  });
+
   it("makes deleting an already deleted image idempotent", async () => {
     const deps = storage();
     prismaMock.review.findFirst.mockResolvedValue(review);

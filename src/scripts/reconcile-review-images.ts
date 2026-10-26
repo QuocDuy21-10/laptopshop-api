@@ -1,8 +1,8 @@
 import { prisma } from "config/client";
 import { env } from "config/env";
 import { logger } from "lib/logger";
-import { createReviewImageStorage } from "lib/storage/s3-review-image-storage";
-import type { ReviewImageStorage } from "lib/storage/review-image-storage";
+import { createS3ObjectStorage } from "lib/storage/s3-object-storage";
+import type { ObjectStorage } from "lib/storage/object-storage";
 
 export type ReconcileResult = {
   pending: number;
@@ -11,7 +11,7 @@ export type ReconcileResult = {
   errors: number;
 };
 
-export type ReconcileDeps = { storage: ReviewImageStorage };
+export type ReconcileDeps = { storage: ObjectStorage };
 
 export const reconcileReviewImages = async (
   deps: ReconcileDeps,
@@ -86,7 +86,15 @@ export const reconcileReviewImages = async (
 };
 
 const main = async () => {
-  const storage = createReviewImageStorage(env);
+  const storage = createS3ObjectStorage({
+    enabled: env.REVIEW_IMAGES_ENABLED,
+    endpoint: env.REVIEW_IMAGE_S3_ENDPOINT,
+    region: env.REVIEW_IMAGE_S3_REGION,
+    bucket: env.REVIEW_IMAGE_S3_BUCKET,
+    accessKeyId: env.REVIEW_IMAGE_S3_ACCESS_KEY_ID,
+    secretAccessKey: env.REVIEW_IMAGE_S3_SECRET_ACCESS_KEY,
+    forcePathStyle: env.REVIEW_IMAGE_S3_FORCE_PATH_STYLE,
+  });
   if (!storage) {
     logger.info("Review image storage is disabled; nothing to reconcile");
     return;

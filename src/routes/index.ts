@@ -18,13 +18,14 @@ import {
 } from "modules/payments/payments.routes";
 import { createAdvisorRoutes, type AdvisorRouteDeps } from "modules/advisor/advisor.routes";
 import {
-  productReviewRoutes,
-  reviewRoutes,
-  adminReviewRoutes,
+  createProductReviewRoutes,
+  createReviewRoutes,
+  createAdminReviewRoutes,
   createReviewHelpfulRoutes,
 } from "modules/reviews/reviews.routes";
 import { createReviewImageRoutes } from "modules/reviews/review-images.routes";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
+import type { ReviewImageRuntime } from "modules/reviews/review-image-runtime";
 import { adminPromotionRoutes, promotionRoutes } from "modules/promotions/promotions.routes";
 import { wishlistRoutes } from "modules/wishlist/wishlist.routes";
 import { notificationRoutes } from "modules/notifications/notifications.routes";
@@ -46,14 +47,18 @@ export const createApiV1Router = (
 ) => {
   const router = express.Router();
   router.use(originCheck(env.CORS_ORIGINS));
+  const reviewRuntime: ReviewImageRuntime = reviewImages ?? {
+    storage: null,
+    urlTtlSeconds: env.REVIEW_IMAGE_URL_TTL_SECONDS,
+  };
 
   router.use("/auth", authRoutes);
-  router.use("/products", productReviewRoutes);
+  router.use("/products", createProductReviewRoutes(reviewRuntime));
   router.use("/products", productRoutes);
   if (reviewImages)
     router.use("/reviews", createReviewImageRoutes(reviewImages, reviewImagesLimiter));
   router.use("/reviews", createReviewHelpfulRoutes(reviewHelpfulLimiter));
-  router.use("/reviews", reviewRoutes);
+  router.use("/reviews", createReviewRoutes(reviewRuntime));
   router.use("/users", usersRoutes);
   router.use("/cart", cartRoutes);
   router.use("/orders", orderRoutes);
@@ -82,7 +87,7 @@ export const createApiV1Router = (
   admin.use("/inventory", adminInventoryRoutes);
   admin.use("/payment-events", adminPaymentRoutes);
   admin.use("/payment-review-cases", adminPaymentReviewRoutes);
-  admin.use("/reviews", adminReviewRoutes);
+  admin.use("/reviews", createAdminReviewRoutes(reviewRuntime));
   admin.use("/after-sales", adminAfterSalesRoutes);
   if (afterSalesAttachments)
     admin.use(

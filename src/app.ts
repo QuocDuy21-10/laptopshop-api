@@ -20,7 +20,6 @@ import {
   priceAdvisorCandidates,
   type AdvisorService,
 } from "modules/advisor/advisor.service";
-import { createReviewImageStorage } from "lib/storage/s3-review-image-storage";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
 import { createS3ObjectStorage } from "lib/storage/s3-object-storage";
 import type { AttachmentDeps } from "modules/after-sales/after-sales.attachments";
@@ -86,8 +85,16 @@ export const createApp = (deps: AppDeps = {}): Express => {
     deps.reviewImages !== undefined
       ? deps.reviewImages
       : (() => {
-          const storage = createReviewImageStorage(env);
-          return storage ? { storage } : null;
+          const storage = createS3ObjectStorage({
+            enabled: env.REVIEW_IMAGES_ENABLED,
+            endpoint: env.REVIEW_IMAGE_S3_ENDPOINT,
+            region: env.REVIEW_IMAGE_S3_REGION,
+            bucket: env.REVIEW_IMAGE_S3_BUCKET,
+            accessKeyId: env.REVIEW_IMAGE_S3_ACCESS_KEY_ID,
+            secretAccessKey: env.REVIEW_IMAGE_S3_SECRET_ACCESS_KEY,
+            forcePathStyle: env.REVIEW_IMAGE_S3_FORCE_PATH_STYLE,
+          });
+          return storage ? { storage, urlTtlSeconds: env.REVIEW_IMAGE_URL_TTL_SECONDS } : null;
         })();
   const afterSalesAttachments =
     deps.afterSalesAttachments !== undefined

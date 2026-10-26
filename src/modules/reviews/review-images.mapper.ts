@@ -17,9 +17,14 @@ export const reviewImageSelect = {
 
 export type ReviewImageRow = Prisma.ReviewImageGetPayload<{ select: typeof reviewImageSelect }>;
 
-export const toOwnerReviewImageDto = (image: ReviewImageRow, url: string) => ({
+export const toOwnerReviewImageDto = (
+  image: ReviewImageRow,
+  url: string,
+  urlExpiresAt: string,
+) => ({
   id: image.id,
   url,
+  urlExpiresAt,
   mimeType: image.mimeType,
   width: image.width,
   height: image.height,

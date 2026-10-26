@@ -4,6 +4,7 @@ import { reviewImageSelect, type ReviewImageRow } from "modules/reviews/review-i
 export type ReviewImageDto = {
   id: number;
   url: string;
+  urlExpiresAt: string;
   mimeType: "image/webp";
   width: number;
   height: number;
@@ -195,16 +196,17 @@ export const toAdminReviewDto = (
   moderatedBy: review.moderatedBy,
   images,
   helpfulCount: review._count?.helpfulVotes ?? 0,
-  officialReply: review.reply && review.reply.deletedAt === null
-    ? {
-        id: review.reply.id,
-        content: review.reply.content,
-        createdAt: review.reply.createdAt,
-        updatedAt: review.reply.updatedAt,
-        createdBy: review.reply.createdBy,
-        updatedBy: review.reply.updatedBy,
-      }
-    : null,
+  officialReply:
+    review.reply && review.reply.deletedAt === null
+      ? {
+          id: review.reply.id,
+          content: review.reply.content,
+          createdAt: review.reply.createdAt,
+          updatedAt: review.reply.updatedAt,
+          createdBy: review.reply.createdBy,
+          updatedBy: review.reply.updatedBy,
+        }
+      : null,
 });
 
 export type AdminReviewListItemDto = ReturnType<typeof toAdminReviewDto>;
