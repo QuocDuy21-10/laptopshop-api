@@ -32,7 +32,10 @@ export const createReviewHelpfulRoutes = (limiter?: RequestHandler) => {
   return router;
 };
 
-export const createProductReviewRoutes = (runtime?: ReviewImageRuntime) => {
+export const createProductReviewRoutes = (
+  runtime?: ReviewImageRuntime,
+  limiter?: RequestHandler,
+) => {
   const router = Router();
   const handlers = createReviewHandlers(runtime);
   router.get(
@@ -44,6 +47,7 @@ export const createProductReviewRoutes = (runtime?: ReviewImageRuntime) => {
   router.post(
     "/:id/reviews",
     authenticate,
+    ...(limiter ? [limiter] : []),
     validate({ params: idParams, body: createReviewBody }),
     handlers.createReview,
   );
@@ -60,16 +64,23 @@ export const createProductReviewRoutes = (runtime?: ReviewImageRuntime) => {
   return router;
 };
 
-export const createReviewRoutes = (runtime?: ReviewImageRuntime) => {
+export const createReviewRoutes = (runtime?: ReviewImageRuntime, limiter?: RequestHandler) => {
   const router = Router();
   const handlers = createReviewHandlers(runtime);
   router.patch(
     "/:id",
     authenticate,
+    ...(limiter ? [limiter] : []),
     validate({ params: idParams, body: updateReviewBody }),
     handlers.updateMyReview,
   );
-  router.delete("/:id", authenticate, validate({ params: idParams }), handlers.deleteMyReview);
+  router.delete(
+    "/:id",
+    authenticate,
+    ...(limiter ? [limiter] : []),
+    validate({ params: idParams }),
+    handlers.deleteMyReview,
+  );
   return router;
 };
 

@@ -773,10 +773,46 @@ const ReviewImage = registry.register(
   z.object({
     id: z.number(),
     url: z.string().url(),
+    urlExpiresAt: z.string().datetime(),
     mimeType: z.literal("image/webp"),
     width: z.number().int(),
     height: z.number().int(),
     position: z.number().int().min(0).max(255),
+  }),
+);
+const ReviewImageSyncResult = registry.register(
+  "ReviewImageSyncResult",
+  z.object({
+    reviewId: z.number(),
+    imageVersion: z.number().int().nonnegative(),
+    replayed: z.boolean(),
+    images: z.array(
+      z.object({
+        clientId: z.string(),
+        id: z.number(),
+        url: z.string().url(),
+        urlExpiresAt: z.string().datetime(),
+        mimeType: z.literal("image/webp"),
+        width: z.number().int(),
+        height: z.number().int(),
+        position: z.number().int().min(0).max(255),
+      }),
+    ),
+  }),
+);
+const ReviewImageSyncStatus = registry.register(
+  "ReviewImageSyncStatus",
+  z.object({
+    reviewId: z.number(),
+    status: z.enum(["PROCESSING", "WAITING_RETRY", "SUCCEEDED", "FAILED"]),
+    expectedVersion: z.number().int().nonnegative(),
+    retryable: z.boolean(),
+    retryAfterMs: z.number().int().nonnegative().optional(),
+    result: ReviewImageSyncResult.optional(),
+    error: z
+      .object({ code: z.string(), message: z.string(), details: z.unknown().optional() })
+      .optional(),
+    updatedAt: z.string().datetime(),
   }),
 );
 const PublicOfficialReply = registry.register(
@@ -832,6 +868,7 @@ const OwnerReview = registry.register(
     isAnonymous: z.boolean(),
     status: z.enum(["PUBLISHED", "HIDDEN"]),
     deletedAt: z.string().datetime().nullable(),
+    imageVersion: z.number().int().nonnegative(),
     verifiedPurchase: z.literal(true),
     images: z.array(ReviewImage),
     createdAt: z.string().datetime(),
@@ -1203,6 +1240,7 @@ type Op = {
   additionalOk?: Array<[status: number, description: string, schema?: z.ZodTypeAny]>;
   errors?: Record<number, string>;
   csv?: boolean;
+  deprecated?: boolean;
 };
 
 const op = (o: Op) => {
@@ -1217,6 +1255,7 @@ const op = (o: Op) => {
     path: o.path,
     summary: o.summary,
     tags: [o.tag],
+    ...(o.deprecated ? { deprecated: true } : {}),
     ...(o.auth === "optional"
       ? { security: [{}, ...secured] }
       : o.auth
@@ -1697,12 +1736,51 @@ op({
     body: multipart(z.object({ images: z.array(binary).min(1).max(3) })),
   },
   ok: [201, "Created", data(z.array(ReviewImage))],
+  deprecated: true,
   errors: {
     404: "Review not found",
     409: "Image limit reached",
     413: "Image too large",
     503: "Storage unavailable",
   },
+});
+op({
+  method: "put",
+  path: `${v1}/reviews/{id}/images/sync`,
+  summary: "Synchronize the complete desired image set for my review",
+  tag: "reviews",
+  auth: "user",
+  request: {
+    params: reviewImageParams,
+    headers: z.object({ "Idempotency-Key": z.string().min(1).max(64) }),
+    body: multipart(
+      z.object({
+        manifest: z.string().describe("JSON-encoded ReviewImageSyncManifest"),
+        files: z.array(binary).max(3).optional(),
+      }),
+    ),
+  },
+  ok: [200, "Synchronized", data(ReviewImageSyncResult)],
+  errors: {
+    400: "Missing idempotency key or invalid manifest",
+    404: "Review not found",
+    409: "Idempotency, lease, image-set, or version conflict",
+    413: "Image too large",
+    503: "Storage unavailable",
+  },
+});
+op({
+  method: "get",
+  path: `${v1}/reviews/{id}/images/sync`,
+  summary: "Get the status of my review image sync operation",
+  tag: "reviews",
+  auth: "user",
+  request: {
+    params: reviewImageParams,
+    headers: z.object({ "Idempotency-Key": z.string().min(1).max(64) }),
+  },
+  ok: [200, "OK", data(ReviewImageSyncStatus)],
+  errors: { 400: "Missing idempotency key", 404: "Sync operation not found" },
 });
 op({
   method: "patch",
@@ -1712,6 +1790,7 @@ op({
   auth: "user",
   request: { params: reviewImageParams, body: json(reviewImageOrderBody) },
   ok: [200, "Updated", data(z.array(ReviewImage))],
+  deprecated: true,
   errors: { 400: "Invalid image order", 404: "Review not found" },
 });
 op({
@@ -1722,6 +1801,7 @@ op({
   auth: "user",
   request: { params: reviewImageDeleteParams },
   ok: [204, "Deleted"],
+  deprecated: true,
   errors: { 404: "Review or image not found" },
 });
 

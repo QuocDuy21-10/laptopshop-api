@@ -35,6 +35,7 @@ const V1_PATHS = [
   "/api/v1/reviews/helpful",
   "/api/v1/reviews/{id}/helpful",
   "/api/v1/reviews/{id}/images",
+  "/api/v1/reviews/{id}/images/sync",
   "/api/v1/reviews/{id}/images/order",
   "/api/v1/reviews/{id}/images/{imageId}",
   "/api/v1/advisor/recommend",
@@ -259,6 +260,22 @@ describe("openapi document", () => {
     expect(body.required).toEqual(expect.arrayContaining(["rating", "content", "isAnonymous"]));
     expect(create.responses[201]).toBeDefined();
     expect(create.responses[409]).toBeDefined();
+  });
+
+  it("documents idempotent review image sync and deprecated legacy mutations", () => {
+    const sync = op("/api/v1/reviews/{id}/images/sync", "put");
+    expect(sync.parameters).toContainEqual(
+      expect.objectContaining({ in: "header", name: "Idempotency-Key", required: true }),
+    );
+    expect(sync.requestBody.content["multipart/form-data"]).toBeDefined();
+    expect(sync.responses[200]).toBeDefined();
+    expect(sync.responses[409]).toBeDefined();
+    expect(op("/api/v1/reviews/{id}/images/sync", "get").responses[200]).toBeDefined();
+    expect((doc.components?.schemas?.ReviewImage as any).properties.urlExpiresAt).toBeDefined();
+    expect((doc.components?.schemas?.OwnerReview as any).properties.imageVersion).toBeDefined();
+    expect(op("/api/v1/reviews/{id}/images", "post").deprecated).toBe(true);
+    expect(op("/api/v1/reviews/{id}/images/order", "patch").deprecated).toBe(true);
+    expect(op("/api/v1/reviews/{id}/images/{imageId}", "delete").deprecated).toBe(true);
   });
 
   it("documents the checkout idempotency header", () => {

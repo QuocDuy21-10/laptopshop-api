@@ -34,6 +34,11 @@ describe("rate limiters", () => {
     expect(reviewImagesLimiter).toBeDefined();
   });
 
+  it("exposes a user-keyed review mutation limiter", () => {
+    const { reviewMutationLimiter } = createLimiters();
+    expect(reviewMutationLimiter).toBeDefined();
+  });
+
   it("limits advisor requests to 20 per requester and returns the standard error envelope", async () => {
     const app = express();
     const { advisorLimiter } = createLimiters();

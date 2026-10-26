@@ -1,4 +1,5 @@
 import type { Request, RequestHandler, Response } from "express";
+import { AppError } from "lib/errors";
 import { type IdParams } from "lib/http";
 import { listPublishedReviews, getPublishedReviewSummary } from "modules/reviews/reviews.service";
 import {
@@ -26,6 +27,12 @@ import {
 } from "modules/reviews/review-helpful.service";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
 import type { ReviewImageRuntime } from "modules/reviews/review-image-runtime";
+import { idempotencyKeyHeader } from "lib/idempotency";
+import { parseReviewImageSyncManifest } from "modules/reviews/review-image-sync.schema";
+import {
+  getReviewImageSyncStatus,
+  syncReviewImages,
+} from "modules/reviews/review-image-sync.service";
 import { deleteOfficialReply, putOfficialReply } from "modules/reviews/review-replies.service";
 import type { PutReviewReplyBody } from "modules/reviews/reviews.schema";
 import {
@@ -50,6 +57,26 @@ export const createReviewImageHandlers = (deps: ReviewImageDeps) => ({
     const reviewId = Number(res.locals.reviewImageReviewId);
     await deleteReviewImage(deps, req.auth!.id, reviewId, Number(req.params.imageId));
     res.sendStatus(204);
+  },
+  sync: async (req: Request, res: Response) => {
+    const reviewId = Number(res.locals.reviewImageReviewId);
+    const parsedKey = idempotencyKeyHeader.safeParse(req.get("Idempotency-Key"));
+    if (!parsedKey.success)
+      throw new AppError("Idempotency-Key is required", 400, "IDEMPOTENCY_KEY_REQUIRED");
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    const manifest = parseReviewImageSyncManifest(req.body.manifest, files.length);
+    res.json({
+      data: await syncReviewImages(deps, req.auth!.id, reviewId, parsedKey.data, manifest, files),
+    });
+  },
+  syncStatus: async (req: Request, res: Response) => {
+    const reviewId = Number(res.locals.reviewImageReviewId);
+    const parsedKey = idempotencyKeyHeader.safeParse(req.get("Idempotency-Key"));
+    if (!parsedKey.success)
+      throw new AppError("Idempotency-Key is required", 400, "IDEMPOTENCY_KEY_REQUIRED");
+    res.json({
+      data: await getReviewImageSyncStatus(deps, req.auth!.id, reviewId, parsedKey.data),
+    });
   },
 });
 

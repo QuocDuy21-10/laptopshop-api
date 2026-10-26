@@ -31,6 +31,7 @@ export interface AppDeps {
     advisor?: Store;
     reviewImages?: Store;
     reviewHelpful?: Store;
+    reviewMutations?: Store;
     afterSalesImages?: Store;
   };
   advisor?: { service: AdvisorService; identitySecret: string };
@@ -66,6 +67,7 @@ export const createApp = (deps: AppDeps = {}): Express => {
     advisorLimiter,
     reviewImagesLimiter,
     reviewHelpfulLimiter,
+    reviewMutationLimiter,
     afterSalesImagesLimiter,
   } = createLimiters(deps.limitStores);
   app.use(globalLimiter);
@@ -119,6 +121,7 @@ export const createApp = (deps: AppDeps = {}): Express => {
       reviewImages,
       reviewImagesLimiter,
       reviewHelpfulLimiter,
+      reviewMutationLimiter,
       afterSalesAttachments,
       afterSalesImagesLimiter,
     ),

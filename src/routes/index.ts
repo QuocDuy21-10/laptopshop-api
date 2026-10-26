@@ -42,6 +42,7 @@ export const createApiV1Router = (
   reviewImages: ReviewImageDeps | null = null,
   reviewImagesLimiter?: RequestHandler,
   reviewHelpfulLimiter?: RequestHandler,
+  reviewMutationLimiter?: RequestHandler,
   afterSalesAttachments: AttachmentDeps | null = null,
   afterSalesImagesLimiter?: RequestHandler,
 ) => {
@@ -53,12 +54,15 @@ export const createApiV1Router = (
   };
 
   router.use("/auth", authRoutes);
-  router.use("/products", createProductReviewRoutes(reviewRuntime));
+  router.use("/products", createProductReviewRoutes(reviewRuntime, reviewMutationLimiter));
   router.use("/products", productRoutes);
   if (reviewImages)
-    router.use("/reviews", createReviewImageRoutes(reviewImages, reviewImagesLimiter));
+    router.use(
+      "/reviews",
+      createReviewImageRoutes(reviewImages, reviewImagesLimiter, reviewMutationLimiter),
+    );
   router.use("/reviews", createReviewHelpfulRoutes(reviewHelpfulLimiter));
-  router.use("/reviews", createReviewRoutes(reviewRuntime));
+  router.use("/reviews", createReviewRoutes(reviewRuntime, reviewMutationLimiter));
   router.use("/users", usersRoutes);
   router.use("/cart", cartRoutes);
   router.use("/orders", orderRoutes);

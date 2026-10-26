@@ -17,22 +17,44 @@ const reviewImageUpload = multer({
   limits: { fileSize: 3 * 1024 * 1024, files: 3 },
 });
 
-export const createReviewImageRoutes = (deps: ReviewImageDeps, limiter?: RequestHandler) => {
+export const createReviewImageRoutes = (
+  deps: ReviewImageDeps,
+  limiter?: RequestHandler,
+  mutationLimiter?: RequestHandler,
+) => {
   const router = Router();
   const handlers = createReviewImageHandlers(deps);
   const authAndLimit = [authenticate, ...(limiter ? [limiter] : [])];
+  const syncAuthAndLimit = [authenticate, ...(mutationLimiter ? [mutationLimiter] : [])];
 
   router.post(
     "/:id/images",
     ...authAndLimit,
+    ...(mutationLimiter ? [mutationLimiter] : []),
     validate({ params: reviewImageParams }),
     requireReviewImageOwner,
     reviewImageUpload.array("images", 3),
     handlers.add,
   );
+  router.put(
+    "/:id/images/sync",
+    ...syncAuthAndLimit,
+    validate({ params: reviewImageParams }),
+    requireReviewImageOwner,
+    reviewImageUpload.array("files", 3),
+    handlers.sync,
+  );
+  router.get(
+    "/:id/images/sync",
+    ...authAndLimit,
+    validate({ params: reviewImageParams }),
+    requireReviewImageOwner,
+    handlers.syncStatus,
+  );
   router.patch(
     "/:id/images/order",
     ...authAndLimit,
+    ...(mutationLimiter ? [mutationLimiter] : []),
     validate({ params: reviewImageParams, body: reviewImageOrderBody }),
     requireReviewImageOwner,
     handlers.reorder,
@@ -40,6 +62,7 @@ export const createReviewImageRoutes = (deps: ReviewImageDeps, limiter?: Request
   router.delete(
     "/:id/images/:imageId",
     ...authAndLimit,
+    ...(mutationLimiter ? [mutationLimiter] : []),
     validate({ params: reviewImageDeleteParams }),
     requireReviewImageOwner,
     handlers.remove,
