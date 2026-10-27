@@ -293,6 +293,7 @@ describe("DELETE /api/v1/admin/products/:id", () => {
     const res = await asAdmin(request(buildApp()).delete("/api/v1/admin/products/1"));
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("PRODUCT_IN_USE");
+    expect(res.body.error.message).toBe("Product has order or stock history; hide it instead");
     expect(prismaMock.stockMovement.deleteMany).not.toHaveBeenCalled();
     expect(prismaMock.product.delete).not.toHaveBeenCalled();
   });
