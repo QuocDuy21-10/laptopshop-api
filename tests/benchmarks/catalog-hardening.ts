@@ -113,7 +113,14 @@ const profiles = (): BenchmarkProfile[] => {
 
 const seedProducts = async (prisma: PrismaClient, size: CatalogBenchmarkSize) => {
   const prefix = `catalog-benchmark-${size}-`;
-  await prisma.product.deleteMany({ where: { name: { startsWith: prefix } } });
+  await prisma.product.deleteMany({
+    where: {
+      OR: [
+        { name: { startsWith: "catalog-benchmark-10000-" } },
+        { name: { startsWith: "catalog-benchmark-50000-" } },
+      ],
+    },
+  });
   const rows: Prisma.ProductCreateManyInput[] = Array.from({ length: size }, (_, index) => ({
     name: `${prefix}${index}`,
     price: 8_000_000 + (index % 15) * 1_000_000,
