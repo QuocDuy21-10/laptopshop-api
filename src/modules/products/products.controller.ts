@@ -22,6 +22,7 @@ import {
 } from "modules/products/products.service";
 import { publicFacetDefinitions } from "modules/products/products.facets";
 import { getProductFacets } from "modules/products/products.facets.service";
+import { env } from "config/env";
 
 export const listProductsHandler: RequestHandler = async (_req, res) => {
   const { items, meta } = await listProducts(res.locals.query as ListProductsQuery);
@@ -50,7 +51,12 @@ export const getFiltersHandler: RequestHandler = (_req, res) => {
 };
 
 export const getProductFacetsHandler: RequestHandler = async (_req, res) => {
-  res.json({ data: await getProductFacets(res.locals.query as ProductFilterQuery) });
+  res.json({
+    data: await getProductFacets(res.locals.query as ProductFilterQuery, {
+      asOf: new Date(),
+      mode: env.CATALOG_PROMOTION_PRICING_ENABLED ? "PROJECTED" : "LIST_PRICE",
+    }),
+  });
 };
 
 export const createProductHandler: RequestHandler = async (req, res) => {

@@ -8,6 +8,7 @@ import {
   type FacetAggregateRow,
 } from "modules/products/products.facets.repository";
 import type { ProductFilterQuery } from "modules/products/products.schema";
+import type { CatalogPricingContext } from "modules/products/products.catalog.repository";
 
 export type FacetCount = { value: string; count: number };
 export type ProductFacetsResult = {
@@ -38,8 +39,11 @@ const rowMap = (rows: FacetAggregateRow[], key: ProductFacetKey) => {
   return map;
 };
 
-export const getProductFacets = async (query: ProductFilterQuery): Promise<ProductFacetsResult> => {
-  const rows = await queryProductFacetRows(query);
+export const getProductFacets = async (
+  query: ProductFilterQuery,
+  context: CatalogPricingContext = { asOf: new Date(), mode: "LIST_PRICE" },
+): Promise<ProductFacetsResult> => {
+  const rows = await queryProductFacetRows(query, context);
   const total = Number(rows.find((row) => row.facetKey === "__total__")?.count ?? 0);
   const groups: Partial<Record<ProductFacetKey, FacetCount[]>> = {};
 
