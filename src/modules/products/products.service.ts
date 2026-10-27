@@ -14,8 +14,7 @@ import {
   ProductPatchBody,
 } from "modules/products/products.schema";
 import {
-  assertProductSpecState,
-  mergeProductSpecState,
+  reconcileProductSpecs,
   type ProductSpecState,
 } from "modules/products/products.normalization";
 import { productWhere } from "modules/products/products.filter";
@@ -103,7 +102,7 @@ export const createProduct = async (
   image: string | undefined,
   actorId: number,
 ) => {
-  const specs = mergeProductSpecState(
+  const specs = reconcileProductSpecs(
     {
       cpu: null,
       cpuBrand: null,
@@ -124,7 +123,6 @@ export const createProduct = async (
       panelType: input.panelType ?? null,
     },
   );
-  assertProductSpecState(specs);
 
   return prisma.$transaction(async (tx) => {
     const created = await tx.product.create({
@@ -195,7 +193,7 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
         resolutionTier: (current.resolutionTier as ProductSpecState["resolutionTier"]) ?? null,
         panelType: (current.panelType as ProductSpecState["panelType"]) ?? null,
       };
-      const specs = mergeProductSpecState(currentSpecs, {
+      const specs = reconcileProductSpecs(currentSpecs, {
         ...(Object.prototype.hasOwnProperty.call(input, "cpu") ? { cpu: input.cpu ?? null } : {}),
         ...(Object.prototype.hasOwnProperty.call(input, "cpuBrand")
           ? { cpuBrand: input.cpuBrand ?? null }
@@ -214,7 +212,6 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
           ? { panelType: input.panelType ?? null }
           : {}),
       });
-      assertProductSpecState(specs);
       for (const key of specKeys) delete data[key];
       if ("cpu" in input || "cpuBrand" in input) {
         data = { ...data, cpu: specs.cpu, cpuBrand: specs.cpuBrand };

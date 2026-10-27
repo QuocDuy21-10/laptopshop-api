@@ -170,7 +170,8 @@ describe("POST /api/v1/admin/products", () => {
     expect((await req).status).toBe(400);
   });
 
-  it("rejects a CPU description without its normalized brand", async () => {
+  it("auto-normalizes a confident CPU description without its brand", async () => {
+    prismaMock.product.create.mockResolvedValue(product);
     const res = await asAdmin(request(buildApp()).post("/api/v1/admin/products"))
       .field("name", "A")
       .field("price", "100")
@@ -180,9 +181,11 @@ describe("POST /api/v1/admin/products", () => {
       .field("factory", "ASUS")
       .field("target", "GAMING")
       .field("cpu", "Intel Core i5");
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("INVALID_PRODUCT_SPECS");
-    expect(prismaMock.product.create).not.toHaveBeenCalled();
+    expect(res.status).toBe(201);
+    expect(prismaMock.product.create.mock.calls[0][0].data).toMatchObject({
+      cpu: "Intel Core i5",
+      cpuBrand: "INTEL",
+    });
   });
 });
 
@@ -230,6 +233,21 @@ describe("PATCH /api/v1/admin/products/:id", () => {
       where: { id: 1 },
       data: { gpu: null, gpuBrand: null, gpuType: null },
     });
+  });
+
+  it("rejects a changed CPU text that conflicts with its normalized brand", async () => {
+    prismaMock.product.findUnique.mockResolvedValue({
+      ...product,
+      cpu: "Intel Core i5",
+      cpuBrand: "INTEL",
+    });
+    const res = await asAdmin(request(buildApp()).patch("/api/v1/admin/products/1")).send({
+      cpu: "AMD Ryzen 7",
+      cpuBrand: "INTEL",
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("INVALID_PRODUCT_SPECS");
+    expect(prismaMock.product.update).not.toHaveBeenCalled();
   });
 
   it("ignores a quantity sent to the product endpoint", async () => {
