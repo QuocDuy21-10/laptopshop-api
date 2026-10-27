@@ -55,8 +55,10 @@ export const toCatalogProductDto = (
   product: Product,
   summary?: ProductReviewSummary,
   resolution: ProductPromotionResolution | null = null,
+  effectiveCatalogPrice = product.price,
 ) => ({
   ...toPricedProductDto(product, resolution),
+  effectiveCatalogPrice,
   reviewSummary: summary ?? emptyProductReviewSummary,
 });
 

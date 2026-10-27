@@ -23,6 +23,10 @@ const columnNames = {
 
 type CatalogColumn = keyof typeof columnNames;
 
+export type CatalogFilterOptions = {
+  priceExpression?: Prisma.Sql;
+};
+
 const column = (alias: string, name: CatalogColumn) => Prisma.raw(`${alias}.${columnNames[name]}`);
 
 const inList = (field: Prisma.Sql, values: readonly (string | number)[]) =>
@@ -56,6 +60,7 @@ export const catalogFilterConditions = (
   query: ProductFilterQuery,
   alias = "p",
   exclude?: ProductFacetKey,
+  options: CatalogFilterOptions = {},
 ): Prisma.Sql[] => {
   const conditions: Prisma.Sql[] = [Prisma.sql`${Prisma.raw(`${alias}.isActive`)} = 1`];
   const addIn = (
@@ -68,7 +73,7 @@ export const catalogFilterConditions = (
   addIn("factory", "factory", query.factory);
   addIn("target", "target", query.target);
   if (exclude !== "price" && query.price.length)
-    conditions.push(pricePredicate(column(alias, "price"), query.price));
+    conditions.push(pricePredicate(options.priceExpression ?? column(alias, "price"), query.price));
   addIn("cpuBrand", "cpuBrand", query.cpuBrand);
   addIn("gpuBrand", "gpuBrand", query.gpuBrand);
   addIn("gpuType", "gpuType", query.gpuType);
