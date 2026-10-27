@@ -1,7 +1,7 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
 
 import request from "supertest";
-import { prismaMock, resetPrisma } from "../../helpers/prisma";
+import { prismaError, prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { ADMIN, USER, cookieFor } from "../../helpers/auth";
 
@@ -41,6 +41,9 @@ const promotion = {
 beforeEach(() => {
   resetPrisma();
   prismaMock.promotion.create.mockResolvedValue(promotion);
+  prismaMock.product.findMany.mockImplementation(async (args: any) =>
+    (args?.where?.id?.in ?? []).map((id: number) => ({ id })),
+  );
   prismaMock.promotion.findUnique.mockResolvedValue(promotion);
   prismaMock.promotion.findMany.mockResolvedValue([promotion]);
   prismaMock.promotion.count.mockResolvedValue(1);
@@ -137,6 +140,76 @@ describe("admin promotion routes", () => {
       kind: "FLASH_SALE",
       flashSale: { priority: 20, quotas: [{ productId: 3, totalQuota: 10 }] },
     });
+  });
+
+  it("rejects promotions that target unknown products without writing", async () => {
+    prismaMock.product.findMany.mockResolvedValue([{ id: 3 }]);
+    const draft = {
+      name: "Unknown targets",
+      discountKind: "PERCENT",
+      discountValue: 10,
+      startsAt: "2026-10-01T00:00:00.000Z",
+      endsAt: "2026-11-01T00:00:00.000Z",
+    };
+    for (const body of [
+      { ...draft, kind: "AUTOMATIC", automatic: { targetProductIds: [3, 99999999] } },
+      {
+        ...draft,
+        kind: "COUPON",
+        coupon: { code: "QA10", scope: "PRODUCT", targetProductIds: [99999999] },
+      },
+      {
+        ...draft,
+        kind: "FLASH_SALE",
+        flashSale: { items: [{ productId: 99999999, totalQuota: 5, maxUnitsPerUser: 1 }] },
+      },
+    ]) {
+      const response = await request(buildApp())
+        .post(endpoint)
+        .set("Cookie", cookieFor(ADMIN))
+        .send(body);
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatchObject({
+        code: "PRODUCT_NOT_FOUND",
+        details: { productIds: [99999999] },
+      });
+    }
+    expect(prismaMock.promotion.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects unknown products when replacing draft Flash Sale items", async () => {
+    prismaMock.promotion.findUnique.mockResolvedValue({
+      ...promotion,
+      kind: "FLASH_SALE",
+      couponPolicy: null,
+      flashSalePolicy: { promotionId: 10, priority: 0, stackableWithCoupon: false, quotas: [] },
+    });
+    prismaMock.product.findMany.mockResolvedValue([]);
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ flashSale: { items: [{ productId: 99999999, totalQuota: 5, maxUnitsPerUser: 1 }] } });
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("PRODUCT_NOT_FOUND");
+    expect(prismaMock.flashSaleProductQuota.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("maps a duplicate coupon code to 409", async () => {
+    prismaMock.promotion.create.mockRejectedValue(prismaError("P2002"));
+    const response = await request(buildApp())
+      .post(endpoint)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({
+        kind: "COUPON",
+        name: "Welcome",
+        discountKind: "PERCENT",
+        discountValue: 10,
+        startsAt: "2026-10-01T00:00:00.000Z",
+        endsAt: "2026-11-01T00:00:00.000Z",
+        coupon: { code: "WELCOME10", scope: "ORDER", maxUsesPerUser: 1 },
+      });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("COUPON_CODE_TAKEN");
   });
 
   it("lists promotions with pagination", async () => {

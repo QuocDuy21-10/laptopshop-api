@@ -257,7 +257,11 @@ export const deleteProduct = async (id: number) => {
     prisma.stockMovement.count({ where: { productId: id } }),
   ]);
   if (ordered > 0 || movements > 0) {
-    throw new AppError("Product is in orders; hide it instead", 409, "PRODUCT_IN_USE");
+    throw new AppError(
+      "Product has order or stock history; hide it instead",
+      409,
+      "PRODUCT_IN_USE",
+    );
   }
   try {
     await prisma.$transaction([

@@ -79,4 +79,32 @@ describe("PATCH /api/v1/users/me", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("INVALID_FILE");
   });
+
+  it("rejects non-image bytes sent with an image MIME type and stores nothing", async () => {
+    const before = fs.readdirSync("public/images");
+    const res = await request(buildApp())
+      .patch("/api/v1/users/me")
+      .set("Cookie", cookieFor(USER))
+      .attach("avatar", Buffer.from("not an image"), {
+        filename: "fake.png",
+        contentType: "image/png",
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe("INVALID_FILE");
+    expect(fs.readdirSync("public/images")).toEqual(before);
+  });
+
+  it("names the stored file from its content, not the client filename", async () => {
+    prismaMock.user.update.mockImplementation(async (args: any) => ({
+      ...row,
+      avatar: args.data.avatar,
+    }));
+    const res = await request(buildApp())
+      .patch("/api/v1/users/me")
+      .set("Cookie", cookieFor(USER))
+      .attach("avatar", PNG, { filename: "../../a.png.php", contentType: "image/png" });
+    expect(res.status).toBe(200);
+    expect(res.body.data.avatar).toMatch(/^\/images\/[0-9a-f-]{36}\.png$/);
+    fs.unlinkSync(path.join("public", res.body.data.avatar));
+  });
 });
