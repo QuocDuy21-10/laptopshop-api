@@ -138,6 +138,14 @@ const seedProducts = async (prisma: PrismaClient, size: CatalogBenchmarkSize) =>
   return prefix;
 };
 
+const prepareHardenedProjection = async (prisma: PrismaClient, prefix: string) => {
+  await prisma.$executeRaw`DELETE FROM catalog_price_windows WHERE productId IN (SELECT id FROM products WHERE name LIKE ${prefix + "%"})`;
+  await prisma.$executeRaw`INSERT INTO catalog_price_windows
+    (productId, validFrom, validUntil, source, listPrice, effectiveCatalogPrice, automaticPromotionId, promotionPricingVersion, policyVersion)
+    SELECT id, NOW(3), NULL, 'LIST_PRICE', price, price, NULL, NULL, 1
+    FROM products WHERE name LIKE ${prefix + "%"}`;
+};
+
 export async function runCatalogBenchmark(
   prisma: PrismaClient,
   args: CatalogBenchmarkArgs,
@@ -147,6 +155,7 @@ export async function runCatalogBenchmark(
     return;
   }
   const prefix = await seedProducts(prisma, args.size);
+  if (args.mode === "hardened") await prepareHardenedProjection(prisma, prefix);
   const samples: Array<{ profile: string; listMs: number; facetsMs: number }> = [];
   for (const profile of profiles()) {
     for (let iteration = 0; iteration < 35; iteration += 1) {

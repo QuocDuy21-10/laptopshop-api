@@ -56,7 +56,7 @@ export const queryCatalogProductPage = async (
              rs.averageRating, COALESCE(rs.totalReviews, 0) AS totalReviews,
              p.isActive, p.name, p.factory, p.target, p.cpuBrand, p.gpuBrand, p.gpuType,
              p.ramGb, p.storageGb, p.screenSizeInch, p.resolutionTier, p.panelType,
-             p.refreshRateHz, p.batteryWh, p.weightGrams, p.warrantyMonths
+             p.refreshRateHz, p.batteryWh, p.weightGrams, p.warrantyMonths, p.quantity
       FROM products p LEFT JOIN review_stats rs ON rs.productId = p.id ${projectionJoin}
     ), filtered AS (
       SELECT b.productId, b.effectiveCatalogPrice, b.averageRating, b.totalReviews
