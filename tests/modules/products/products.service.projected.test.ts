@@ -36,8 +36,8 @@ describe("listProducts with projected catalog pricing", () => {
         productId: 1,
         effectiveCatalogPrice: 15_000_000,
         averageRating: "4.5",
-        totalReviews: 2n,
-        total: 1n,
+        totalReviews: BigInt(2),
+        total: BigInt(1),
       },
     ]);
     prismaMock.product.findMany.mockResolvedValue([product]);
