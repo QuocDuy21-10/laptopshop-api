@@ -2,6 +2,7 @@ import { prisma } from "config/client";
 import { getProductFacets } from "modules/products/products.facets.service";
 import { createCompletedOrderItem, createProduct, createUser, resetDb } from "./fixtures";
 import { queryRatedProductPage } from "modules/products/products.rating.repository";
+import { refreshCatalogPriceWindows } from "modules/pricing/catalog-price-projection.repository";
 
 beforeEach(resetDb);
 afterAll(() => prisma.$disconnect());
@@ -250,6 +251,34 @@ describe("product facets on MySQL", () => {
     expect(
       (await queryRatedProductPage({ ...base, minRating: 4, page: 1, pageSize: 10 })).total,
     ).toBe(four.total);
+  });
+
+  it("uses Automatic Promotion effective price for projected price buckets", async () => {
+    const admin = await createUser();
+    const discounted = await createProduct(2, 18_000_000);
+    await prisma.promotion.create({
+      data: {
+        kind: "AUTOMATIC",
+        state: "ACTIVE",
+        name: "Facet automatic",
+        discountKind: "FIXED",
+        discountValue: 4_000_000,
+        startsAt: new Date("2026-10-01T00:00:00.000Z"),
+        endsAt: new Date("2026-11-01T00:00:00.000Z"),
+        createdById: admin.id,
+        updatedById: admin.id,
+        automaticPolicy: { create: { priority: 1, stackableWithCoupon: false } },
+        products: { create: { productId: discounted.id } },
+      },
+    });
+    const asOf = new Date("2026-10-27T00:00:00.000Z");
+    await prisma.$transaction((tx) => refreshCatalogPriceWindows(tx, [discounted.id], asOf));
+    const result = await getProductFacets(
+      { ...allQuery(), price: ["10-15m"] },
+      { asOf, mode: "PROJECTED" },
+    );
+    expect(result.total).toBe(1);
+    expect(result.groups.price).toEqual(expect.arrayContaining([{ value: "10-15m", count: 1 }]));
   });
 });
 
