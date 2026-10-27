@@ -15,7 +15,6 @@
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
     "test": "jest",
     "test:cov": "jest --coverage",
-    "test:int": "jest -c jest.int.config.ts --runInBand",
     "test:redis": "jest -c jest.redis.config.ts --runInBand --watchman=false",
     "products:audit-facets": "ts-node -r tsconfig-paths/register src/scripts/audit-product-facets.ts",
     "products:audit-rating": "ts-node -r tsconfig-paths/register src/scripts/audit-product-rating-query.ts",
