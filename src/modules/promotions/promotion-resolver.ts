@@ -1,4 +1,8 @@
-import { automaticDiscountPerUnit } from "modules/promotions/promotion-pricing";
+import { automaticDiscountPerUnit } from "modules/promotions/promotion-discount";
+import {
+  resolveAutomaticPromotionAt,
+  type AutomaticPromotionCandidate,
+} from "modules/promotions/automatic-promotion-policy";
 import { selectProductPromotion } from "modules/promotions/promotion-selection";
 import type {
   ProductPromotionResolution,
@@ -205,16 +209,36 @@ export const resolveAutomaticPromotions = async (
       },
     },
   })) ?? []) as PromotionRow[];
-  const context: PromotionResolutionContext = { now, eligibilityMode: "POTENTIAL" };
-  const candidatesByProduct = candidatesFromRows(rows, context);
+  const candidatesByProduct = new Map<number, AutomaticPromotionCandidate[]>();
+  for (const row of rows) {
+    if (!row.automaticPolicy) continue;
+    for (const target of row.products) {
+      const candidates = candidatesByProduct.get(target.productId) ?? [];
+      candidates.push({
+        id: row.id,
+        name: row.name,
+        discountKind: row.discountKind,
+        discountValue: row.discountValue,
+        priority: row.automaticPolicy.priority,
+        stackableWithCoupon: row.automaticPolicy.stackableWithCoupon,
+        pricingVersion: row.pricingVersion,
+        startsAt: row.startsAt,
+        endsAt: row.endsAt,
+      });
+      candidatesByProduct.set(target.productId, candidates);
+    }
+  }
   const result = new Map<number, ResolvedAutomaticPromotion>();
   for (const productId of ids) {
-    const winner = selectProductPromotion(
+    const product = rows
+      .flatMap((row) => row.products)
+      .find((target) => target.productId === productId);
+    const winner = resolveAutomaticPromotionAt(
       candidatesByProduct.get(productId) ?? [],
-      { productId, quantity: 1 },
-      context,
-    ).winner;
-    if (winner?.kind === "AUTOMATIC") result.set(productId, winner);
+      product?.product?.price ?? Number.MAX_SAFE_INTEGER,
+      now,
+    );
+    if (winner) result.set(productId, winner);
   }
   return result;
 };

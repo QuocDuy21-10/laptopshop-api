@@ -1,4 +1,4 @@
-import { automaticDiscountPerUnit } from "modules/promotions/promotion-pricing";
+import { automaticDiscountPerUnit } from "modules/promotions/promotion-discount";
 import type {
   FlashSaleFallback,
   ProductPromotionResolution,
