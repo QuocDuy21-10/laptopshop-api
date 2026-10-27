@@ -1,4 +1,5 @@
 import { performance } from "node:perf_hooks";
+import { appendFile, mkdir } from "node:fs/promises";
 import type { PrismaClient, Prisma } from "@prisma/client";
 import { logger } from "lib/logger";
 import { listProducts } from "modules/products/products.service";
@@ -158,8 +159,50 @@ export async function runCatalogBenchmark(
       if (iteration >= 5) samples.push({ profile: profile.name, listMs, facetsMs });
     }
   }
+  const percentile = (values: number[], rank: number) => {
+    const sorted = [...values].sort((left, right) => left - right);
+    return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * rank) - 1)] ?? 0;
+  };
+  const summaries = profiles().map((profile) => {
+    const rows = samples.filter((sample) => sample.profile === profile.name);
+    return {
+      profile: profile.name,
+      listP50: percentile(
+        rows.map((row) => row.listMs),
+        0.5,
+      ),
+      listP95: percentile(
+        rows.map((row) => row.listMs),
+        0.95,
+      ),
+      facetsP50: percentile(
+        rows.map((row) => row.facetsMs),
+        0.5,
+      ),
+      facetsP95: percentile(
+        rows.map((row) => row.facetsMs),
+        0.95,
+      ),
+    };
+  });
+  await mkdir("docs-local/verification", { recursive: true });
+  const report = [
+    `\n## Catalog benchmark ${args.mode} ${args.size} (${new Date().toISOString()})`,
+    `Seed prefix: ${prefix}`,
+    "| Profile | List p50 (ms) | List p95 (ms) | Facets p50 (ms) | Facets p95 (ms) |",
+    "| --- | ---: | ---: | ---: | ---: |",
+    ...summaries.map(
+      (summary) =>
+        `| ${summary.profile} | ${summary.listP50.toFixed(2)} | ${summary.listP95.toFixed(2)} | ${summary.facetsP50.toFixed(2)} | ${summary.facetsP95.toFixed(2)} |`,
+    ),
+    "",
+  ].join("\n");
+  await appendFile(
+    "docs-local/verification/advanced-product-facets-hardening-benchmark.md",
+    report,
+  );
   logger.info(
-    { mode: args.mode, size: args.size, prefix, samples: samples.length },
+    { mode: args.mode, size: args.size, prefix, samples: samples.length, summaries },
     "catalog benchmark complete",
   );
 }
