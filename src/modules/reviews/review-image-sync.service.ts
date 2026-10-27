@@ -2,7 +2,7 @@ import { Prisma, type ReviewImageSyncOperation } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { env } from "config/env";
 import { prisma } from "config/client";
-import { AppError } from "lib/errors";
+import { AppError, isUniqueViolation } from "lib/errors";
 import { createReviewImageSyncFingerprint } from "modules/reviews/review-image-sync.fingerprint";
 import {
   snapshotFromJson,
@@ -382,15 +382,29 @@ export const syncReviewImages = async (
 ): Promise<ReviewImageSyncResultDto> => {
   const processed = await Promise.all(files.map(processReviewImage));
   const fingerprint = createReviewImageSyncFingerprint(reviewId, manifest, files);
-  const reservation = await reserveOperation(
-    deps,
-    userId,
-    reviewId,
-    idempotencyKey,
-    manifest,
-    fingerprint,
-    processed,
-  );
+  let reservation: Awaited<ReturnType<typeof reserveOperation>>;
+  try {
+    reservation = await reserveOperation(
+      deps,
+      userId,
+      reviewId,
+      idempotencyKey,
+      manifest,
+      fingerprint,
+      processed,
+    );
+  } catch (error) {
+    if (!isUniqueViolation(error)) throw error;
+    reservation = await reserveOperation(
+      deps,
+      userId,
+      reviewId,
+      idempotencyKey,
+      manifest,
+      fingerprint,
+      processed,
+    );
+  }
   if (reservation.replay) {
     const snapshot = snapshotFromJson(reservation.operation.result);
     return signSnapshot(deps, snapshot, true);
