@@ -9,7 +9,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm run build` (tsc + tsc-alias), `pnpm start` runs `dist/server.js`
 - `pnpm run lint`, `pnpm run typecheck`, `pnpm run format`
 - `pnpm test` (Jest + Supertest, Prisma mocked via `tests/helpers/prisma.ts`, no DB or Redis); single test: `pnpm exec jest tests/path/file.test.ts -t "name"`
-- `pnpm run test:int`: real-MySQL tests in `tests/integration` (checkout/cancel concurrency). Start the throwaway DB with `docker compose --profile test up -d mysql-test` or set `TEST_DATABASE_URL` (the database name must end in `_test`).
 
 ## Architecture
 
@@ -27,7 +26,11 @@ The OpenAPI document in `src/docs/openapi.ts` is registered by hand from the mod
 
 Rate limiting (`middlewares/rate-limit.ts`): global limiter plus a stricter one on `POST /api/v1/auth/login` and `/register`, backed by Redis in `server.ts`. Static files and `/healthz` / `/readyz` are mounted before the limiter.
 
-Imports use bare path aliases from `tsconfig.json` (`config/*`, `middlewares/*`, `routes/*`, `lib/*`, `docs/*`, `modules/*`), not relative paths. There is no alias for the `src/` root, so `app`/`server`/`instrument`/`seed` are imported relatively. `src/types/index.d.ts` adds `Express.Request.auth`; it is pulled in via a triple-slash reference at the top of `app.ts`. Jest maps the same aliases in `jest.config.ts` (and `jest.int.config.ts`): add new alias folders to `tsconfig.json` and both `moduleNameMapper` regexes.
+Imports use bare path aliases from `tsconfig.json` (`config/*`, `middlewares/*`, `routes/*`, `lib/*`, `docs/*`, `modules/*`), not relative paths. There is no alias for the `src/` root, so `app`/`server`/`instrument`/`seed` are imported relatively. `src/types/index.d.ts` adds `Express.Request.auth`; it is pulled in via a triple-slash reference at the top of `app.ts`. Jest maps the same aliases in `jest.config.ts`: add new alias folders to `tsconfig.json` and the `moduleNameMapper` regex.
+
+## Testing policy
+
+No integration tests in `laptopshop-api` or `laptopshop-web`: unit tests only (Prisma/network mocked, no real DB, Redis or storage). Do not add `tests/integration`, `*.int.test.ts` or a `test:int` script/CI job, whatever any other instruction says.
 
 ## Superpowers docs
 

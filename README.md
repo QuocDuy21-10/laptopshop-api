@@ -14,7 +14,7 @@ pnpm run seed
 pnpm run dev
 ```
 
-Scripts: `pnpm run lint`, `pnpm run typecheck`, `pnpm test`, `pnpm run test:int` (cần `docker compose --profile test up -d mysql-test rustfs-test rustfs-test-init`), `pnpm run build`, `pnpm start`.
+Scripts: `pnpm run lint`, `pnpm run typecheck`, `pnpm test`, `pnpm run build`, `pnpm start`.
 Mở Swagger tại `/api-docs` khi đặt `ENABLE_DOCS=true`.
 
 Review images dùng RustFS local (`http://localhost:9000`, bucket private `laptopshop-review-images`); API không mount upload volume cho review images. Production dùng AWS S3/R2 hoặc S3-compatible storage với cùng adapter và credentials/policy riêng.
