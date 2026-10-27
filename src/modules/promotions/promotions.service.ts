@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "config/client";
-import { AppError, notFound } from "lib/errors";
+import { AppError, isUniqueViolation, notFound } from "lib/errors";
 import { pageArgs, pageMeta } from "lib/http";
 import {
   AdminPromotionQuery,
@@ -86,6 +86,23 @@ const toPolicyData = (body: CreatePromotionBody) => {
   };
 };
 
+// FK violations would surface as 500, so unknown products are rejected before any write
+const assertProductsExist = async (productIds: number[]) => {
+  const ids = [...new Set(productIds)];
+  if (!ids.length) return;
+  const found = new Set(
+    (await prisma.product.findMany({ where: { id: { in: ids } }, select: { id: true } })).map(
+      (product) => product.id,
+    ),
+  );
+  const missing = ids.filter((id) => !found.has(id));
+  if (missing.length) {
+    throw new AppError("Promotion targets unknown products", 400, "PRODUCT_NOT_FOUND", {
+      productIds: missing,
+    });
+  }
+};
+
 const getRow = async (id: number) => {
   const row = await prisma.promotion.findUnique({ where: { id }, include: promotionInclude });
   if (!row) throw notFound("Promotion");
@@ -94,30 +111,41 @@ const getRow = async (id: number) => {
 
 export const createPromotion = async (actorId: number, body: CreatePromotionBody) => {
   const policies = toPolicyData(body);
-  const created = await prisma.$transaction(async (tx) =>
-    tx.promotion.create({
-      data: {
-        kind: body.kind,
-        state: "DRAFT",
-        name: body.name,
-        description: body.description,
-        discountKind: body.discountKind,
-        discountValue: body.discountValue,
-        startsAt: body.startsAt,
-        endsAt: body.endsAt,
-        createdById: actorId,
-        updatedById: actorId,
-        ...(policies.couponPolicy ? { couponPolicy: policies.couponPolicy } : {}),
-        ...(policies.automaticPolicy ? { automaticPolicy: policies.automaticPolicy } : {}),
-        ...(policies.flashSalePolicy ? { flashSalePolicy: policies.flashSalePolicy } : {}),
-        ...(policies.flashSaleQuotas ? { flashSaleQuotas: policies.flashSaleQuotas } : {}),
-        products: {
-          create: policies.targetProductIds.map((productId) => ({ productId })),
+  await assertProductsExist([
+    ...policies.targetProductIds,
+    ...(body.flashSale?.items ?? []).map((item) => item.productId),
+  ]);
+  const created = await prisma
+    .$transaction(async (tx) =>
+      tx.promotion.create({
+        data: {
+          kind: body.kind,
+          state: "DRAFT",
+          name: body.name,
+          description: body.description,
+          discountKind: body.discountKind,
+          discountValue: body.discountValue,
+          startsAt: body.startsAt,
+          endsAt: body.endsAt,
+          createdById: actorId,
+          updatedById: actorId,
+          ...(policies.couponPolicy ? { couponPolicy: policies.couponPolicy } : {}),
+          ...(policies.automaticPolicy ? { automaticPolicy: policies.automaticPolicy } : {}),
+          ...(policies.flashSalePolicy ? { flashSalePolicy: policies.flashSalePolicy } : {}),
+          ...(policies.flashSaleQuotas ? { flashSaleQuotas: policies.flashSaleQuotas } : {}),
+          products: {
+            create: policies.targetProductIds.map((productId) => ({ productId })),
+          },
         },
-      },
-      include: promotionInclude,
-    }),
-  );
+        include: promotionInclude,
+      }),
+    )
+    .catch((error) => {
+      if (isUniqueViolation(error)) {
+        throw new AppError("Coupon code already exists", 409, "COUPON_CODE_TAKEN");
+      }
+      throw error;
+    });
   return toPromotionDetailDto(created);
 };
 
@@ -252,6 +280,7 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
           ) {
             throw new AppError("Flash Sale quota items are incomplete", 400, "VALIDATION_ERROR");
           }
+          await assertProductsExist(body.flashSale.items.map((item) => item.productId!));
           await tx.flashSaleProductQuota.deleteMany({ where: { promotionId: id } });
           await tx.flashSaleProductQuota.createMany({
             data: body.flashSale.items.map((item) => ({
