@@ -15,6 +15,7 @@ import {
   TARGETS,
   WARRANTY_MINIMUMS,
   WEIGHT_MAXIMUMS,
+  MAX_MULTI_FACET_SELECTIONS,
 } from "modules/products/products.facets";
 
 export {
@@ -43,7 +44,7 @@ const specNumber = (min: number, max: number, int = true) =>
 const specEnum = <T extends readonly [string, ...string[]]>(values: T) =>
   z.preprocess(blankToNull, z.enum(values).nullable()).optional();
 
-const csvOf = (allowed: readonly string[], maxItems = 10) =>
+const csvOf = (allowed: readonly string[], maxItems = MAX_MULTI_FACET_SELECTIONS) =>
   z
     .string()
     .optional()

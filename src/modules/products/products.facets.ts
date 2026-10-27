@@ -23,25 +23,28 @@ export const MIN_RATING_THRESHOLDS = [3, 4] as const;
 export const FACTORIES = factoryOptions.map((o) => o.value);
 export const TARGETS = targetOptions.map((o) => o.value);
 export const LOW_STOCK_THRESHOLD = 5;
+export const MAX_MULTI_FACET_SELECTIONS = 10;
 
-export type ProductFacetKey =
-  | "factory"
-  | "target"
-  | "price"
-  | "cpuBrand"
-  | "gpuBrand"
-  | "gpuType"
-  | "ramGb"
-  | "storageGb"
-  | "screenSize"
-  | "resolutionTier"
-  | "panelType"
-  | "minRefreshHz"
-  | "minBatteryWh"
-  | "maxWeightGrams"
-  | "minWarrantyMonths"
-  | "minRating"
-  | "inStock";
+export const PRODUCT_FACET_KEYS = [
+  "factory",
+  "target",
+  "price",
+  "cpuBrand",
+  "gpuBrand",
+  "gpuType",
+  "ramGb",
+  "storageGb",
+  "screenSize",
+  "resolutionTier",
+  "panelType",
+  "minRefreshHz",
+  "minBatteryWh",
+  "maxWeightGrams",
+  "minWarrantyMonths",
+  "minRating",
+  "inStock",
+] as const;
+export type ProductFacetKey = (typeof PRODUCT_FACET_KEYS)[number];
 export type FacetMode = "MULTI" | "SINGLE_MIN" | "SINGLE_MAX" | "BOOLEAN";
 export type FacetKind = "categorical" | "exact" | "bucket";
 export type FacetOption = { name: string; value: string };
@@ -51,6 +54,7 @@ export type FacetDefinition = {
   mode: FacetMode;
   kind: FacetKind;
   options?: readonly FacetOption[];
+  maxSelections?: number;
 };
 
 const options = (values: readonly string[], names: readonly string[]): FacetOption[] =>
@@ -65,13 +69,22 @@ export const facetDefinitions: readonly FacetDefinition[] = [
     mode: "MULTI",
     kind: "categorical",
     options: factoryOptions,
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
   },
-  { key: "target", name: "Nhu cầu", mode: "MULTI", kind: "categorical", options: targetOptions },
+  {
+    key: "target",
+    name: "Nhu cầu",
+    mode: "MULTI",
+    kind: "categorical",
+    options: targetOptions,
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
+  },
   {
     key: "price",
     name: "Khoảng giá",
     mode: "MULTI",
     kind: "bucket",
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
     options: options(Object.keys(PRICE_RANGES), [
       "Dưới 10 triệu",
       "10 – dưới 15 triệu",
@@ -84,6 +97,7 @@ export const facetDefinitions: readonly FacetDefinition[] = [
     name: "CPU",
     mode: "MULTI",
     kind: "categorical",
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
     options: options(CPU_BRANDS, ["Intel", "AMD", "Apple", "Qualcomm"]),
   },
   {
@@ -91,6 +105,7 @@ export const facetDefinitions: readonly FacetDefinition[] = [
     name: "Hãng GPU",
     mode: "MULTI",
     kind: "categorical",
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
     options: options(GPU_BRANDS, ["NVIDIA", "AMD", "Intel", "Apple", "Qualcomm"]),
   },
   {
@@ -98,15 +113,29 @@ export const facetDefinitions: readonly FacetDefinition[] = [
     name: "Loại GPU",
     mode: "MULTI",
     kind: "categorical",
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
     options: options(GPU_TYPES, ["Tích hợp", "Rời"]),
   },
-  { key: "ramGb", name: "RAM", mode: "MULTI", kind: "exact" },
-  { key: "storageGb", name: "Ổ cứng", mode: "MULTI", kind: "exact" },
+  {
+    key: "ramGb",
+    name: "RAM",
+    mode: "MULTI",
+    kind: "exact",
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
+  },
+  {
+    key: "storageGb",
+    name: "Ổ cứng",
+    mode: "MULTI",
+    kind: "exact",
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
+  },
   {
     key: "screenSize",
     name: "Kích thước màn hình",
     mode: "MULTI",
     kind: "bucket",
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
     options: options(SCREEN_SIZES, ["Dưới 14 inch", "14 – dưới 16 inch", "Từ 16 inch"]),
   },
   {
@@ -114,6 +143,7 @@ export const facetDefinitions: readonly FacetDefinition[] = [
     name: "Độ phân giải",
     mode: "MULTI",
     kind: "categorical",
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
     options: options(RESOLUTION_TIERS, ["HD", "Full HD", "QHD / 2K", "UHD / 4K"]),
   },
   {
@@ -121,6 +151,7 @@ export const facetDefinitions: readonly FacetDefinition[] = [
     name: "Loại tấm nền",
     mode: "MULTI",
     kind: "categorical",
+    maxSelections: MAX_MULTI_FACET_SELECTIONS,
     options: options(PANEL_TYPES, ["IPS", "OLED", "Mini LED", "TN", "VA"]),
   },
   {
