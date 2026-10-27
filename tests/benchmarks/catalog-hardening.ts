@@ -163,7 +163,10 @@ export async function runCatalogBenchmark(
       await listProducts(profile.list);
       const listMs = performance.now() - listStart;
       const facetsStart = performance.now();
-      await getProductFacets(profile.facets);
+      await getProductFacets(profile.facets, {
+        asOf: new Date(),
+        mode: args.mode === "hardened" ? "PROJECTED" : "LIST_PRICE",
+      });
       const facetsMs = performance.now() - facetsStart;
       if (iteration >= 5) samples.push({ profile: profile.name, listMs, facetsMs });
     }
