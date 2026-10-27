@@ -4,10 +4,10 @@ import { auditCatalogPriceProjection } from "modules/pricing/catalog-price-proje
 
 describe("catalog price projection audit", () => {
   it("reports missing, overlap, stale-policy, and list-price issues from one health query", async () => {
-    const queryRaw = jest.fn<(query: Prisma.Sql) => Promise<unknown>>().mockResolvedValue([
+    const queryRaw = jest.fn<() => Promise<unknown[]>>().mockResolvedValue([
       { productId: 1, activeWindows: 0, staleWindows: 0, listPriceMismatches: 0 },
       { productId: 2, activeWindows: 2, staleWindows: 1, listPriceMismatches: 1 },
-    ]);
+    ]) as unknown as <T>(query: Prisma.Sql) => Promise<T>;
     const result = await auditCatalogPriceProjection({ $queryRaw: queryRaw }, new Date());
     expect(result.checked).toBe(2);
     expect(result.issues).toEqual(
