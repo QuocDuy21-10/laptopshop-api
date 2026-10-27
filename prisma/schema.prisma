@@ -305,6 +305,7 @@ model Product {
   reviews          Review[]
   wishlistItems    WishlistItem[]
   notifications    Notification[]
+  catalogPriceWindows CatalogPriceWindow[]
 
   @@map("products")
 }
@@ -826,9 +827,32 @@ model Promotion {
   couponOrders    Order[]                   @relation("OrderCouponPromotion")
   automaticLines  OrderDetail[]             @relation("OrderDetailAutomaticPromotion")
   flashSaleQuotas FlashSaleProductQuota[]
+  catalogPriceWindows CatalogPriceWindow[]
 
   @@index([kind, state, startsAt, endsAt])
   @@map("promotions")
+}
+
+model CatalogPriceWindow {
+  id                      BigInt    @id @default(autoincrement())
+  productId               Int
+  validFrom               DateTime
+  validUntil              DateTime?
+  source                  String    @db.VarChar(20)
+  listPrice               Int
+  effectiveCatalogPrice   Int
+  automaticPromotionId    Int?
+  promotionPricingVersion Int?
+  policyVersion           Int
+  computedAt              DateTime  @default(now())
+
+  product            Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  automaticPromotion Promotion? @relation(fields: [automaticPromotionId], references: [id], onDelete: Restrict)
+
+  @@unique([productId, validFrom])
+  @@index([productId, validFrom, validUntil])
+  @@index([automaticPromotionId])
+  @@map("catalog_price_windows")
 }
 
 model CouponPolicy {
