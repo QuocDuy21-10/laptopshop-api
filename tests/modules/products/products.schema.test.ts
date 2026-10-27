@@ -2,8 +2,11 @@ import { describe, expect, it } from "@jest/globals";
 import {
   adminListProductsQuery,
   listProductsQuery,
+  productBody,
   productFacetsQuery,
+  productPatchBody,
 } from "modules/products/products.schema";
+import { idParams } from "lib/http";
 
 describe("product facet query", () => {
   it("deduplicates CSV filters and parses exact numeric values", () => {
@@ -48,5 +51,25 @@ describe("product facet query", () => {
   it("keeps admin sort allow-list explicit", () => {
     expect(adminListProductsQuery.parse({ sort: "price_desc" }).sort).toBe("price_desc");
     expect(() => adminListProductsQuery.parse({ sort: "rating_desc" })).toThrow();
+  });
+});
+
+describe("product body integer bounds", () => {
+  const body = {
+    name: "QA laptop",
+    price: 1000,
+    quantity: 1,
+    shortDesc: "short",
+    detailDesc: "detail",
+    factory: "ASUS",
+    target: "GAMING",
+  };
+
+  it("accepts the largest INT and rejects anything above it", () => {
+    expect(productBody.safeParse({ ...body, price: 2_147_483_647 }).success).toBe(true);
+    expect(productBody.safeParse({ ...body, price: 2_147_483_648 }).success).toBe(false);
+    expect(productBody.safeParse({ ...body, quantity: 99_999_999_999 }).success).toBe(false);
+    expect(productPatchBody.safeParse({ price: 2_147_483_648 }).success).toBe(false);
+    expect(idParams.safeParse({ id: "2147483648" }).success).toBe(false);
   });
 });

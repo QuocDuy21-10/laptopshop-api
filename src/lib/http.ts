@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-export const idParams = z.object({ id: z.coerce.number().int().positive() });
+// MySQL INT upper bound; larger values make Prisma throw (HTTP 500) instead of failing validation
+export const MAX_DB_INT = 2_147_483_647;
+
+export const idParams = z.object({ id: z.coerce.number().int().positive().max(MAX_DB_INT) });
 export type IdParams = z.infer<typeof idParams>;
 
 export const pageQuery = z.object({

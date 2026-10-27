@@ -113,6 +113,42 @@ describe("promotion schemas", () => {
     ).toBe(false);
   });
 
+  it("rejects integers that do not fit the INT columns", () => {
+    const tooBig = 2_147_483_648;
+    expect(
+      createPromotionBody.safeParse({ ...base, discountKind: "FIXED", discountValue: tooBig })
+        .success,
+    ).toBe(false);
+    for (const field of ["minOrderValue", "maxDiscount", "maxUses", "maxUsesPerUser"]) {
+      expect(
+        createPromotionBody.safeParse({ ...base, coupon: { ...base.coupon, [field]: tooBig } })
+          .success,
+      ).toBe(false);
+    }
+    expect(
+      createPromotionBody.safeParse({
+        ...base,
+        kind: "AUTOMATIC",
+        coupon: undefined,
+        automatic: { targetProductIds: [tooBig] },
+      }).success,
+    ).toBe(false);
+    for (const item of [
+      { productId: tooBig, totalQuota: 1, maxUnitsPerUser: 1 },
+      { productId: 1, totalQuota: tooBig, maxUnitsPerUser: 1 },
+    ]) {
+      expect(
+        createPromotionBody.safeParse({
+          ...base,
+          kind: "FLASH_SALE",
+          coupon: undefined,
+          flashSale: { items: [item] },
+        }).success,
+      ).toBe(false);
+    }
+    expect(updatePromotionBody.safeParse({ discountValue: tooBig }).success).toBe(false);
+  });
+
   it("only accepts known lifecycle actions", () => {
     expect(transitionPromotionBody.safeParse({ action: "ACTIVATE" }).success).toBe(true);
     expect(transitionPromotionBody.safeParse({ action: "DELETE" }).success).toBe(false);

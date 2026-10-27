@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { idParams, pageQuery } from "lib/http";
+import { idParams, MAX_DB_INT, pageQuery } from "lib/http";
 
 export const PROMOTION_KINDS = ["COUPON", "AUTOMATIC", "FLASH_SALE"] as const;
 export const PROMOTION_STATES = ["DRAFT", "ACTIVE", "PAUSED", "ENDED"] as const;
@@ -21,15 +21,16 @@ const code = z
   .max(50)
   .regex(/^[A-Z0-9_-]+$/, "Coupon code must use A-Z, 0-9, _ or -");
 
-const targetIds = z.array(z.coerce.number().int().positive()).max(500).default([]);
+const dbId = z.coerce.number().int().positive().max(MAX_DB_INT);
+const targetIds = z.array(dbId).max(500).default([]);
 const couponPolicy = z
   .object({
     code,
     scope: z.enum(COUPON_SCOPES),
-    minOrderValue: z.coerce.number().int().min(0).default(0),
-    maxDiscount: z.coerce.number().int().positive().nullable().optional(),
-    maxUses: z.coerce.number().int().positive().nullable().optional(),
-    maxUsesPerUser: z.coerce.number().int().positive().default(1),
+    minOrderValue: z.coerce.number().int().min(0).max(MAX_DB_INT).default(0),
+    maxDiscount: z.coerce.number().int().positive().max(MAX_DB_INT).nullable().optional(),
+    maxUses: z.coerce.number().int().positive().max(MAX_DB_INT).nullable().optional(),
+    maxUsesPerUser: z.coerce.number().int().positive().max(MAX_DB_INT).default(1),
     isPublic: z.boolean().default(false),
     targetProductIds: targetIds,
   })
@@ -45,9 +46,9 @@ const automaticPolicy = z
 
 const flashSaleItem = z
   .object({
-    productId: z.coerce.number().int().positive(),
-    totalQuota: z.coerce.number().int().positive(),
-    maxUnitsPerUser: z.coerce.number().int().positive(),
+    productId: dbId,
+    totalQuota: z.coerce.number().int().positive().max(MAX_DB_INT),
+    maxUnitsPerUser: z.coerce.number().int().positive().max(MAX_DB_INT),
   })
   .strict();
 
@@ -87,7 +88,7 @@ const promotionBase = z
     name: z.string().trim().min(1).max(150),
     description: optionalText(500),
     discountKind: z.enum(DISCOUNT_KINDS),
-    discountValue: z.coerce.number().int().positive(),
+    discountValue: z.coerce.number().int().positive().max(MAX_DB_INT),
     startsAt: z.coerce.date(),
     endsAt: z.coerce.date(),
     coupon: couponPolicy.optional(),
@@ -184,7 +185,7 @@ export const updatePromotionBody = z
     name: z.string().trim().min(1).max(150).optional(),
     description: optionalText(500),
     discountKind: z.enum(DISCOUNT_KINDS).optional(),
-    discountValue: z.coerce.number().int().positive().optional(),
+    discountValue: z.coerce.number().int().positive().max(MAX_DB_INT).optional(),
     startsAt: z.coerce.date().optional(),
     endsAt: z.coerce.date().optional(),
     coupon: couponPolicy.partial().optional(),
