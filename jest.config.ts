@@ -3,7 +3,7 @@ import type { Config } from "jest";
 const config: Config = {
   testEnvironment: "node",
   roots: ["<rootDir>/tests"],
-  testPathIgnorePatterns: ["/node_modules/", "<rootDir>/tests/integration/"],
+  testPathIgnorePatterns: ["/node_modules/"],
   setupFiles: ["<rootDir>/tests/setup-env.ts"],
   transform: { "^.+\\.ts$": ["ts-jest", { diagnostics: false }] },
   moduleNameMapper: {

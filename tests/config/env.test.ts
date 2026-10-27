@@ -53,6 +53,7 @@ describe("parseEnv", () => {
     expect(e.DELIVERY_MAX_ATTEMPTS).toBe(5);
     expect(e.FLASH_SALE_PRICE_ALERT_ENABLED).toBe(false);
     expect(e.PRICE_RESOLVER_SHADOW_MODE).toBe(false);
+    expect(e.CATALOG_PROMOTION_PRICING_ENABLED).toBe(false);
     expect(e.WEB_PUSH_ENABLED).toBe(false);
     expect(e.VAPID_PUBLIC_KEY).toBeUndefined();
     expect(e.EMAIL_ENABLED).toBe(false);

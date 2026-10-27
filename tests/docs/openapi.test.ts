@@ -372,6 +372,32 @@ describe("openapi document", () => {
     expect((doc.components?.schemas?.Product as any).properties.reviewSummary).toBeUndefined();
   });
 
+  it("publishes typed facet keys, selection limits, and effective catalog price", () => {
+    const facet = doc.components?.schemas?.FacetDefinition as any;
+    const catalog = doc.components?.schemas?.CatalogProduct as any;
+    expect(facet.properties.key.enum).toEqual([
+      "factory",
+      "target",
+      "price",
+      "cpuBrand",
+      "gpuBrand",
+      "gpuType",
+      "ramGb",
+      "storageGb",
+      "screenSize",
+      "resolutionTier",
+      "panelType",
+      "minRefreshHz",
+      "minBatteryWh",
+      "maxWeightGrams",
+      "minWarrantyMonths",
+      "minRating",
+      "inStock",
+    ]);
+    expect(facet.properties.maxSelections).toBeDefined();
+    expect(catalog.required).toContain("effectiveCatalogPrice");
+  });
+
   it("documents resolved promotion eligibility and cart fallback diagnostics", () => {
     const pricedProduct = doc.components?.schemas?.PricedProduct as any;
     const cart = doc.components?.schemas?.Cart as any;

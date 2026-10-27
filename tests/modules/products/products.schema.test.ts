@@ -7,8 +7,20 @@ import {
   productPatchBody,
 } from "modules/products/products.schema";
 import { idParams } from "lib/http";
+import {
+  MAX_MULTI_FACET_SELECTIONS,
+  PRODUCT_FACET_KEYS,
+  facetDefinitions,
+} from "modules/products/products.facets";
 
 describe("product facet query", () => {
+  it("keeps the runtime key registry aligned with definitions and limits multi-selects", () => {
+    expect(facetDefinitions.map((definition) => definition.key)).toEqual(PRODUCT_FACET_KEYS);
+    expect(MAX_MULTI_FACET_SELECTIONS).toBe(10);
+    expect(facetDefinitions.filter((definition) => definition.mode === "MULTI")).toEqual(
+      expect.arrayContaining([expect.objectContaining({ maxSelections: 10 })]),
+    );
+  });
   it("deduplicates CSV filters and parses exact numeric values", () => {
     expect(
       productFacetsQuery.parse({ cpuBrand: "INTEL,INTEL,AMD", ramGb: "8,16,16" }),

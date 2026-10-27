@@ -1,5 +1,4 @@
 import type {
-  AutomaticPromotionInput,
   CouponInput,
   PromotionPricingInput,
   PromotionPricingLineResult,
@@ -11,10 +10,7 @@ import {
   toPublicPromotionFallback,
 } from "modules/promotions/promotion-selection";
 
-export const automaticDiscountPerUnit = (promotion: AutomaticPromotionInput, listPrice: number) =>
-  promotion.discountKind === "PERCENT"
-    ? Math.min(listPrice, Math.floor((listPrice * promotion.discountValue) / 100))
-    : Math.min(listPrice, promotion.discountValue);
+export { automaticDiscountPerUnit } from "modules/promotions/promotion-discount";
 
 export const selectAutomaticPromotion = (
   candidates: PromotionPricingCandidate[],

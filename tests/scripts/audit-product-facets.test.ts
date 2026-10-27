@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { Product } from "@prisma/client";
-import { buildFacetBackfillDecision } from "scripts/audit-product-facets";
+import { buildFacetAuditResult } from "scripts/audit-product-facets";
 
 const product = (over: Partial<Product> = {}): Product => ({
   id: 1,
@@ -33,48 +33,45 @@ const product = (over: Partial<Product> = {}): Product => ({
 });
 
 describe("product facet audit", () => {
-  it("returns safe updates only for missing normalized fields", () => {
-    const decision = buildFacetBackfillDecision(
-      product({ cpuBrand: null, gpuBrand: null, gpuType: null, resolutionTier: null }),
-    );
-    expect(decision.status).toBe("safe_to_update");
-    expect(decision.data).toEqual({
-      cpuBrand: "INTEL",
-      gpuBrand: "NVIDIA",
-      gpuType: "DEDICATED",
-      resolutionTier: "FHD",
-    });
-    expect(decision.data).not.toHaveProperty("panelType");
-  });
-
-  it("reports ambiguous GPU data without guessing its type", () => {
-    const decision = buildFacetBackfillDecision(
-      product({ gpu: "AMD Radeon Graphics", gpuBrand: null, gpuType: null, panelType: "IPS" }),
-    );
-    expect(decision.status).toBe("ambiguous");
-    expect(decision.data).not.toHaveProperty("gpuType");
-  });
-
-  it("prioritizes invalid resolution over an ambiguous GPU", () => {
-    const decision = buildFacetBackfillDecision(
+  it("keeps safe CPU and resolution updates when GPU type is ambiguous", () => {
+    const result = buildFacetAuditResult(
       product({
-        gpu: "AMD Radeon Graphics",
+        cpu: "AMD Ryzen 7",
+        cpuBrand: null,
+        gpu: "Intel Arc Graphics",
         gpuBrand: null,
         gpuType: null,
-        screenResolution: "unknown",
         resolutionTier: null,
       }),
     );
-    expect(decision.status).toBe("invalid_resolution");
+    expect(result.updates).toMatchObject({
+      cpuBrand: "AMD",
+      gpuBrand: "INTEL",
+      resolutionTier: "FHD",
+    });
+    expect(result.updates).not.toHaveProperty("gpuType");
+    expect(result.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: "gpuType", status: "AMBIGUOUS" })]),
+    );
   });
 
-  it("reports an otherwise complete product with an unverified panel", () => {
-    const decision = buildFacetBackfillDecision(product({ panelType: null }));
-    expect(decision.status).toBe("unverified_panel");
-    expect(decision.data).toEqual({});
+  it("reports unknown CPU instead of marking the product complete", () => {
+    const result = buildFacetAuditResult(product({ cpu: "Unknown CPU", cpuBrand: null }));
+    expect(result.updates).toEqual({});
+    expect(result.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ field: "cpuBrand", status: "UNKNOWN" })]),
+    );
   });
 
-  it("recognizes a fully verified product", () => {
-    expect(buildFacetBackfillDecision(product()).status).toBe("already_complete");
+  it("reports conflicts and unverified panel fields separately", () => {
+    const result = buildFacetAuditResult(
+      product({ cpu: "AMD Ryzen 7", cpuBrand: "INTEL", panelType: null }),
+    );
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ field: "cpuBrand", status: "CONFLICT" }),
+        expect.objectContaining({ field: "panelType", status: "UNVERIFIED" }),
+      ]),
+    );
   });
 });

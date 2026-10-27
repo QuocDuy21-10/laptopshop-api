@@ -1,5 +1,6 @@
 import { Prisma, Product } from "@prisma/client";
 import { prisma } from "config/client";
+import { env } from "config/env";
 import { AppError, isNotFound, notFound } from "lib/errors";
 import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
 import { pageArgs, pageMeta } from "lib/http";
@@ -14,14 +15,16 @@ import {
   ProductPatchBody,
 } from "modules/products/products.schema";
 import {
-  assertProductSpecState,
-  mergeProductSpecState,
+  reconcileProductSpecs,
   type ProductSpecState,
 } from "modules/products/products.normalization";
 import { productWhere } from "modules/products/products.filter";
 import { getReviewStatsForProductIds } from "modules/products/products.review-stats.repository";
 import { queryRatedProductPage } from "modules/products/products.rating.repository";
 import { resolveProductPromotions } from "modules/promotions/promotion-resolver";
+import { refreshCatalogPriceWindows } from "modules/pricing/catalog-price-projection.repository";
+import { getEffectiveCatalogPrices } from "modules/pricing/catalog-price-projection.repository";
+import { queryCatalogProductPage } from "modules/products/products.catalog.repository";
 
 const resolveCatalogPromotions = (productIds: number[]) =>
   resolveProductPromotions(
@@ -39,6 +42,30 @@ export const listProducts = async (
   q: ListProductsQuery | AdminListProductsQuery,
   admin = false,
 ) => {
+  if (!admin && env.CATALOG_PROMOTION_PRICING_ENABLED) {
+    const asOf = new Date();
+    const page = await queryCatalogProductPage(q as ListProductsQuery, { asOf, mode: "PROJECTED" });
+    const rows = await prisma.product.findMany({
+      where: { id: { in: page.rows.map((row) => row.productId) }, isActive: true },
+    });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const promotions = await resolveCatalogPromotions(page.rows.map((row) => row.productId));
+    const priceById = new Map(page.rows.map((row) => [row.productId, row.effectiveCatalogPrice]));
+    return {
+      items: page.rows
+        .map((row) => byId.get(row.productId))
+        .filter((row): row is Product => Boolean(row))
+        .map((row) =>
+          toCatalogProductDto(
+            row,
+            undefined,
+            promotions.get(row.id) ?? null,
+            priceById.get(row.id),
+          ),
+        ),
+      meta: pageMeta(q, page.total),
+    };
+  }
   if (!admin && (q.minRating !== undefined || q.sort === "rating_desc")) {
     const ratedPage = await queryRatedProductPage(q);
     const rows = await prisma.product.findMany({
@@ -80,10 +107,14 @@ export const getProduct = async (id: number, admin = false) => {
   if (admin) return toProductDto(product);
   const summaries = await getReviewStatsForProductIds([product.id]);
   const promotions = await resolveCatalogPromotions([product.id]);
+  const effectivePrice = env.CATALOG_PROMOTION_PRICING_ENABLED
+    ? (await getEffectiveCatalogPrices(prisma, [product.id], new Date())).get(product.id)
+    : product.price;
   return toCatalogProductDto(
     product,
     summaries.get(product.id),
     promotions.get(product.id) ?? null,
+    effectivePrice,
   );
 };
 
@@ -95,7 +126,17 @@ export const compareProducts = async (ids: number[]) => {
     throw new AppError("Product not found", 404, "NOT_FOUND", { missingIds });
   }
   const promotions = await resolveCatalogPromotions(ids);
-  return ids.map((id) => toCatalogProductDto(byId.get(id)!, undefined, promotions.get(id) ?? null));
+  const effectivePrices = env.CATALOG_PROMOTION_PRICING_ENABLED
+    ? await getEffectiveCatalogPrices(prisma, ids, new Date())
+    : new Map(ids.map((id) => [id, byId.get(id)!.price]));
+  return ids.map((id) =>
+    toCatalogProductDto(
+      byId.get(id)!,
+      undefined,
+      promotions.get(id) ?? null,
+      effectivePrices.get(id),
+    ),
+  );
 };
 
 export const createProduct = async (
@@ -103,7 +144,7 @@ export const createProduct = async (
   image: string | undefined,
   actorId: number,
 ) => {
-  const specs = mergeProductSpecState(
+  const specs = reconcileProductSpecs(
     {
       cpu: null,
       cpuBrand: null,
@@ -124,7 +165,6 @@ export const createProduct = async (
       panelType: input.panelType ?? null,
     },
   );
-  assertProductSpecState(specs);
 
   return prisma.$transaction(async (tx) => {
     const created = await tx.product.create({
@@ -158,13 +198,17 @@ export const createProduct = async (
         ...(image ? { image } : {}),
       },
     });
-    if (input.quantity === 0) return toProductDto(created);
+    if (input.quantity === 0) {
+      await refreshCatalogPriceWindows(tx, [created.id], new Date());
+      return toProductDto(created);
+    }
     await moveStock(tx, {
       productId: created.id,
       delta: input.quantity,
       reason: "INITIAL",
       actorId,
     });
+    await refreshCatalogPriceWindows(tx, [created.id], new Date());
     return toProductDto(await tx.product.findUniqueOrThrow({ where: { id: created.id } }));
   });
 };
@@ -195,7 +239,7 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
         resolutionTier: (current.resolutionTier as ProductSpecState["resolutionTier"]) ?? null,
         panelType: (current.panelType as ProductSpecState["panelType"]) ?? null,
       };
-      const specs = mergeProductSpecState(currentSpecs, {
+      const specs = reconcileProductSpecs(currentSpecs, {
         ...(Object.prototype.hasOwnProperty.call(input, "cpu") ? { cpu: input.cpu ?? null } : {}),
         ...(Object.prototype.hasOwnProperty.call(input, "cpuBrand")
           ? { cpuBrand: input.cpuBrand ?? null }
@@ -214,7 +258,6 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
           ? { panelType: input.panelType ?? null }
           : {}),
       });
-      assertProductSpecState(specs);
       for (const key of specKeys) delete data[key];
       if ("cpu" in input || "cpuBrand" in input) {
         data = { ...data, cpu: specs.cpu, cpuBrand: specs.cpuBrand };
@@ -241,6 +284,7 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
           productIds: [id],
           eventVersion: String(id) + "-" + String(Date.now()),
         });
+        await refreshCatalogPriceWindows(tx, [id], new Date());
       }
       return updated;
     });

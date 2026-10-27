@@ -26,6 +26,7 @@ import {
   productBody,
   productPatchBody,
 } from "modules/products/products.schema";
+import { PRODUCT_FACET_KEYS } from "modules/products/products.facets";
 import { addItemBody, updateItemBody } from "modules/cart/cart.schema";
 import {
   adminExportOrdersQuery,
@@ -192,7 +193,11 @@ const ProductReviewSummary = registry.register(
 );
 const CatalogProduct = registry.register(
   "CatalogProduct",
-  z.object({ ...PricedProduct.shape, reviewSummary: ProductReviewSummary }),
+  z.object({
+    ...PricedProduct.shape,
+    effectiveCatalogPrice: z.number().int(),
+    reviewSummary: ProductReviewSummary,
+  }),
 );
 const PriceAlertMode = registry.register(
   "PriceAlertMode",
@@ -299,11 +304,12 @@ const Option = z.object({ name: z.string(), value: z.string() });
 const FacetDefinition = registry.register(
   "FacetDefinition",
   z.object({
-    key: z.string(),
+    key: z.enum(PRODUCT_FACET_KEYS),
     name: z.string(),
     mode: z.enum(["MULTI", "SINGLE_MIN", "SINGLE_MAX", "BOOLEAN"]),
     kind: z.enum(["categorical", "exact", "bucket"]),
     options: z.array(Option).optional(),
+    maxSelections: z.number().int().positive().optional(),
   }),
 );
 const ProductFilterCatalog = registry.register(

@@ -37,6 +37,10 @@ const schema = z
       .enum(["true", "false"])
       .default("false")
       .transform((v) => v === "true"),
+    CATALOG_PROMOTION_PRICING_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
     WEB_PUSH_ENABLED: z
       .enum(["true", "false"])
       .default("false")

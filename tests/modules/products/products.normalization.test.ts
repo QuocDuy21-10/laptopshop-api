@@ -3,9 +3,12 @@ import { AppError } from "lib/errors";
 import {
   assertProductSpecState,
   inferCpuBrand,
+  inferGpuBrand,
   inferGpuProfile,
+  inferGpuType,
   inferResolutionTier,
   mergeProductSpecState,
+  reconcileProductSpecs,
   type ProductSpecState,
 } from "modules/products/products.normalization";
 
@@ -60,5 +63,44 @@ describe("product spec normalization", () => {
     expect(() => assertProductSpecState({ ...state(), cpuBrand: null })).toThrow(
       expect.objectContaining({ code: "INVALID_PRODUCT_SPECS", status: 400 }),
     );
+  });
+
+  it("rejects a CPU brand that contradicts confident text inference", () => {
+    expect(() => reconcileProductSpecs(state(), { cpu: "AMD Ryzen 7", cpuBrand: "INTEL" })).toThrow(
+      expect.objectContaining({ code: "INVALID_PRODUCT_SPECS" }),
+    );
+  });
+
+  it("replaces a stale CPU brand when changed text gives confident evidence", () => {
+    expect(reconcileProductSpecs(state(), { cpu: "AMD Ryzen 7" })).toMatchObject({
+      cpu: "AMD Ryzen 7",
+      cpuBrand: "AMD",
+    });
+  });
+
+  it("separates GPU brand confidence from ambiguous GPU type", () => {
+    expect(inferGpuBrand("Intel Arc Graphics")).toMatchObject({
+      kind: "CONFIDENT",
+      value: "INTEL",
+    });
+    expect(inferGpuType("Intel Arc Graphics").kind).toBe("AMBIGUOUS");
+    expect(inferGpuBrand("NVIDIA GeForce RTX 4060")).toMatchObject({
+      kind: "CONFIDENT",
+      value: "NVIDIA",
+    });
+    expect(inferGpuType("NVIDIA GeForce RTX 4060")).toMatchObject({
+      kind: "CONFIDENT",
+      value: "DEDICATED",
+    });
+  });
+
+  it("accepts an explicit type for an ambiguous GPU text", () => {
+    expect(
+      reconcileProductSpecs(state(), { gpu: "Intel Arc Graphics", gpuType: "INTEGRATED" }),
+    ).toMatchObject({
+      gpu: "Intel Arc Graphics",
+      gpuBrand: "INTEL",
+      gpuType: "INTEGRATED",
+    });
   });
 });
