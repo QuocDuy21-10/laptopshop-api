@@ -71,11 +71,12 @@ export const refreshCatalogPriceWindows = async (
   await tx.$queryRaw<{ id: number }[]>(Prisma.sql`
     SELECT id FROM products WHERE id IN (${Prisma.join(ids)}) ORDER BY id ASC FOR UPDATE
   `);
-  const products = await tx.product.findMany({
-    where: { id: { in: ids } },
-    select: { id: true, price: true },
-  });
-  const rows = (await tx.promotion.findMany({
+  const products =
+    (await tx.product.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, price: true },
+    })) ?? [];
+  const rows = ((await tx.promotion.findMany({
     where: {
       kind: "AUTOMATIC",
       state: "ACTIVE",
@@ -89,7 +90,7 @@ export const refreshCatalogPriceWindows = async (
         select: { productId: true, product: { select: { price: true } } },
       },
     },
-  })) as unknown as ProjectionPromotionRow[];
+  })) ?? []) as unknown as ProjectionPromotionRow[];
   const candidatesByProduct = new Map<number, AutomaticPromotionCandidate[]>();
   for (const row of rows) {
     if (!row.automaticPolicy) continue;

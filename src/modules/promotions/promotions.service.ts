@@ -27,6 +27,7 @@ import {
   type PrismaClientLike,
 } from "modules/promotions/promotion-resolver";
 import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
+import { refreshCatalogPriceWindows } from "modules/pricing/catalog-price-projection.repository";
 import type {
   PricingLineInput,
   PricingQuoteDto,
@@ -94,8 +95,8 @@ const getRow = async (id: number) => {
 
 export const createPromotion = async (actorId: number, body: CreatePromotionBody) => {
   const policies = toPolicyData(body);
-  const created = await prisma.$transaction(async (tx) =>
-    tx.promotion.create({
+  const created = await prisma.$transaction(async (tx) => {
+    const promotion = await tx.promotion.create({
       data: {
         kind: body.kind,
         state: "DRAFT",
@@ -116,8 +117,12 @@ export const createPromotion = async (actorId: number, body: CreatePromotionBody
         },
       },
       include: promotionInclude,
-    }),
-  );
+    });
+    if (body.kind === "AUTOMATIC") {
+      await refreshCatalogPriceWindows(tx, policies.targetProductIds, new Date());
+    }
+    return promotion;
+  });
   return toPromotionDetailDto(created);
 };
 
@@ -291,6 +296,13 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
         eventVersion: `${id}-${updated.pricingVersion}`,
         availableAt: body.startsAt && body.startsAt > new Date() ? body.startsAt : undefined,
       });
+      if (current.kind === "AUTOMATIC") {
+        await refreshCatalogPriceWindows(
+          tx,
+          current.products.map((target) => target.productId),
+          new Date(),
+        );
+      }
     }
     return updated;
   });
@@ -348,6 +360,13 @@ export const transitionPromotion = async (
           ? current.startsAt
           : undefined,
     });
+    if (current.kind === "AUTOMATIC") {
+      await refreshCatalogPriceWindows(
+        tx,
+        current.products.map((target) => target.productId),
+        now,
+      );
+    }
     return promotion;
   });
   return toPromotionDetailDto(updated);

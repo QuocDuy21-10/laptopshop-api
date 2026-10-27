@@ -21,6 +21,7 @@ import { productWhere } from "modules/products/products.filter";
 import { getReviewStatsForProductIds } from "modules/products/products.review-stats.repository";
 import { queryRatedProductPage } from "modules/products/products.rating.repository";
 import { resolveProductPromotions } from "modules/promotions/promotion-resolver";
+import { refreshCatalogPriceWindows } from "modules/pricing/catalog-price-projection.repository";
 
 const resolveCatalogPromotions = (productIds: number[]) =>
   resolveProductPromotions(
@@ -156,13 +157,17 @@ export const createProduct = async (
         ...(image ? { image } : {}),
       },
     });
-    if (input.quantity === 0) return toProductDto(created);
+    if (input.quantity === 0) {
+      await refreshCatalogPriceWindows(tx, [created.id], new Date());
+      return toProductDto(created);
+    }
     await moveStock(tx, {
       productId: created.id,
       delta: input.quantity,
       reason: "INITIAL",
       actorId,
     });
+    await refreshCatalogPriceWindows(tx, [created.id], new Date());
     return toProductDto(await tx.product.findUniqueOrThrow({ where: { id: created.id } }));
   });
 };
@@ -238,6 +243,7 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
           productIds: [id],
           eventVersion: String(id) + "-" + String(Date.now()),
         });
+        await refreshCatalogPriceWindows(tx, [id], new Date());
       }
       return updated;
     });
