@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import type { CatalogPriceWindowDraft } from "modules/pricing/catalog-price-timeline";
 import {
   buildCatalogPriceTimeline,
+  CATALOG_PRICE_WINDOW_FLOOR,
   type CatalogPriceWindowDraft as TimelineWindow,
 } from "modules/pricing/catalog-price-timeline";
 import type { AutomaticPromotionCandidate } from "modules/promotions/automatic-promotion-policy";
@@ -112,11 +113,12 @@ export const refreshCatalogPriceWindows = async (
   }
   let windowCount = 0;
   for (const product of products) {
-    const windows: TimelineWindow[] = buildCatalogPriceTimeline({
+    const [first, ...rest]: TimelineWindow[] = buildCatalogPriceTimeline({
       listPrice: product.price,
       candidates: candidatesByProduct.get(product.id) ?? [],
       now,
     });
+    const windows = [{ ...first, validFrom: CATALOG_PRICE_WINDOW_FLOOR }, ...rest];
     windowCount += await replaceCatalogPriceWindows(tx, product.id, windows);
   }
   return { productCount: products.length, windowCount };
