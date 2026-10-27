@@ -50,19 +50,20 @@ export const listProducts = async (
     });
     const byId = new Map(rows.map((row) => [row.id, row]));
     const promotions = await resolveCatalogPromotions(page.rows.map((row) => row.productId));
-    const priceById = new Map(page.rows.map((row) => [row.productId, row.effectiveCatalogPrice]));
+    const pageRowById = new Map(page.rows.map((row) => [row.productId, row]));
     return {
       items: page.rows
         .map((row) => byId.get(row.productId))
         .filter((row): row is Product => Boolean(row))
-        .map((row) =>
-          toCatalogProductDto(
+        .map((row) => {
+          const pageRow = pageRowById.get(row.id)!;
+          return toCatalogProductDto(
             row,
-            undefined,
+            { averageRating: pageRow.averageRating, totalReviews: pageRow.totalReviews },
             promotions.get(row.id) ?? null,
-            priceById.get(row.id),
-          ),
-        ),
+            pageRow.effectiveCatalogPrice,
+          );
+        }),
       meta: pageMeta(q, page.total),
     };
   }

@@ -4,6 +4,8 @@ import {
 } from "modules/promotions/automatic-promotion-policy";
 
 export const CATALOG_PRICE_POLICY_VERSION = 1;
+// first persisted window opens here so reads with an asOf just before a refresh still resolve
+export const CATALOG_PRICE_WINDOW_FLOOR = new Date("1970-01-01T00:00:00.000Z");
 
 export type CatalogPriceWindowDraft = {
   validFrom: Date;

@@ -1,9 +1,17 @@
+jest.mock("config/client", () => ({ prisma: require("../helpers/prisma").prismaMock }));
+jest.mock("modules/pricing/catalog-price-projection.repository", () => ({
+  refreshCatalogPriceWindows: jest.fn().mockResolvedValue({ productCount: 2, windowCount: 2 }),
+}));
+
+import initDatabase from "config/seed";
 import { productSeeds } from "config/seed-products";
 import {
   inferCpuBrand,
   inferGpuProfile,
   inferResolutionTier,
 } from "modules/products/products.normalization";
+import { refreshCatalogPriceWindows } from "modules/pricing/catalog-price-projection.repository";
+import { prismaMock, resetPrisma } from "../helpers/prisma";
 
 describe("productSeeds", () => {
   it("keeps advisor catalog metadata consistent", () => {
@@ -45,5 +53,21 @@ describe("productSeeds", () => {
       expect(product.resolutionTier).toBe(inferResolutionTier(product.screenResolution));
       expect("panelType" in product).toBe(false);
     }
+  });
+});
+
+describe("initDatabase", () => {
+  it("builds catalog price windows for freshly seeded products", async () => {
+    resetPrisma();
+    prismaMock.user.count.mockResolvedValue(1);
+    prismaMock.role.count.mockResolvedValue(2);
+    prismaMock.product.count.mockResolvedValue(0);
+    prismaMock.product.findMany
+      .mockResolvedValueOnce([{ id: 1, quantity: 5 }])
+      .mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
+
+    await initDatabase();
+
+    expect(refreshCatalogPriceWindows).toHaveBeenCalledWith(prismaMock, [1, 2], expect.any(Date));
   });
 });

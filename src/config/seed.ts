@@ -4,6 +4,7 @@ import { logger } from "lib/logger";
 import { hashPassword } from "lib/password";
 import { ACCOUNT_TYPE } from "config/constant";
 import { productSeeds } from "config/seed-products";
+import { refreshCatalogPriceWindows } from "modules/pricing/catalog-price-projection.repository";
 
 const initDatabase = async () => {
   const countUser = await prisma.user.count();
@@ -288,6 +289,16 @@ const initDatabase = async () => {
         balanceAfter: p.quantity,
       })),
     });
+
+    // the catalog reads need a price window per product once CATALOG_PROMOTION_PRICING_ENABLED is on
+    const seeded = await prisma.product.findMany({ select: { id: true } });
+    await prisma.$transaction((tx) =>
+      refreshCatalogPriceWindows(
+        tx,
+        seeded.map((p) => p.id),
+        new Date(),
+      ),
+    );
   }
 
   if (countRole !== 0 && countUser !== 0 && countProduct !== 0) {

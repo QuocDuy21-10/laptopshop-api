@@ -3,8 +3,7 @@ import { CATALOG_PRICE_POLICY_VERSION } from "modules/pricing/catalog-price-time
 
 export type CatalogPriceProjectionIssue = {
   productId: number;
-  code:
-    "MISSING" | "OVERLAP" | "GAP" | "STALE_POLICY" | "LIST_PRICE_MISMATCH" | "RESOLVER_MISMATCH";
+  code: "MISSING" | "OVERLAP" | "STALE_POLICY" | "LIST_PRICE_MISMATCH";
   detail: string;
 };
 
