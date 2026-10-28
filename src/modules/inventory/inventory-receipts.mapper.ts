@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { toActor } from "modules/orders/orders.mapper";
+import { toActor } from "lib/actor";
 import { productImage } from "modules/products/products.mapper";
 import { movementInclude, toMovementDto } from "modules/inventory/inventory.mapper";
 
