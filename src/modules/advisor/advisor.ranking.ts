@@ -67,15 +67,15 @@ export const weightsFor = (input: AdvisorInput): AdvisorWeights => {
 };
 
 const ramScore = (ramGb: number | null) =>
-  ramGb === null ? 0 : ramGb < 8 ? 0.2 : ramGb === 8 ? 0.4 : ramGb === 16 ? 0.75 : 1;
+  ramGb === null ? 0 : ramGb < 8 ? 0.2 : ramGb < 16 ? 0.4 : ramGb < 32 ? 0.75 : 1;
 const storageScore = (storageGb: number | null) =>
   storageGb === null
     ? 0
     : storageGb < 256
       ? 0.2
-      : storageGb === 256
+      : storageGb < 512
         ? 0.35
-        : storageGb === 512
+        : storageGb < 1024
           ? 0.7
           : 1;
 const batteryScore = (batteryWh: number | null) =>
