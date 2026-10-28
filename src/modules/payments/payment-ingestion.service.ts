@@ -3,6 +3,7 @@ import { Prisma, PrismaClient } from "@prisma/client";
 import { env } from "config/env";
 import { prisma } from "config/client";
 import { AppError } from "lib/errors";
+import { logger } from "lib/logger";
 import { samePaymentAuthority, PaymentAuthority } from "modules/payments/payment-authority";
 import { classifyPaymentTransaction } from "modules/payments/payment-reconcile";
 import { PaymentRow, paymentInclude } from "modules/payments/payment-mapper";
@@ -84,7 +85,18 @@ const duplicateEvent = async (
   const distinctRows = new Map(rows.map((row) => [row.id, row]));
   if (distinctRows.size > 1)
     throw new AppError("Payment event identity conflict", 409, "PAYMENT_EVENT_IDENTITY_CONFLICT");
-  return rows[0] ?? null;
+  const stored = rows[0];
+  if (!stored) return null;
+  // payloadHash differs between webhook and reconciliation for the same transaction, so compare normalized fields
+  const fields = (["amount", "currency", "direction", "transferCode"] as const).filter(
+    (field) => stored[field] !== transaction[field],
+  );
+  if (fields.length > 0)
+    logger.warn(
+      { eventId: stored.id, provider: authority.provider, mode: authority.mode, fields },
+      "payment event replayed with a different payload",
+    );
+  return stored;
 };
 
 const isPaymentAuthorityMatch = (payment: PaymentRow, authority: PaymentAuthority) =>
