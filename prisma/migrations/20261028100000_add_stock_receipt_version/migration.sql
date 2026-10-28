@@ -1,0 +1,1 @@
+ALTER TABLE `stock_receipts` ADD COLUMN `version` INTEGER NOT NULL DEFAULT 0;

@@ -15,6 +15,7 @@ const detail = {
   note: "Nhập hàng",
   createdAt: new Date("2026-10-20T03:00:00Z"),
   postedAt: null,
+  version: 0,
   createdBy: { id: ADMIN.id, fullName: "Admin", username: "admin@gmail.com" },
   postedBy: null,
   items: [{ id: 1, productId: 1, quantity: 2, unitCost: 1200, product }],
@@ -136,7 +137,7 @@ describe("receipt draft routes", () => {
     const res = await request(buildApp())
       .patch(`${endpoint}/${detail.id}`)
       .set("Cookie", cookieFor(ADMIN))
-      .send({ note: "Sửa" });
+      .send({ note: "Sửa", version: 0 });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("INVALID_RECEIPT_STATUS");
   });
@@ -152,9 +153,14 @@ describe("receipt draft routes", () => {
   it("posts a draft exactly once and logs metadata without payload", async () => {
     const res = await request(buildApp())
       .post(`${endpoint}/${detail.id}/post`)
-      .set("Cookie", cookieFor(ADMIN));
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ version: 0 });
     expect(res.status).toBe(200);
     expect(res.body.data.created).toBe(true);
+    expect(prismaMock.stockReceipt.updateMany.mock.calls[0][0]).toMatchObject({
+      where: { id: detail.id, status: "DRAFT", version: 0 },
+      data: { status: "POSTED", version: { increment: 1 } },
+    });
     expect(prismaMock.stockMovement.create).toHaveBeenCalledWith({
       data: expect.objectContaining({ receiptId: detail.id, reason: "RESTOCK", delta: 2 }),
     });
@@ -174,7 +180,8 @@ describe("receipt draft routes", () => {
     prismaMock.stockReceipt.findUnique.mockResolvedValue({ ...detail, status: "POSTED" });
     const res = await request(buildApp())
       .post(`${endpoint}/${detail.id}/post`)
-      .set("Cookie", cookieFor(ADMIN));
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ version: 0 });
     expect(res.status).toBe(200);
     expect(res.body.data.created).toBe(false);
     expect(prismaMock.stockMovement.create).not.toHaveBeenCalled();
@@ -188,6 +195,7 @@ describe("receipt draft routes", () => {
         await request(buildApp())
           .post(`${endpoint}/${detail.id}/post`)
           .set("Cookie", cookieFor(ADMIN))
+          .send({ version: 0 })
       ).status,
     ).toBe(404);
 
@@ -195,15 +203,58 @@ describe("receipt draft routes", () => {
     prismaMock.stockReceiptItem.findMany.mockResolvedValue([]);
     const empty = await request(buildApp())
       .post(`${endpoint}/${detail.id}/post`)
-      .set("Cookie", cookieFor(ADMIN));
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ version: 0 });
     expect(empty.status).toBe(400);
 
     prismaMock.stockReceiptItem.findMany.mockResolvedValue([{ productId: 1, quantity: 2 }]);
     prismaMock.product.findMany.mockResolvedValue([]);
     const inactive = await request(buildApp())
       .post(`${endpoint}/${detail.id}/post`)
-      .set("Cookie", cookieFor(ADMIN));
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ version: 0 });
     expect(inactive.status).toBe(409);
     expect(inactive.body.error.code).toBe("PRODUCT_UNAVAILABLE");
   });
+
+  it("rejects patch and post without a version", async () => {
+    const patch = await request(buildApp())
+      .patch(`${endpoint}/${detail.id}`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ note: "Sửa" });
+    expect(patch.status).toBe(400);
+    const post = await request(buildApp())
+      .post(`${endpoint}/${detail.id}/post`)
+      .set("Cookie", cookieFor(ADMIN));
+    expect(post.status).toBe(400);
+    expect(prismaMock.stockReceipt.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("claims a draft only at the expected version and bumps it", async () => {
+    const res = await request(buildApp())
+      .patch(`${endpoint}/${detail.id}`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ note: "Sửa", version: 3 });
+    expect(res.status).toBe(200);
+    expect(prismaMock.stockReceipt.updateMany).toHaveBeenCalledWith({
+      where: { id: detail.id, status: "DRAFT", version: 3 },
+      data: { note: "Sửa", version: { increment: 1 } },
+    });
+  });
+
+  it.each(["patch", "post"] as const)(
+    "returns 409 RECEIPT_VERSION_CONFLICT on a stale %s",
+    async (method) => {
+      prismaMock.stockReceipt.updateMany.mockResolvedValue({ count: 0 });
+      prismaMock.stockReceipt.findUnique.mockResolvedValue({ ...detail, version: 4 });
+      const url = method === "patch" ? `${endpoint}/${detail.id}` : `${endpoint}/${detail.id}/post`;
+      const res = await request(buildApp())
+        [method](url)
+        .set("Cookie", cookieFor(ADMIN))
+        .send(method === "patch" ? { note: "Sửa", version: 3 } : { version: 3 });
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe("RECEIPT_VERSION_CONFLICT");
+      expect(prismaMock.stockMovement.create).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -32,6 +32,15 @@ const unavailableProducts = (productIds: number[]) =>
     productIds,
   });
 
+// a failed draft claim: gone, no longer a draft, or someone saved a newer version
+const claimFailure = (existing: { status: string } | null) => {
+  if (!existing) return notFound("Stock receipt");
+  if (existing.status !== RECEIPT_STATUS.DRAFT) {
+    return new AppError("Stock receipt is not a draft", 409, "INVALID_RECEIPT_STATUS");
+  }
+  return new AppError("Stock receipt was modified", 409, "RECEIPT_VERSION_CONFLICT");
+};
+
 const assertProductsAvailable = async (
   client: Prisma.TransactionClient | typeof prisma,
   items: CreateReceiptBody["items"],
@@ -131,17 +140,19 @@ export const updateReceipt = async (id: string, body: UpdateReceiptBody) => {
   const result = await prisma.$transaction(async (tx) => {
     if (body.items) await assertProductsAvailable(tx, body.items);
     const claimed = await tx.stockReceipt.updateMany({
-      where: { id, status: RECEIPT_STATUS.DRAFT },
+      where: { id, status: RECEIPT_STATUS.DRAFT, version: body.version },
       data: {
-        status: RECEIPT_STATUS.DRAFT,
+        version: { increment: 1 },
         ...(body.supplierName !== undefined ? { supplierName: body.supplierName } : {}),
         ...(body.note !== undefined ? { note: body.note } : {}),
       },
     });
     if (claimed.count !== 1) {
-      const existing = await tx.stockReceipt.findUnique({ where: { id }, select: { id: true } });
-      if (!existing) throw notFound("Stock receipt");
-      throw new AppError("Stock receipt is not a draft", 409, "INVALID_RECEIPT_STATUS");
+      const existing = await tx.stockReceipt.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      throw claimFailure(existing);
     }
     if (body.items) {
       await tx.stockReceiptItem.deleteMany({ where: { receiptId: id } });
@@ -175,29 +186,34 @@ export type PostReceiptResult = {
   created: boolean;
 };
 
-export const postReceipt = async (id: string, actorId: number): Promise<PostReceiptResult> => {
+export const postReceipt = async (
+  id: string,
+  actorId: number,
+  version: number,
+): Promise<PostReceiptResult> => {
   const startedAt = Date.now();
   const result = await withPrismaTransactionRetry(() =>
     prisma.$transaction(async (tx) => {
       const claimed = await tx.stockReceipt.updateMany({
-        where: { id, status: RECEIPT_STATUS.DRAFT },
-        data: { status: RECEIPT_STATUS.POSTED, postedById: actorId, postedAt: new Date() },
+        where: { id, status: RECEIPT_STATUS.DRAFT, version },
+        data: {
+          status: RECEIPT_STATUS.POSTED,
+          postedById: actorId,
+          postedAt: new Date(),
+          version: { increment: 1 },
+        },
       });
       if (claimed.count !== 1) {
         const existing = await tx.stockReceipt.findUnique({
           where: { id },
           include: receiptDetailInclude,
         });
-        if (!existing) throw notFound("Stock receipt");
-        if (existing.status === RECEIPT_STATUS.POSTED) {
+        // a repeated post after success replays, whatever version the caller saw
+        if (existing?.status === RECEIPT_STATUS.POSTED) {
           const receipt = toReceiptDetailDto(existing);
-          return {
-            receipt,
-            movements: receipt.movements,
-            created: false,
-          };
+          return { receipt, movements: receipt.movements, created: false };
         }
-        throw new AppError("Stock receipt is not a draft", 409, "INVALID_RECEIPT_STATUS");
+        throw claimFailure(existing);
       }
 
       const items = await tx.stockReceiptItem.findMany({

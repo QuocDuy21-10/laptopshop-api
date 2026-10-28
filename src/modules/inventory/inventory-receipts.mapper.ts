@@ -35,6 +35,7 @@ export const toReceiptSummaryDto = (receipt: ReceiptSummaryRow) => ({
   note: receipt.note,
   createdAt: receipt.createdAt,
   postedAt: receipt.postedAt,
+  version: receipt.version,
   createdBy: toActor(receipt.createdBy),
   postedBy: toActor(receipt.postedBy),
   itemCount: receipt._count.items,
@@ -49,6 +50,7 @@ export const toReceiptDetailDto = (receipt: ReceiptDetailRow) => ({
   note: receipt.note,
   createdAt: receipt.createdAt,
   postedAt: receipt.postedAt,
+  version: receipt.version,
   createdBy: toActor(receipt.createdBy),
   postedBy: toActor(receipt.postedBy),
   items: receipt.items.map((item) => ({

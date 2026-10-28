@@ -36,10 +36,19 @@ export const createReceiptBody = z
   .strict();
 export type CreateReceiptBody = z.infer<typeof createReceiptBody>;
 
+const receiptVersion = z.number().int().min(0);
+
 export const updateReceiptBody = createReceiptBody
   .partial()
-  .refine((body) => Object.keys(body).length > 0, "At least one field is required");
+  .extend({ version: receiptVersion })
+  .refine(
+    (body) => Object.keys(body).some((key) => key !== "version"),
+    "At least one field is required",
+  );
 export type UpdateReceiptBody = z.infer<typeof updateReceiptBody>;
+
+export const postReceiptBody = z.object({ version: receiptVersion }).strict();
+export type PostReceiptBody = z.infer<typeof postReceiptBody>;
 
 export const receiptIdParams = z.object({ id: z.string().uuid() });
 export type ReceiptIdParams = z.infer<typeof receiptIdParams>;
