@@ -97,6 +97,27 @@ describe("ingestPaymentTransaction", () => {
     },
   );
 
+  it.each([
+    ["a matched code", payment],
+    ["no code", null],
+  ])("stores an outbound transaction with %s as resolved, not for review", async (_, row) => {
+    prismaMock.paymentWebhookEvent.findMany.mockResolvedValue([]);
+    prismaMock.payment.findUnique.mockResolvedValue(row);
+    prismaMock.paymentWebhookEvent.create.mockResolvedValue({});
+
+    await expect(
+      ingestPaymentTransaction(authority, { ...transaction, direction: "OUT" }, "WEBHOOK"),
+    ).resolves.toMatchObject({ status: "RESOLVED" });
+    expect(prismaMock.paymentWebhookEvent.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: "RESOLVED",
+        reviewReason: "OUTBOUND",
+        resolvedAt: expect.any(Date),
+      }),
+    });
+    expect(prismaMock.order.updateMany).not.toHaveBeenCalled();
+  });
+
   it("rethrows an unrelated unique error instead of labeling it matched", async () => {
     prismaMock.paymentWebhookEvent.findMany.mockResolvedValue([]);
     prismaMock.payment.findUnique.mockResolvedValue(null);
