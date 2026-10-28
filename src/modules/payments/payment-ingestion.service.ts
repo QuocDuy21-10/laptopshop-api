@@ -7,7 +7,11 @@ import { logger } from "lib/logger";
 import { samePaymentAuthority, PaymentAuthority } from "modules/payments/payment-authority";
 import { classifyPaymentTransaction } from "modules/payments/payment-reconcile";
 import { PaymentRow, paymentInclude } from "modules/payments/payment-mapper";
-import { PAYMENT_EVENT_STATUS, PAYMENT_STATUS } from "modules/payments/payment-status";
+import {
+  PAYMENT_EVENT_STATUS,
+  PAYMENT_REVIEW_REASON,
+  PAYMENT_STATUS,
+} from "modules/payments/payment-status";
 import { encryptPayload } from "modules/payments/payment-crypto";
 import { NormalizedPaymentTransaction } from "modules/payments/providers/payment-provider";
 import { ORDER_STATUS, PAYMENT_STATUS as ORDER_PAYMENT_STATUS } from "modules/orders/order-status";
@@ -16,7 +20,7 @@ type PaymentDb = Prisma.TransactionClient | PrismaClient;
 export type PaymentTransactionSource = "WEBHOOK" | "RECONCILIATION";
 export type IngestPaymentResult = {
   duplicate: boolean;
-  status: "MATCHED" | "REVIEW_REQUIRED";
+  status: "MATCHED" | "REVIEW_REQUIRED" | "RESOLVED";
   paymentId?: string;
 };
 
@@ -217,6 +221,26 @@ export const ingestPaymentTransaction = async (
           ),
         });
         return { duplicate: false, status: PAYMENT_EVENT_STATUS.MATCHED, paymentId: payment.id };
+      }
+
+      // money leaving the shop account never pays an order; keep it for audit, out of the review queue
+      if (transaction.direction !== "IN") {
+        await tx.paymentWebhookEvent.create({
+          data: {
+            ...eventData(
+              authority,
+              source,
+              transaction,
+              PAYMENT_EVENT_STATUS.RESOLVED,
+              PAYMENT_REVIEW_REASON.OUTBOUND,
+              payment?.id ?? null,
+              rawPayload,
+            ),
+            resolvedAt: new Date(),
+            note: "Outbound transaction ignored automatically",
+          },
+        });
+        return { duplicate: false, status: PAYMENT_EVENT_STATUS.RESOLVED, paymentId: payment?.id };
       }
 
       await tx.paymentWebhookEvent.create({
