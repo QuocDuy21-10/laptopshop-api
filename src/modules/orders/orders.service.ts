@@ -298,7 +298,9 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
             where: { id: created.id },
             include: orderInclude,
           });
-          await tx.cartDetail.deleteMany({ where: { cart: { userId } } });
+          // the cart read above is a snapshot; a concurrent checkout with another key may have consumed it
+          const cleared = await tx.cartDetail.deleteMany({ where: { cart: { userId } } });
+          if (cleared.count === 0) throw new AppError("Cart is empty", 409, "CART_EMPTY");
           await tx.cart.deleteMany({ where: { userId } });
           return { row: persisted, created: true };
         }),
