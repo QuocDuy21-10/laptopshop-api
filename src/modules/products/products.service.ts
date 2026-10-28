@@ -297,11 +297,12 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
 };
 
 export const deleteProduct = async (id: number) => {
-  const [ordered, movements] = await Promise.all([
+  const [ordered, movements, receiptLines] = await Promise.all([
     prisma.orderDetail.count({ where: { productId: id } }),
     prisma.stockMovement.count({ where: { productId: id } }),
+    prisma.stockReceiptItem.count({ where: { productId: id } }),
   ]);
-  if (ordered > 0 || movements > 0) {
+  if (ordered > 0 || movements > 0 || receiptLines > 0) {
     throw new AppError(
       "Product has order or stock history; hide it instead",
       409,

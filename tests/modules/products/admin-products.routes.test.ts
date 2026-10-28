@@ -298,11 +298,23 @@ describe("DELETE /api/v1/admin/products/:id", () => {
   it("removes cart lines and the product", async () => {
     prismaMock.orderDetail.count.mockResolvedValue(0);
     prismaMock.stockMovement.count.mockResolvedValue(0);
+    prismaMock.stockReceiptItem.count.mockResolvedValue(0);
     const res = await asAdmin(request(buildApp()).delete("/api/v1/admin/products/1"));
     expect(res.status).toBe(204);
     expect(prismaMock.cartDetail.deleteMany).toHaveBeenCalledWith({ where: { productId: 1 } });
     expect(prismaMock.stockMovement.deleteMany).not.toHaveBeenCalled();
     expect(prismaMock.product.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+  });
+
+  it("returns 409 PRODUCT_IN_USE when a stock receipt references it", async () => {
+    prismaMock.orderDetail.count.mockResolvedValue(0);
+    prismaMock.stockMovement.count.mockResolvedValue(0);
+    prismaMock.stockReceiptItem.count.mockResolvedValue(1);
+    const res = await asAdmin(request(buildApp()).delete("/api/v1/admin/products/1"));
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("PRODUCT_IN_USE");
+    expect(prismaMock.stockReceiptItem.count).toHaveBeenCalledWith({ where: { productId: 1 } });
+    expect(prismaMock.product.delete).not.toHaveBeenCalled();
   });
 
   it("returns 409 PRODUCT_IN_USE when a stock movement references it", async () => {
