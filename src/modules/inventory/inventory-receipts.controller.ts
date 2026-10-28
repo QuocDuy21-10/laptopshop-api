@@ -2,6 +2,7 @@ import { RequestHandler } from "express";
 import {
   CreateReceiptBody,
   ListReceiptsQuery,
+  PostReceiptBody,
   ReceiptIdParams,
   UpdateReceiptBody,
 } from "modules/inventory/inventory-receipts.schema";
@@ -39,6 +40,10 @@ export const updateReceiptHandler: RequestHandler = async (req, res) => {
 
 export const postReceiptHandler: RequestHandler = async (req, res) => {
   res.json({
-    data: await postReceipt((res.locals.params as ReceiptIdParams).id, req.auth!.id),
+    data: await postReceipt(
+      (res.locals.params as ReceiptIdParams).id,
+      req.auth!.id,
+      (req.body as PostReceiptBody).version,
+    ),
   });
 };

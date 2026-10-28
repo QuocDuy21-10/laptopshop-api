@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { toActor } from "lib/actor";
 import { productImage } from "modules/products/products.mapper";
 import {
   allowedRequestTypesForCoverage,
@@ -111,9 +112,6 @@ export const adminOrderDetailInclude = {
 export type AdminOrderDetailRow = Prisma.OrderGetPayload<{
   include: typeof adminOrderDetailInclude;
 }>;
-
-export const toActor = (a: { id: number; fullName: string | null; username: string } | null) =>
-  a ? { id: a.id, name: a.fullName ?? a.username } : null;
 
 export const toAdminOrderDetailDto = (o: AdminOrderDetailRow) => ({
   ...toAdminOrderDto(o),

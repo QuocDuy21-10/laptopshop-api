@@ -20,6 +20,7 @@ import {
 import {
   createReceiptBody,
   listReceiptsQuery,
+  postReceiptBody,
   receiptIdParams,
   updateReceiptBody,
 } from "modules/inventory/inventory-receipts.schema";
@@ -47,6 +48,6 @@ adminInventoryRoutes.patch(
 );
 adminInventoryRoutes.post(
   "/receipts/:id/post",
-  validate({ params: receiptIdParams }),
+  validate({ params: receiptIdParams, body: postReceiptBody }),
   postReceiptHandler,
 );

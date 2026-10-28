@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { toActor } from "modules/orders/orders.mapper";
+import { toActor } from "lib/actor";
 import { productImage } from "modules/products/products.mapper";
 import { movementInclude, toMovementDto } from "modules/inventory/inventory.mapper";
 
@@ -35,6 +35,7 @@ export const toReceiptSummaryDto = (receipt: ReceiptSummaryRow) => ({
   note: receipt.note,
   createdAt: receipt.createdAt,
   postedAt: receipt.postedAt,
+  version: receipt.version,
   createdBy: toActor(receipt.createdBy),
   postedBy: toActor(receipt.postedBy),
   itemCount: receipt._count.items,
@@ -49,6 +50,7 @@ export const toReceiptDetailDto = (receipt: ReceiptDetailRow) => ({
   note: receipt.note,
   createdAt: receipt.createdAt,
   postedAt: receipt.postedAt,
+  version: receipt.version,
   createdBy: toActor(receipt.createdBy),
   postedBy: toActor(receipt.postedBy),
   items: receipt.items.map((item) => ({

@@ -10,7 +10,10 @@ beforeEach(resetPrisma);
 describe("GET /api/v1/admin/dashboard", () => {
   it("returns counts, revenue and orders by status", async () => {
     prismaMock.user.count.mockResolvedValue(3);
-    prismaMock.product.count.mockResolvedValueOnce(10).mockResolvedValueOnce(2);
+    prismaMock.product.count
+      .mockResolvedValueOnce(10)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(1);
     prismaMock.order.count.mockResolvedValue(4);
     prismaMock.order.aggregate.mockResolvedValue({ _sum: { totalPrice: 900 } });
     prismaMock.order.groupBy.mockResolvedValue([
@@ -27,10 +30,14 @@ describe("GET /api/v1/admin/dashboard", () => {
       orderCount: 4,
       revenue: 900,
       lowStockCount: 2,
+      outOfStockCount: 1,
       ordersByStatus: { PENDING: 3, SHIPPING: 0, COMPLETED: 1, CANCELLED: 0 },
     });
     expect(prismaMock.product.count).toHaveBeenNthCalledWith(2, {
-      where: { isActive: true, quantity: { lte: 5 } },
+      where: { isActive: true, quantity: { gte: 1, lte: 5 } },
+    });
+    expect(prismaMock.product.count).toHaveBeenNthCalledWith(3, {
+      where: { isActive: true, quantity: 0 },
     });
     expect(prismaMock.order.aggregate.mock.calls[0][0]).toMatchObject({
       where: { status: "COMPLETED" },

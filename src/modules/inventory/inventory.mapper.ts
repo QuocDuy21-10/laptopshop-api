@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { toActor } from "modules/orders/orders.mapper";
+import { toActor } from "lib/actor";
 
 export const movementInclude = {
   product: { select: { name: true } },

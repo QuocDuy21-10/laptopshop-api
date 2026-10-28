@@ -44,6 +44,7 @@ import {
 import {
   createReceiptBody,
   listReceiptsQuery,
+  postReceiptBody,
   receiptIdParams,
   updateReceiptBody,
 } from "modules/inventory/inventory-receipts.schema";
@@ -983,6 +984,7 @@ const Dashboard = registry.register(
     revenue: z.number(),
     ordersByStatus: z.record(z.number()),
     lowStockCount: z.number(),
+    outOfStockCount: z.number(),
   }),
 );
 
@@ -1042,6 +1044,7 @@ const StockReceiptSummary = registry.register(
     note: z.string().nullable(),
     createdAt: z.string().datetime(),
     postedAt: z.string().datetime().nullable(),
+    version: z.number().int(),
     createdBy: Actor,
     postedBy: Actor,
     itemCount: z.number().int(),
@@ -1057,6 +1060,7 @@ const StockReceiptDetail = registry.register(
     note: z.string().nullable(),
     createdAt: z.string().datetime(),
     postedAt: z.string().datetime().nullable(),
+    version: z.number().int(),
     createdBy: Actor,
     postedBy: Actor,
     items: z.array(StockReceiptItem),
@@ -2664,7 +2668,7 @@ op({
   additionalOk: [
     [
       200,
-      "Replayed adjustment",
+      "Replayed adjustment (movement is the original; product.quantity is the current stock)",
       data(z.object({ product: Product, movement: StockMovement, created: z.boolean() })),
     ],
   ],
@@ -2725,7 +2729,7 @@ op({
   errors: {
     400: "Invalid input",
     404: "Not found",
-    409: "Receipt is not a draft or product unavailable",
+    409: "Receipt is not a draft, was modified, or product unavailable",
   },
 });
 op({
@@ -2734,7 +2738,7 @@ op({
   summary: "Post a stock receipt",
   tag: "admin",
   auth: "admin",
-  request: { params: receiptIdParams },
+  request: { params: receiptIdParams, body: json(postReceiptBody) },
   ok: [
     200,
     "Posted or replayed",
@@ -2747,9 +2751,9 @@ op({
     ),
   ],
   errors: {
-    400: "Receipt is empty",
+    400: "Invalid input or receipt is empty",
     404: "Not found",
-    409: "Invalid status or product unavailable",
+    409: "Invalid status, version conflict or product unavailable",
   },
 });
 

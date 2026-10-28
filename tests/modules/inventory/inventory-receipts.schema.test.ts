@@ -1,6 +1,7 @@
 import {
   createReceiptBody,
   generateReceiptCode,
+  postReceiptBody,
   updateReceiptBody,
 } from "modules/inventory/inventory-receipts.schema";
 
@@ -45,10 +46,18 @@ describe("inventory receipt schemas", () => {
     );
   });
 
-  it("requires a non-empty patch and validates replacement items", () => {
-    expect(updateReceiptBody.safeParse({}).success).toBe(false);
-    expect(updateReceiptBody.safeParse({ items: [] }).success).toBe(false);
-    expect(updateReceiptBody.safeParse({ note: "Đã cập nhật" }).success).toBe(true);
+  it("requires a version plus at least one field on patch", () => {
+    expect(updateReceiptBody.safeParse({ note: "Đã cập nhật" }).success).toBe(false);
+    expect(updateReceiptBody.safeParse({ version: 0 }).success).toBe(false);
+    expect(updateReceiptBody.safeParse({ version: 0, items: [] }).success).toBe(false);
+    expect(updateReceiptBody.safeParse({ version: -1, note: "x" }).success).toBe(false);
+    expect(updateReceiptBody.safeParse({ version: 0, note: "Đã cập nhật" }).success).toBe(true);
+  });
+
+  it("requires a version to post", () => {
+    expect(postReceiptBody.safeParse({}).success).toBe(false);
+    expect(postReceiptBody.safeParse({ version: 2 }).success).toBe(true);
+    expect(postReceiptBody.safeParse({ version: 2, extra: 1 }).success).toBe(false);
   });
 
   it("generates a stable shop-date receipt code", () => {

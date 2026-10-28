@@ -1,5 +1,5 @@
 import type { PromotionState } from "@prisma/client";
-import { toActor } from "modules/orders/orders.mapper";
+import { toActor } from "lib/actor";
 import type {
   FlashSaleAllocationRow,
   PromotionRow,

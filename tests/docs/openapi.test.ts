@@ -445,8 +445,21 @@ describe("openapi document", () => {
     expect(names).toEqual(expect.arrayContaining(["status", "q", "from", "to", "userId"]));
   });
 
+  it("documents receipt versions for optimistic locking", () => {
+    expect((doc.components?.schemas?.StockReceiptDetail as any).properties).toHaveProperty(
+      "version",
+    );
+    expect((doc.components?.schemas?.StockReceiptSummary as any).properties).toHaveProperty(
+      "version",
+    );
+    expect(op("/api/v1/admin/inventory/receipts/{id}/post", "post").requestBody).toBeDefined();
+  });
+
   it("documents the low-stock count on the dashboard", () => {
     expect((doc.components?.schemas?.Dashboard as any).properties).toHaveProperty("lowStockCount");
+    expect((doc.components?.schemas?.Dashboard as any).properties).toHaveProperty(
+      "outOfStockCount",
+    );
     expect(doc.components?.schemas).toHaveProperty("Payment");
     expect(doc.components?.schemas).toHaveProperty("PaymentEvent");
   });

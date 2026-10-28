@@ -1321,6 +1321,7 @@ model StockReceipt {
   note         String?   @db.VarChar(500)
   createdAt    DateTime  @default(now())
   postedAt     DateTime?
+  version      Int       @default(0)
 
   createdBy   User  @relation("ReceiptCreator", fields: [createdById], references: [id])
   createdById Int
