@@ -6,7 +6,7 @@ import { pageArgs, pageMeta } from "lib/http";
 import { sha256Canonical } from "lib/idempotency";
 import { logger } from "lib/logger";
 import { assertDayRange, createdAtRange, formatShopDateTime } from "lib/shop-time";
-import { outOfStock } from "modules/cart/cart.service";
+import { outOfStock, productUnavailable } from "modules/cart/cart.service";
 import { MovementRow, movementInclude, toMovementDto } from "modules/inventory/inventory.mapper";
 import {
   AdjustmentBody,
@@ -50,6 +50,23 @@ export const moveStock = async (tx: Prisma.TransactionClient, m: StockMove) => {
       data: { quantity: { decrement: -m.delta }, ...soldChange(m) },
     });
     if (count === 0) throw outOfStock(m.productId);
+    const product = await tx.product.findUniqueOrThrow({
+      where: { id: m.productId },
+      select: { quantity: true },
+    });
+    balanceAfter = product.quantity;
+  } else if (m.onlyActive) {
+    const { count } = await tx.product.updateMany({
+      where: { id: m.productId, isActive: true },
+      data: { quantity: { increment: m.delta }, ...soldChange(m) },
+    });
+    if (count === 0) {
+      const exists = await tx.product.findUnique({
+        where: { id: m.productId },
+        select: { id: true },
+      });
+      throw exists ? productUnavailable(m.productId) : notFound("Product");
+    }
     const product = await tx.product.findUniqueOrThrow({
       where: { id: m.productId },
       select: { quantity: true },

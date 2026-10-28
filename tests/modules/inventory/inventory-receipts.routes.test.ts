@@ -53,7 +53,8 @@ beforeEach(() => {
   prismaMock.stockReceiptItem.findMany.mockResolvedValue([
     { productId: 1, quantity: 2, unitCost: 1200 },
   ]);
-  prismaMock.product.update.mockResolvedValue({ quantity: 2 });
+  prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
+  prismaMock.product.findUniqueOrThrow.mockResolvedValue({ quantity: 2 });
   prismaMock.stockMovement.create.mockResolvedValue({ id: movement.id });
   prismaMock.stockMovement.findMany.mockResolvedValue([movement]);
   prismaMock.stockReceipt.findUniqueOrThrow.mockResolvedValue({
