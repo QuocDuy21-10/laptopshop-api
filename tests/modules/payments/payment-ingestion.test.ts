@@ -1,6 +1,7 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
 
 import { ingestPaymentTransaction } from "modules/payments/payment-ingestion.service";
+import { logger } from "lib/logger";
 import { prismaError, prismaMock, resetPrisma } from "../../helpers/prisma";
 
 const authority = { provider: "fake" as const, mode: "test" as const };
@@ -64,6 +65,37 @@ describe("ingestPaymentTransaction", () => {
       paymentId: "pay-1",
     });
     expect(prismaMock.paymentWebhookEvent.create).not.toHaveBeenCalled();
+  });
+
+  it("warns when a duplicate identity carries a different amount", async () => {
+    const warn = jest.spyOn(logger, "warn").mockImplementation(() => undefined);
+    prismaMock.paymentWebhookEvent.findMany.mockResolvedValue([
+      { ...transaction, id: "event-row", status: "MATCHED", paymentId: "pay-1", amount: 999 },
+    ]);
+
+    await expect(ingestPaymentTransaction(authority, transaction, "WEBHOOK")).resolves.toEqual({
+      duplicate: true,
+      status: "MATCHED",
+      paymentId: "pay-1",
+    });
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ eventId: "event-row", fields: ["amount"] }),
+      expect.any(String),
+    );
+    expect(prismaMock.paymentWebhookEvent.create).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  it("does not warn when a duplicate matches the stored transaction", async () => {
+    const warn = jest.spyOn(logger, "warn").mockImplementation(() => undefined);
+    prismaMock.paymentWebhookEvent.findMany.mockResolvedValue([
+      { ...transaction, id: "event-row", status: "MATCHED", paymentId: "pay-1" },
+    ]);
+
+    await ingestPaymentTransaction(authority, transaction, "RECONCILIATION");
+
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("rejects an event whose two identity keys resolve to different rows", async () => {

@@ -148,6 +148,7 @@ beforeEach(() => {
   prismaMock.product.update.mockResolvedValue({ quantity: 2 });
   prismaMock.product.findUniqueOrThrow.mockResolvedValue({ quantity: 0 });
   prismaMock.order.findUniqueOrThrow.mockResolvedValue(orderRow());
+  prismaMock.cartDetail.deleteMany.mockResolvedValue({ count: 2 });
 });
 
 describe("POST /api/v1/orders", () => {
@@ -186,6 +187,18 @@ describe("POST /api/v1/orders", () => {
     const res = await post().send(receiver);
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("CART_EMPTY");
+  });
+
+  it("returns 409 CART_EMPTY when a concurrent checkout already cleared the cart", async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.cartDetail.findMany.mockResolvedValue(lines);
+    prismaMock.product.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.order.create.mockResolvedValue(orderRow());
+    prismaMock.cartDetail.deleteMany.mockResolvedValue({ count: 0 });
+    const res = await post().send(receiver);
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("CART_EMPTY");
+    expect(prismaMock.cart.deleteMany).not.toHaveBeenCalled();
   });
 
   it("creates the order with a server-side total and clears the cart", async () => {
