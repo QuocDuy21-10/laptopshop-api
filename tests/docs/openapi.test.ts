@@ -457,6 +457,9 @@ describe("openapi document", () => {
 
   it("documents the low-stock count on the dashboard", () => {
     expect((doc.components?.schemas?.Dashboard as any).properties).toHaveProperty("lowStockCount");
+    expect((doc.components?.schemas?.Dashboard as any).properties).toHaveProperty(
+      "outOfStockCount",
+    );
     expect(doc.components?.schemas).toHaveProperty("Payment");
     expect(doc.components?.schemas).toHaveProperty("PaymentEvent");
   });

@@ -984,6 +984,7 @@ const Dashboard = registry.register(
     revenue: z.number(),
     ordersByStatus: z.record(z.number()),
     lowStockCount: z.number(),
+    outOfStockCount: z.number(),
   }),
 );
 
