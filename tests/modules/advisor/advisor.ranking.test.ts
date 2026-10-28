@@ -80,6 +80,20 @@ describe("hardwareTier", () => {
 });
 
 describe("advisor ranking", () => {
+  it("does not reduce the RAM/storage score when RAM increases from 12 GB to 16 GB", () => {
+    const scoreAt12Gb = featureScoresFor(priced({ ramGb: 12 }), input).ramStorage;
+    const scoreAt16Gb = featureScoresFor(priced({ ramGb: 16 }), input).ramStorage;
+
+    expect(scoreAt16Gb).toBeGreaterThanOrEqual(scoreAt12Gb);
+  });
+
+  it("does not reduce the RAM/storage score when storage increases from 384 GB to 512 GB", () => {
+    const scoreAt384Gb = featureScoresFor(priced({ storageGb: 384 }), input).ramStorage;
+    const scoreAt512Gb = featureScoresFor(priced({ storageGb: 512 }), input).ramStorage;
+
+    expect(scoreAt512Gb).toBeGreaterThanOrEqual(scoreAt384Gb);
+  });
+
   it("uses the fixed normalization thresholds", () => {
     const scores = featureScoresFor(
       priced({
