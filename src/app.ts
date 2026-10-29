@@ -71,7 +71,15 @@ export const createApp = (deps: AppDeps = {}): Express => {
     afterSalesImagesLimiter,
   } = createLimiters(deps.limitStores);
   app.use(globalLimiter);
-  app.post(["/api/v1/auth/login", "/api/v1/auth/register"], authLimiter);
+  app.post(
+    [
+      "/api/v1/auth/login",
+      "/api/v1/auth/register",
+      "/api/v1/auth/forgot-password",
+      "/api/v1/auth/reset-password",
+    ],
+    authLimiter,
+  );
 
   const advisor =
     deps.advisor ??

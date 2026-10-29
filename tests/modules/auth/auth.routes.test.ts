@@ -47,6 +47,17 @@ describe("POST /api/v1/auth/register", () => {
     expect(cookie(res, "refresh_token")).toMatch(/Path=\/api\/v1\/auth/);
   });
 
+  it("sets a JS-readable session hint cookie next to the HttpOnly ones", async () => {
+    prismaMock.role.findUnique.mockResolvedValue({ id: 2, name: "USER", description: null });
+    prismaMock.user.create.mockResolvedValue(row as any);
+    const res = await request(buildApp()).post("/api/v1/auth/register").send(body);
+    const hint = cookie(res, "logged_in");
+    expect(hint).toMatch(/^logged_in=1;/);
+    expect(hint).toMatch(/Path=\//);
+    expect(hint).not.toMatch(/HttpOnly/);
+    expect(hint).toMatch(/SameSite=Lax/);
+  });
+
   it("returns 400 when the passwords differ", async () => {
     const res = await request(buildApp())
       .post("/api/v1/auth/register")

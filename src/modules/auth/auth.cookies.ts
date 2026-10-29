@@ -4,6 +4,8 @@ import { IssuedRefresh } from "modules/auth/token.service";
 
 export const ACCESS_COOKIE = "access_token";
 export const REFRESH_COOKIE = "refresh_token";
+// readable by the storefront (not HttpOnly, carries no secret): tells it whether a session exists so guests skip the /users/me probe
+export const SESSION_HINT_COOKIE = "logged_in";
 const REFRESH_PATH = "/api/v1/auth";
 
 const base = (): CookieOptions => ({
@@ -21,9 +23,16 @@ export const setAuthCookies = (res: Response, accessToken: string, refresh: Issu
     path: REFRESH_PATH,
     expires: refresh.expiresAt,
   });
+  res.cookie(SESSION_HINT_COOKIE, "1", {
+    ...base(),
+    httpOnly: false,
+    path: "/",
+    expires: refresh.expiresAt,
+  });
 };
 
 export const clearAuthCookies = (res: Response) => {
   res.clearCookie(ACCESS_COOKIE, { ...base(), path: "/" });
   res.clearCookie(REFRESH_COOKIE, { ...base(), path: REFRESH_PATH });
+  res.clearCookie(SESSION_HINT_COOKIE, { ...base(), httpOnly: false, path: "/" });
 };

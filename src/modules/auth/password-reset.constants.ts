@@ -1,0 +1,1 @@
+export const PASSWORD_RESET_TTL_MINUTES = 15;

@@ -377,9 +377,15 @@ model NotificationPreference {
   @@map("notification_preferences")
 }
 
+enum EmailChallengePurpose {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
 model EmailVerificationChallenge {
   id                   Int       @id @default(autoincrement())
   userId               Int
+  purpose              EmailChallengePurpose @default(EMAIL_VERIFICATION)
   email                String    @db.VarChar(255)
   otpHash              String    @db.VarChar(255)
   otpCiphertext        String    @db.Text

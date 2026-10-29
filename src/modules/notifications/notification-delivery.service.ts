@@ -1,7 +1,9 @@
 import { env } from "config/env";
+import { PASSWORD_RESET_TTL_MINUTES } from "modules/auth/password-reset.constants";
 import { decryptEmailOtp } from "modules/email-verification/email-otp.crypto";
 import {
   renderEmailVerification,
+  renderPasswordResetEmail,
   renderAfterSalesEmail,
   renderPriceAlertEmail,
 } from "modules/notifications/notification-template";
@@ -101,7 +103,9 @@ const providerInput = (d: DeliveryRecord) => {
     );
     return {
       to: d.destinationKey,
-      ...renderEmailVerification({ code: c, expiresMinutes: 10 }),
+      ...(d.emailVerificationChallenge.purpose === "PASSWORD_RESET"
+        ? renderPasswordResetEmail({ code: c, expiresMinutes: PASSWORD_RESET_TTL_MINUTES })
+        : renderEmailVerification({ code: c, expiresMinutes: 10 })),
       idempotencyKey: `delivery-${d.id}`,
     };
   }

@@ -10,7 +10,12 @@ import {
 } from "@asteasolutions/zod-to-openapi";
 import { env } from "config/env";
 import { idParams, pageQuery } from "lib/http";
-import { loginBody, registerBody } from "modules/auth/auth.schema";
+import {
+  forgotPasswordBody,
+  loginBody,
+  registerBody,
+  resetPasswordBody,
+} from "modules/auth/auth.schema";
 import {
   adminCreateUserBody,
   adminListUsersQuery,
@@ -1335,6 +1340,42 @@ op({
   request: { body: json(loginBody) },
   ok: [200, "Logged in; sets auth cookies", userData],
   errors: { 401: "Invalid credentials", 429: "Too many attempts" },
+});
+op({
+  method: "post",
+  path: `${v1}/auth/forgot-password`,
+  summary: "Email a password reset code (always accepted for a well-formed email)",
+  tag: "auth",
+  request: { body: json(forgotPasswordBody) },
+  ok: [202, "Accepted", data(z.object({ accepted: z.boolean() }))],
+  errors: { 400: "Invalid input", 429: "Too many attempts", 503: "Email delivery unavailable" },
+});
+op({
+  method: "post",
+  path: `${v1}/auth/reset-password`,
+  summary: "Set a new password with the emailed code; signs out every session",
+  tag: "auth",
+  request: { body: json(resetPasswordBody) },
+  ok: [200, "Password changed; auth cookies cleared", data(z.object({ reset: z.boolean() }))],
+  errors: { 400: "Invalid input or invalid/expired code", 429: "Too many attempts" },
+});
+op({
+  method: "get",
+  path: `${v1}/store-info`,
+  summary: "Public store contact details (null when not configured)",
+  tag: "store",
+  ok: [
+    200,
+    "OK",
+    data(
+      z.object({
+        hotline: z.string().nullable(),
+        supportEmail: z.string().nullable(),
+        supportHours: z.string().nullable(),
+        vatInvoice: z.boolean(),
+      }),
+    ),
+  ],
 });
 op({
   method: "post",
