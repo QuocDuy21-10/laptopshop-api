@@ -22,6 +22,8 @@ export const setEmailProvider = (provider: EmailProvider | null) => {
   emailProvider = provider;
 };
 
+export const isEmailDeliveryAvailable = () => Boolean(env.EMAIL_ENABLED && emailProvider);
+
 const unavailable = () =>
   new AppError("Email delivery is unavailable", 503, "EMAIL_DELIVERY_UNAVAILABLE");
 
@@ -39,6 +41,7 @@ export const requestEmailVerification = async (userId: number) => {
   const active = await prisma.emailVerificationChallenge.findFirst({
     where: {
       userId,
+      purpose: "EMAIL_VERIFICATION",
       consumedAt: null,
       invalidatedAt: null,
       lastSentAt: { gt: new Date(now.getTime() - 60_000) },
@@ -50,12 +53,12 @@ export const requestEmailVerification = async (userId: number) => {
   const encrypted = createEmailOtp(env.EMAIL_OTP_ENCRYPTION_KEY!, env.EMAIL_OTP_KEY_VERSION);
   return prisma.$transaction(async (tx) => {
     const previous = await tx.emailVerificationChallenge.findFirst({
-      where: { userId },
+      where: { userId, purpose: "EMAIL_VERIFICATION" },
       orderBy: { createdAt: "desc" },
       select: { failedAttempts: true },
     });
     await tx.emailVerificationChallenge.updateMany({
-      where: { userId, consumedAt: null, invalidatedAt: null },
+      where: { userId, purpose: "EMAIL_VERIFICATION", consumedAt: null, invalidatedAt: null },
       data: { invalidatedAt: now },
     });
     const challenge = await tx.emailVerificationChallenge.create({
@@ -96,7 +99,7 @@ export const requestEmailVerification = async (userId: number) => {
 export const confirmEmailVerification = async (userId: number, code: string) => {
   const now = new Date();
   const challenge = await prisma.emailVerificationChallenge.findFirst({
-    where: { userId, consumedAt: null, invalidatedAt: null },
+    where: { userId, purpose: "EMAIL_VERIFICATION", consumedAt: null, invalidatedAt: null },
     orderBy: { createdAt: "desc" },
   });
   if (!challenge || challenge.expiresAt <= now) {

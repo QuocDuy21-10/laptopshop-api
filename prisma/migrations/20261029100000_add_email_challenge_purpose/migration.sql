@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE `email_verification_challenges` ADD COLUMN `purpose` ENUM('EMAIL_VERIFICATION', 'PASSWORD_RESET') NOT NULL DEFAULT 'EMAIL_VERIFICATION';

@@ -2,7 +2,13 @@ import { Request, RequestHandler, Response } from "express";
 import { AppError } from "lib/errors";
 import { readCookie } from "lib/cookies";
 import { toUserDto, UserRow } from "modules/users/users.mapper";
-import { LoginBody, RegisterBody } from "modules/auth/auth.schema";
+import {
+  ForgotPasswordBody,
+  LoginBody,
+  RegisterBody,
+  ResetPasswordBody,
+} from "modules/auth/auth.schema";
+import { requestPasswordReset, resetPassword } from "modules/auth/password-reset.service";
 import { loginUser, registerUser } from "modules/auth/auth.service";
 import { clearAuthCookies, REFRESH_COOKIE, setAuthCookies } from "modules/auth/auth.cookies";
 import {
@@ -50,4 +56,16 @@ export const logout: RequestHandler = async (req, res) => {
   if (token) await revokeByToken(token);
   clearAuthCookies(res);
   res.sendStatus(204);
+};
+
+export const forgotPassword: RequestHandler = async (req, res) => {
+  await requestPasswordReset((req.body as ForgotPasswordBody).username);
+  res.status(202).json({ data: { accepted: true } });
+};
+
+export const resetPasswordHandler: RequestHandler = async (req, res) => {
+  const { username, code, password } = req.body as ResetPasswordBody;
+  const data = await resetPassword({ username, code, password });
+  clearAuthCookies(res);
+  res.json({ data });
 };

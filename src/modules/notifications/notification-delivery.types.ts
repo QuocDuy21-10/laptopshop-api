@@ -67,6 +67,7 @@ export type DeliveryRecord = {
   } | null;
   emailVerificationChallenge?: {
     email: string;
+    purpose?: "EMAIL_VERIFICATION" | "PASSWORD_RESET";
     otpCiphertext?: string;
     otpIv?: string;
     otpTag?: string;

@@ -74,6 +74,14 @@ const schema = z
           .filter(Boolean),
       ),
     STOREFRONT_ORIGIN: z.string().url().default("http://localhost:3000"),
+    // public store contact details served by GET /store-info; unset values are hidden by the storefront
+    STORE_HOTLINE: z.preprocess(emptyToUndefined, z.string().max(50).optional()),
+    STORE_SUPPORT_EMAIL: z.preprocess(emptyToUndefined, z.string().email().max(255).optional()),
+    STORE_SUPPORT_HOURS: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
+    STORE_VAT_INVOICE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
     ADMIN_PASSWORD: z.preprocess(emptyToUndefined, z.string().optional()),
     SENTRY_DSN: z.preprocess(emptyToUndefined, z.string().url().optional()),
     ENABLE_DOCS: z

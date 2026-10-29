@@ -31,6 +31,7 @@ import { wishlistRoutes } from "modules/wishlist/wishlist.routes";
 import { notificationRoutes } from "modules/notifications/notifications.routes";
 import { notificationPreferencesRoutes } from "modules/notifications/notification-preferences.routes";
 import { webPushRoutes } from "modules/notifications/web-push.routes";
+import { storeInfoRoutes } from "modules/store-info/store-info.routes";
 import { emailVerificationRoutes } from "modules/email-verification/email-verification.routes";
 import { adminNotificationRoutes } from "modules/notifications/admin-notifications.routes";
 import { adminAfterSalesRoutes, afterSalesRoutes } from "modules/after-sales/after-sales.routes";
@@ -54,6 +55,7 @@ export const createApiV1Router = (
   };
 
   router.use("/auth", authRoutes);
+  router.use("/store-info", storeInfoRoutes);
   router.use("/products", createProductReviewRoutes(reviewRuntime, reviewMutationLimiter));
   router.use("/products", productRoutes);
   if (reviewImages)

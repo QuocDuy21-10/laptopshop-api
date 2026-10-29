@@ -24,6 +24,22 @@ export const renderEmailVerification = (input: { code: string; expiresMinutes: n
     " phút.</p>",
 });
 
+export const renderPasswordResetEmail = (input: { code: string; expiresMinutes: number }) => ({
+  subject: "Đặt lại mật khẩu LaptopShop",
+  text:
+    "Mã đặt lại mật khẩu LaptopShop của bạn là " +
+    input.code +
+    ". Mã hết hạn sau " +
+    input.expiresMinutes +
+    " phút. Nếu bạn không yêu cầu, hãy bỏ qua email này.",
+  html:
+    "<p>Mã đặt lại mật khẩu LaptopShop của bạn là <strong>" +
+    input.code +
+    "</strong>.</p><p>Mã hết hạn sau " +
+    input.expiresMinutes +
+    " phút.</p><p>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>",
+});
+
 export const renderPriceAlertEmail = (input: {
   productName: string;
   oldPrice: number;
