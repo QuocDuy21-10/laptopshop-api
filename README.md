@@ -61,16 +61,15 @@ docker compose up -d --build
 
 ## 🛠️ Công nghệ & Cấu hình
 
-| Công nghệ             | Mô tả                                                                 |
-|----------------------|------------------------------------------------------------------------|
-| **Node.js**          | Backend server                                                         |
-| **Express.js**       | Web framework xử lý routing, middleware                                |
-| **TypeScript**       | Hỗ trợ viết code an toàn, dễ bảo trì                                   |
-| **JWT**              | Access token ngắn hạn + refresh token xoay vòng (lưu hash trong MySQL)  |
-| **Nodemon**          | Tự động reload server khi thay đổi code                                |
-| **Prisma ORM**       | Giao tiếp với database thông qua schema rõ ràng và migrations          |
-| **MySQL**            | Cơ sở dữ liệu chính để lưu thông tin người dùng, đơn hàng, sản phẩm    |
-| **Multer**           | Upload hình ảnh (ví dụ: avatar người dùng, ảnh sản phẩm)               |
+| Công nghệ      | Mô tả                                                                  |
+| -------------- | ---------------------------------------------------------------------- |
+| **Node.js**    | Backend server                                                         |
+| **Express.js** | Web framework xử lý routing, middleware                                |
+| **TypeScript** | Hỗ trợ viết code an toàn, dễ bảo trì                                   |
+| **JWT**        | Access token ngắn hạn + refresh token xoay vòng (lưu hash trong MySQL) |
+| **Nodemon**    | Tự động reload server khi thay đổi code                                |
+| **Prisma ORM** | Giao tiếp với database thông qua schema rõ ràng và migrations          |
+| **MySQL**      | Cơ sở dữ liệu chính để lưu thông tin người dùng, đơn hàng, sản phẩm    |
+| **Multer**     | Upload hình ảnh (ví dụ: avatar người dùng, ảnh sản phẩm)               |
 
 ---
-
