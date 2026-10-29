@@ -20,6 +20,7 @@ describe("GET /api/v1/store-info", () => {
       supportEmail: null,
       supportHours: null,
       vatInvoice: false,
+      paymentMethods: ["COD"],
     });
   });
 
@@ -36,6 +37,7 @@ describe("GET /api/v1/store-info", () => {
       supportEmail: "help@shop.test",
       supportHours: "08:00 – 21:00",
       vatInvoice: true,
+      paymentMethods: ["COD"],
     });
   });
 });

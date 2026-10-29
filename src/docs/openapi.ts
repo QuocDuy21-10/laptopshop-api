@@ -1373,6 +1373,7 @@ op({
         supportEmail: z.string().nullable(),
         supportHours: z.string().nullable(),
         vatInvoice: z.boolean(),
+        paymentMethods: z.array(z.string()),
       }),
     ),
   ],
