@@ -19,3 +19,11 @@ Rules that are easy to miss:
 - Changing `/api/v1` routes: update `src/docs/openapi.ts` and `tests/docs/openapi.test.ts`.
 - New admin endpoints go on the module's admin router, which `routes/index.ts` mounts behind `requireRole("ADMIN")`.
 - Never run `prisma migrate reset` / `db push` against a real database; generate migrations against the `mysql-test` compose service.
+
+Coding style (enforced by `eslint.config.mjs`; `eslint --fix` applies most of it, lint-staged runs it on touched files):
+
+- Imports: external (Node built-ins, packages) first, then internal (path aliases and relative paths), exactly one blank line between the groups. Inside each group sort by module path length ascending, then A-Z (`eslint-rules/import-order-by-length.mjs`). `import type` follows the same order. Side-effect imports (`import "x"`) keep their place and split the sorting into separate runs.
+- No unused or duplicate imports; use `import type` for type-only imports.
+- Avoid `any` (use `unknown` and narrow), unsafe `as` and `@ts-ignore`; prefer `const`.
+- Do not disable a lint rule to get past an error; fix the cause. Do not reformat or re-sort files unrelated to the task.
+- Keep controllers thin, business rules in services, pricing/promotion/stock maths in the shared resolvers; wrap multi-write consistency in a transaction.
