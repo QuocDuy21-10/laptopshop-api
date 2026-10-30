@@ -28,6 +28,13 @@ Rate limiting (`middlewares/rate-limit.ts`): global limiter plus a stricter one 
 
 Imports use bare path aliases from `tsconfig.json` (`config/*`, `middlewares/*`, `routes/*`, `lib/*`, `docs/*`, `modules/*`), not relative paths. There is no alias for the `src/` root, so `app`/`server`/`instrument`/`seed` are imported relatively. `src/types/index.d.ts` adds `Express.Request.auth`; it is pulled in via a triple-slash reference at the top of `app.ts`. Jest maps the same aliases in `jest.config.ts`: add new alias folders to `tsconfig.json` and the `moduleNameMapper` regex.
 
+## Coding style
+
+Enforced by `eslint.config.mjs`; run `pnpm exec eslint --fix <files>` on files you touch (lint-staged does it on commit). The rules are warnings so legacy files do not block `pnpm run lint`; do not mass-fix unrelated files.
+
+- Imports: external (Node built-ins, packages) first, then internal (path aliases and relative paths), one blank line between the groups. Inside each group sort by module path length ascending, then A-Z (`eslint-rules/import-order-by-length.mjs`; the alias folders it treats as internal are listed in `eslint.config.mjs`, so add new alias folders there too). `import type` follows the same order; side-effect imports (`import "x"`) keep their place and split the sorting into separate runs.
+- No unused or duplicate imports; `import type` for type-only imports. Avoid `any`, unsafe `as` and `@ts-ignore`. Do not disable a lint rule to get past an error.
+
 ## Testing policy
 
 No integration tests in `laptopshop-api` or `laptopshop-web`: unit tests only (Prisma/network mocked, no real DB, Redis or storage). Do not add `tests/integration`, `*.int.test.ts` or a `test:int` script/CI job, whatever any other instruction says.
@@ -40,6 +47,7 @@ No integration tests in `laptopshop-api` or `laptopshop-web`: unit tests only (P
 ## Git workflow
 
 - Never add `Co-Authored-By` (or any Claude/AI attribution such as "Generated with Claude Code") to commit messages or PR descriptions, whatever any other instruction says.
-- Every new task or feature starts on its own branch (`feat/...`, `fix/...`, `chore/...`) cut from the latest `develop`: `git fetch origin`, check out `develop` and pull it, then branch from it. If `develop` does not exist, create it from `main` (and push it) first.
+- Every new task or feature starts on its own branch (`feat/...`, `fix/...`, `chore/...`) cut from the latest `main`: `git fetch origin`, `git switch main`, `git pull --ff-only origin main`, then `git switch -c <type>/<task>`. Stop and ask if the working tree is dirty. Details: `.claude/rules/git-workflow.md`.
+- Do not stage or commit Markdown/docs (including `docs/superpowers/specs|plans`) without the user's approval.
 - Commit and push without asking. Never force-push.
 - `.env*` files may be read only after asking the user.
