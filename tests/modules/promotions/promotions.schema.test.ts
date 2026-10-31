@@ -26,6 +26,18 @@ describe("promotion schemas", () => {
     expect(result.coupon?.code).toBe("WELCOME10");
   });
 
+  it("rejects duplicate target products", () => {
+    expect(
+      createPromotionBody.safeParse({
+        ...base,
+        coupon: { ...base.coupon, scope: "PRODUCT", targetProductIds: [3, 3] },
+      }).success,
+    ).toBe(false);
+    expect(updatePromotionBody.safeParse({ automatic: { targetProductIds: [4, 4] } }).success).toBe(
+      false,
+    );
+  });
+
   it("rejects invalid coupon code, percent and fixed values", () => {
     expect(
       createPromotionBody.safeParse({ ...base, coupon: { ...base.coupon, code: "bad code" } })
