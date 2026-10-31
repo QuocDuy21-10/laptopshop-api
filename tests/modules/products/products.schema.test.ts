@@ -1,17 +1,19 @@
 import { describe, expect, it } from "@jest/globals";
-import {
-  adminListProductsQuery,
-  listProductsQuery,
-  productBody,
-  productFacetsQuery,
-  productPatchBody,
-} from "modules/products/products.schema";
+
 import { idParams } from "lib/http";
 import {
   MAX_MULTI_FACET_SELECTIONS,
   PRODUCT_FACET_KEYS,
   facetDefinitions,
 } from "modules/products/products.facets";
+import {
+  adminListProductsQuery,
+  compareQuery,
+  listProductsQuery,
+  productBody,
+  productFacetsQuery,
+  productPatchBody,
+} from "modules/products/products.schema";
 
 describe("product facet query", () => {
   it("keeps the runtime key registry aligned with definitions and limits multi-selects", () => {
@@ -83,5 +85,21 @@ describe("product body integer bounds", () => {
     expect(productBody.safeParse({ ...body, quantity: 99_999_999_999 }).success).toBe(false);
     expect(productPatchBody.safeParse({ price: 2_147_483_648 }).success).toBe(false);
     expect(idParams.safeParse({ id: "2147483648" }).success).toBe(false);
+  });
+});
+
+describe("compareQuery", () => {
+  it.each(["1,abc", "1,,2", "9999999999,1", "1,2<script>"])(
+    "reports only the format error for %s",
+    (ids) => {
+      const result = compareQuery.safeParse({ ids });
+      expect(result.success).toBe(false);
+      expect(result.error?.issues.map((i) => i.message)).toEqual(["Comma-separated product ids"]);
+    },
+  );
+
+  it("still rejects a valid-format list of the wrong size", () => {
+    const result = compareQuery.safeParse({ ids: "1" });
+    expect(result.error?.issues.map((i) => i.message)).toEqual(["Compare 2 to 4 products"]);
   });
 });

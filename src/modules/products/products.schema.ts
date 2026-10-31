@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 import { MAX_DB_INT, pageQuery } from "lib/http";
 import {
   BATTERY_MINIMUMS,
@@ -163,9 +164,14 @@ export const compareQuery = z.object({
   ids: z
     .string()
     .regex(/^\s*[1-9]\d{0,8}\s*(,\s*[1-9]\d{0,8}\s*)*$/, "Comma-separated product ids")
-    .transform((s) => s.split(",").map(Number))
-    .refine((ids) => ids.length >= 2 && ids.length <= 4, { message: "Compare 2 to 4 products" })
-    .refine((ids) => new Set(ids).size === ids.length, { message: "Duplicate product ids" }),
+    // pipe stops after a failed regex, so a malformed list does not also report count/duplicate errors
+    .pipe(
+      z
+        .string()
+        .transform((s) => s.split(",").map(Number))
+        .refine((ids) => ids.length >= 2 && ids.length <= 4, { message: "Compare 2 to 4 products" })
+        .refine((ids) => new Set(ids).size === ids.length, { message: "Duplicate product ids" }),
+    ),
 });
 export type CompareQuery = z.infer<typeof compareQuery>;
 
