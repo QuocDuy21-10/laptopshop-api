@@ -1,4 +1,8 @@
-import { toPublicReviewDto } from "modules/reviews/reviews.mapper";
+import {
+  ownerReviewSelect,
+  toOwnerReviewDto,
+  toPublicReviewDto,
+} from "modules/reviews/reviews.mapper";
 
 const baseRow = {
   id: 18,
@@ -12,6 +16,21 @@ const baseRow = {
   user: { fullName: "Nguyễn Văn A" },
   _count: { helpfulVotes: 7 },
 };
+
+describe("owner review image version", () => {
+  it.each([0, 7])("returns the stored image version %i to the owner", (imageVersion) => {
+    const dto = toOwnerReviewDto({
+      ...baseRow,
+      status: "PUBLISHED",
+      deletedAt: null,
+      images: [],
+      imageVersion,
+    });
+
+    expect(dto).toMatchObject({ imageVersion });
+    expect(ownerReviewSelect).toMatchObject({ imageVersion: true });
+  });
+});
 
 describe("toPublicReviewDto", () => {
   it("masks an anonymous author and omits internal fields", () => {

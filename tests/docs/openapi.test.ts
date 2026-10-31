@@ -522,4 +522,11 @@ describe("openapi document", () => {
       expect.arrayContaining(["Error", "User", "Me", "Product", "Cart", "Order", "AdminOrder"]),
     );
   });
+
+  it("requires a nonnegative integer image version on owner reviews", () => {
+    expect(doc.components?.schemas?.OwnerReview).toMatchObject({
+      required: expect.arrayContaining(["imageVersion"]),
+      properties: { imageVersion: { type: "integer", minimum: 0 } },
+    });
+  });
 });

@@ -26,6 +26,8 @@ const ownerReviewRow = {
   content: "Máy chạy ổn định cho công việc hằng ngày.",
   isAnonymous: true,
   status: "PUBLISHED" as const,
+  imageVersion: 0,
+  images: [],
   deletedAt: null,
   createdAt: new Date("2026-10-21T03:00:00.000Z"),
   contentUpdatedAt: new Date("2026-10-21T04:00:00.000Z"),
@@ -249,6 +251,65 @@ describe("review eligibility and creation", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("VALIDATION_ERROR");
   });
+});
+
+describe("owner review image version responses", () => {
+  it.each([0, 7])("returns imageVersion %i when creating a review", async (imageVersion) => {
+    prismaMock.product.findUnique.mockResolvedValue({ id: 12, isActive: true });
+    prismaMock.review.findUnique.mockResolvedValue(null);
+    prismaMock.orderDetail.findFirst.mockResolvedValue({ id: 91 });
+    prismaMock.review.create.mockResolvedValue({ ...ownerReviewRow, imageVersion });
+
+    const res = await request(buildApp())
+      .post("/api/v1/products/12/reviews")
+      .set("Cookie", cookieFor(USER))
+      .send({ rating: 5, content: "Nội dung đủ dài", isAnonymous: true });
+
+    expect(res.status).toBe(201);
+    expect(res.body.data.imageVersion).toBe(imageVersion);
+    expect(prismaMock.review.create).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ imageVersion: true }) }),
+    );
+  });
+
+  it.each([0, 7])("returns imageVersion %i when updating a review", async (imageVersion) => {
+    const row = { ...ownerReviewRow, imageVersion };
+    prismaMock.review.findFirst.mockResolvedValue(row);
+    prismaMock.review.updateMany.mockResolvedValue({ count: 1 });
+    prismaMock.review.findUnique.mockResolvedValue(row);
+
+    const res = await request(buildApp())
+      .patch("/api/v1/reviews/18")
+      .set("Cookie", cookieFor(USER))
+      .send({ rating: 4 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.imageVersion).toBe(imageVersion);
+    expect(prismaMock.review.findFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ imageVersion: true }) }),
+    );
+    expect(prismaMock.review.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ imageVersion: true }) }),
+    );
+  });
+
+  it.each([0, 7])(
+    "returns imageVersion %i in the eligibility owner review",
+    async (imageVersion) => {
+      prismaMock.product.findUnique.mockResolvedValue({ id: 12 });
+      prismaMock.review.findUnique.mockResolvedValue({ ...ownerReviewRow, imageVersion });
+
+      const res = await request(buildApp())
+        .get("/api/v1/products/12/reviews/eligibility")
+        .set("Cookie", cookieFor(USER));
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.existingReview.imageVersion).toBe(imageVersion);
+      expect(prismaMock.review.findUnique).toHaveBeenCalledWith(
+        expect.objectContaining({ select: expect.objectContaining({ imageVersion: true }) }),
+      );
+    },
+  );
 });
 
 describe("customer review lifecycle", () => {
