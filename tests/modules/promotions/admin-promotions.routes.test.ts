@@ -271,6 +271,138 @@ describe("admin promotion routes", () => {
     expect(new Set(dedupeKeys).size).toBe(2);
   });
 
+  it("persists every coupon field and replaces targets on a draft", async () => {
+    prismaMock.promotion.update.mockResolvedValue(promotion);
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({
+        coupon: {
+          code: " spring20 ",
+          scope: "PRODUCT",
+          minOrderValue: 500_000,
+          maxUsesPerUser: 2,
+          targetProductIds: [3, 4],
+        },
+      });
+    expect(response.status).toBe(200);
+    expect(prismaMock.couponPolicy.update).toHaveBeenCalledWith({
+      where: { promotionId: 10 },
+      data: {
+        code: "SPRING20",
+        scope: "PRODUCT",
+        minOrderValue: 500_000,
+        maxDiscount: null,
+        maxUses: 100,
+        maxUsesPerUser: 2,
+        isPublic: false,
+      },
+    });
+    expect(prismaMock.promotionProduct.deleteMany).toHaveBeenCalledWith({
+      where: { promotionId: 10 },
+    });
+    expect(prismaMock.promotionProduct.createMany).toHaveBeenCalledWith({
+      data: [
+        { promotionId: 10, productId: 3 },
+        { promotionId: 10, productId: 4 },
+      ],
+    });
+    expect(prismaMock.promotion.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ pricingVersion: { increment: 1 } }),
+      }),
+    );
+  });
+
+  it("persists automatic policy fields and targets on a draft", async () => {
+    const automaticDraft = {
+      ...promotion,
+      kind: "AUTOMATIC",
+      couponPolicy: null,
+      automaticPolicy: { promotionId: 10, priority: 0, stackableWithCoupon: false },
+      products: [{ productId: 3, product: { id: 3, name: "Laptop", image: null } }],
+    };
+    prismaMock.promotion.findUnique.mockResolvedValue(automaticDraft);
+    prismaMock.promotion.update.mockResolvedValue(automaticDraft);
+    prismaMock.promotion.findMany.mockResolvedValue([]);
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ automatic: { priority: 5, stackableWithCoupon: true, targetProductIds: [4] } });
+    expect(response.status).toBe(200);
+    expect(prismaMock.automaticPromotionPolicy.update).toHaveBeenCalledWith({
+      where: { promotionId: 10 },
+      data: { priority: 5, stackableWithCoupon: true },
+    });
+    expect(prismaMock.promotionProduct.createMany).toHaveBeenCalledWith({
+      data: [{ promotionId: 10, productId: 4 }],
+    });
+  });
+
+  it.each([
+    ["percent above 100", { discountValue: 150 }],
+    ["startsAt after endsAt", { startsAt: "2026-12-01T00:00:00.000Z" }],
+    ["product scope without targets", { coupon: { scope: "PRODUCT" } }],
+  ])("rejects a draft PATCH that breaks create rules: %s", async (_label, body) => {
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send(body);
+    expect(response.status).toBe(400);
+    expect(response.body.error.code).toBe("VALIDATION_ERROR");
+    expect(prismaMock.couponPolicy.update).not.toHaveBeenCalled();
+    expect(prismaMock.promotion.update).not.toHaveBeenCalled();
+  });
+
+  it("maps a duplicate coupon code on update to 409", async () => {
+    prismaMock.couponPolicy.update.mockRejectedValue(prismaError("P2002"));
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ coupon: { code: "TAKEN10" } });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("COUPON_CODE_TAKEN");
+  });
+
+  it("lets an active coupon change visibility and raise maxUses without bumping pricingVersion", async () => {
+    const activeCoupon = {
+      ...promotion,
+      state: "ACTIVE",
+      activatedAt: new Date("2026-10-01T00:00:00.000Z"),
+    };
+    prismaMock.promotion.findUnique.mockResolvedValue(activeCoupon);
+    prismaMock.promotion.update.mockResolvedValue(activeCoupon);
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ coupon: { isPublic: true, maxUses: 200 } });
+    expect(response.status).toBe(200);
+    expect(prismaMock.couponPolicy.update).toHaveBeenCalledWith({
+      where: { promotionId: 10 },
+      data: { isPublic: true, maxUses: 200 },
+    });
+    expect(prismaMock.promotion.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.not.objectContaining({ pricingVersion: expect.anything() }),
+      }),
+    );
+  });
+
+  it("keeps an active coupon code locked", async () => {
+    prismaMock.promotion.findUnique.mockResolvedValue({
+      ...promotion,
+      state: "ACTIVE",
+      activatedAt: new Date("2026-10-01T00:00:00.000Z"),
+    });
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ coupon: { code: "OTHER10" } });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("PROMOTION_FIELD_LOCKED");
+    expect(prismaMock.couponPolicy.update).not.toHaveBeenCalled();
+  });
+
   it("allows only an active Flash Sale quota increase without bumping pricingVersion", async () => {
     const activeFlash = {
       ...promotion,
