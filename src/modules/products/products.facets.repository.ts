@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+
 import { prisma } from "config/client";
 import {
   BATTERY_MINIMUMS,
@@ -7,9 +8,10 @@ import {
   WEIGHT_MAXIMUMS,
   type ProductFacetKey,
 } from "modules/products/products.facets";
+import type { ProductFilterQuery } from "modules/products/products.schema";
 import { andSql, catalogFilterConditions } from "modules/products/products.catalog-sql";
 import type { CatalogPricingContext } from "modules/products/products.catalog.repository";
-import type { ProductFilterQuery } from "modules/products/products.schema";
+import { activeCatalogPriceWindows } from "modules/pricing/catalog-price-projection.repository";
 
 export type FacetAggregateRow = { facetKey: string; value: string; count: bigint };
 
@@ -167,10 +169,12 @@ export const queryProductFacetRows = async (
   ];
   const projectionJoin =
     context.mode === "PROJECTED"
-      ? Prisma.sql`INNER JOIN catalog_price_windows cpw ON cpw.productId = p.id AND cpw.validFrom <= ${context.asOf} AND (cpw.validUntil IS NULL OR cpw.validUntil > ${context.asOf})`
+      ? Prisma.sql`LEFT JOIN (${activeCatalogPriceWindows(context.asOf)}) cpw ON cpw.productId = p.id AND cpw.windowRank = 1`
       : Prisma.empty;
   const effectivePrice =
-    context.mode === "PROJECTED" ? Prisma.sql`cpw.effectiveCatalogPrice` : Prisma.sql`p.price`;
+    context.mode === "PROJECTED"
+      ? Prisma.sql`COALESCE(cpw.effectiveCatalogPrice, p.price)`
+      : Prisma.sql`p.price`;
   return prisma.$queryRaw<FacetAggregateRow[]>(Prisma.sql`
     WITH review_stats AS (
       SELECT productId, ROUND(AVG(rating), 1) AS averageRating, COUNT(*) AS totalReviews

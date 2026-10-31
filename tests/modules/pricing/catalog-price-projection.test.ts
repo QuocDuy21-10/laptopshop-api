@@ -1,11 +1,14 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Prisma } from "@prisma/client";
+
+import { logger } from "lib/logger";
 import {
   buildCatalogPriceTimeline,
   CATALOG_PRICE_WINDOW_FLOOR,
 } from "modules/pricing/catalog-price-timeline";
 import {
   catalogPriceWindowData,
+  getEffectiveCatalogPrices,
   refreshCatalogPriceWindows,
   replaceCatalogPriceWindows,
 } from "modules/pricing/catalog-price-projection.repository";
@@ -80,5 +83,50 @@ describe("catalog price projection persistence", () => {
       new Date("2026-10-28T00:00:00.000Z"),
       new Date("2026-10-29T00:00:00.000Z"),
     ]);
+  });
+});
+
+describe("effective catalog prices", () => {
+  const asOf = new Date("2026-10-31T00:00:00.000Z");
+  const clientReturning = (rows: unknown[]) => {
+    const queryRaw = jest.fn<(query: Prisma.Sql) => Promise<unknown>>().mockResolvedValue(rows);
+    return { client: { $queryRaw: queryRaw } as never, queryRaw };
+  };
+
+  it("falls back to the list price when a product has no active window", async () => {
+    const warn = jest.spyOn(logger, "warn").mockImplementation(() => undefined);
+    const { client } = clientReturning([
+      { productId: 7, listPrice: 20_000_000, effectiveCatalogPrice: null, windowCount: null },
+    ]);
+    await expect(getEffectiveCatalogPrices(client, [7], asOf)).resolves.toEqual(
+      new Map([[7, 20_000_000]]),
+    );
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ missing: [7] }),
+      expect.any(String),
+    );
+    warn.mockRestore();
+  });
+
+  it("reads one ranked window per product so overlapping windows cannot double up", async () => {
+    const warn = jest.spyOn(logger, "warn").mockImplementation(() => undefined);
+    const { client, queryRaw } = clientReturning([
+      {
+        productId: 5,
+        listPrice: 20_000_000,
+        effectiveCatalogPrice: 14_000_000,
+        windowCount: BigInt(2),
+      },
+    ]);
+    await expect(getEffectiveCatalogPrices(client, [5], asOf)).resolves.toEqual(
+      new Map([[5, 14_000_000]]),
+    );
+    const sql = (queryRaw.mock.calls[0][0] as unknown as { strings: string[] }).strings.join(" ");
+    expect(sql).toContain("windowRank = 1");
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ overlapping: [5] }),
+      expect.any(String),
+    );
+    warn.mockRestore();
   });
 });

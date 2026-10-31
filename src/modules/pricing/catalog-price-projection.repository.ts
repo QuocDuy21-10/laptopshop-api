@@ -1,4 +1,6 @@
 import { Prisma } from "@prisma/client";
+
+import { logger } from "lib/logger";
 import type { CatalogPriceWindowDraft } from "modules/pricing/catalog-price-timeline";
 import {
   buildCatalogPriceTimeline,
@@ -6,7 +8,6 @@ import {
   type CatalogPriceWindowDraft as TimelineWindow,
 } from "modules/pricing/catalog-price-timeline";
 import type { AutomaticPromotionCandidate } from "modules/promotions/automatic-promotion-policy";
-import { AppError } from "lib/errors";
 
 export type CatalogPriceProjectionTx = {
   $executeRaw: (query: Prisma.Sql) => Promise<number>;
@@ -124,6 +125,31 @@ export const refreshCatalogPriceWindows = async (
   return { productCount: products.length, windowCount };
 };
 
+// Windows active at asOf ranked per product; join on windowRank = 1 so an overlap (a data error the
+// audit reports) still yields one row, and windowCount lets callers log missing or overlapping windows.
+export const activeCatalogPriceWindows = (asOf: Date) => Prisma.sql`
+  SELECT productId, effectiveCatalogPrice,
+         COUNT(*) OVER (PARTITION BY productId) AS windowCount,
+         ROW_NUMBER() OVER (PARTITION BY productId ORDER BY validFrom DESC, id DESC) AS windowRank
+  FROM catalog_price_windows
+  WHERE validFrom <= ${asOf} AND (validUntil IS NULL OR validUntil > ${asOf})
+`;
+
+type WindowHealthRow = { productId: number | null; windowCount: bigint | number | null };
+
+export const warnOnUnhealthyCatalogWindows = (rows: readonly WindowHealthRow[]) => {
+  const missing = rows.filter((row) => row.productId !== null && row.windowCount === null);
+  const overlapping = rows.filter((row) => row.windowCount !== null && Number(row.windowCount) > 1);
+  if (!missing.length && !overlapping.length) return;
+  logger.warn(
+    {
+      missing: missing.map((row) => row.productId),
+      overlapping: overlapping.map((row) => row.productId),
+    },
+    "catalog price windows missing or overlapping; run catalog-pricing:audit",
+  );
+};
+
 export const getEffectiveCatalogPrices = async (
   client: ProjectionQueryClient,
   productIds: readonly number[],
@@ -132,20 +158,20 @@ export const getEffectiveCatalogPrices = async (
   const ids = [...new Set(productIds)].sort((left, right) => left - right);
   if (!ids.length) return new Map();
   const rows = await client.$queryRaw<
-    { productId: number; effectiveCatalogPrice: number }[]
+    {
+      productId: number;
+      listPrice: number;
+      effectiveCatalogPrice: number | null;
+      windowCount: bigint | number | null;
+    }[]
   >(Prisma.sql`
-    SELECT productId, effectiveCatalogPrice
-    FROM catalog_price_windows
-    WHERE productId IN (${Prisma.join(ids)})
-      AND validFrom <= ${asOf}
-      AND (validUntil IS NULL OR validUntil > ${asOf})
+    SELECT p.id AS productId, p.price AS listPrice, cpw.effectiveCatalogPrice, cpw.windowCount
+    FROM products p
+    LEFT JOIN (${activeCatalogPriceWindows(asOf)}) cpw ON cpw.productId = p.id AND cpw.windowRank = 1
+    WHERE p.id IN (${Prisma.join(ids)})
   `);
-  if (new Set(rows.map((row) => row.productId)).size !== ids.length) {
-    throw new AppError(
-      "Catalog price projection is unavailable",
-      503,
-      "CATALOG_PRICE_PROJECTION_UNAVAILABLE",
-    );
-  }
-  return new Map(rows.map((row) => [row.productId, Number(row.effectiveCatalogPrice)]));
+  warnOnUnhealthyCatalogWindows(rows);
+  return new Map(
+    rows.map((row) => [row.productId, Number(row.effectiveCatalogPrice ?? row.listPrice)]),
+  );
 };
