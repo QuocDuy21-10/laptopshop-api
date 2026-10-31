@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 import { idParams, MAX_DB_INT, pageQuery } from "lib/http";
 
 export const PROMOTION_KINDS = ["COUPON", "AUTOMATIC", "FLASH_SALE"] as const;
@@ -22,7 +23,11 @@ const code = z
   .regex(/^[A-Z0-9_-]+$/, "Coupon code must use A-Z, 0-9, _ or -");
 
 const dbId = z.coerce.number().int().positive().max(MAX_DB_INT);
-const targetIds = z.array(dbId).max(500).default([]);
+const targetIds = z
+  .array(dbId)
+  .max(500)
+  .refine((ids) => new Set(ids).size === ids.length, "targetProductIds must be unique")
+  .default([]);
 const couponPolicy = z
   .object({
     code,

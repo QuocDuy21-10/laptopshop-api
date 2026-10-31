@@ -194,6 +194,55 @@ describe("quoteOrder", () => {
     });
   });
 
+  const now = new Date("2026-10-15T00:00:00Z");
+
+  it("rejects a coupon whose global usage is exhausted", async () => {
+    prismaMock.promotion.findFirst.mockResolvedValue({
+      ...couponPromotion,
+      couponPolicy: { ...couponPromotion.couponPolicy, maxUses: 5, usedCount: 5 },
+    });
+    await expect(quoteOrder(7, "WELCOME10", now)).rejects.toMatchObject({
+      status: 409,
+      code: "PROMOTION_USAGE_LIMIT",
+    });
+  });
+
+  it("rejects a coupon the caller has already used up", async () => {
+    prismaMock.promotionUserUsage.findUnique.mockResolvedValue({ usedCount: 1 });
+    await expect(quoteOrder(7, "WELCOME10", now)).rejects.toMatchObject({
+      status: 409,
+      code: "PROMOTION_USER_LIMIT",
+    });
+    expect(prismaMock.promotionUserUsage.findUnique).toHaveBeenCalledWith({
+      where: { promotionId_userId: { promotionId: 10, userId: 7 } },
+    });
+  });
+
+  it("rejects a product coupon when no cart line is a target", async () => {
+    prismaMock.promotion.findFirst.mockResolvedValue({
+      ...couponPromotion,
+      couponPolicy: { ...couponPromotion.couponPolicy, scope: "PRODUCT" },
+      products: [{ productId: 99 }],
+    });
+    await expect(quoteOrder(7, "WELCOME10", now)).rejects.toMatchObject({
+      status: 409,
+      code: "COUPON_NOT_APPLICABLE",
+    });
+  });
+
+  it("rejects an order coupon when every line has a non-stackable Automatic winner", async () => {
+    prismaMock.cartDetail.findMany.mockResolvedValue([
+      { ...cartLines[0], product: { id: 1, price: 20_000_000, isActive: true } },
+    ]);
+    prismaMock.promotion.findMany.mockResolvedValue([
+      automaticPromotion({ automaticPolicy: { priority: 1, stackableWithCoupon: false } }),
+    ]);
+    await expect(quoteOrder(7, "WELCOME10", now)).rejects.toMatchObject({
+      status: 409,
+      code: "COUPON_NOT_APPLICABLE",
+    });
+  });
+
   it("applies a stackable coupon after the resolved Automatic fallback", async () => {
     prismaMock.cartDetail.findMany.mockResolvedValue([
       { ...cartLines[0], quantity: 3, product: { id: 1, price: 20_000_000, isActive: true } },

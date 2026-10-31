@@ -1,49 +1,87 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "config/client";
-import { AppError, isUniqueViolation, notFound } from "lib/errors";
+import { type Prisma } from "@prisma/client";
+
 import { pageArgs, pageMeta } from "lib/http";
-import {
-  AdminPromotionQuery,
-  CreatePromotionBody,
-  PromotionRedemptionQuery,
-  FlashSaleAllocationQuery,
-  UpdatePromotionBody,
-} from "modules/promotions/promotions.schema";
-import {
-  flashSaleAllocationInclude,
-  promotionInclude,
-  redemptionInclude,
-} from "modules/promotions/promotions.repository";
+import { AppError, isUniqueViolation, notFound } from "lib/errors";
+import { prisma } from "config/client";
+import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
+import type {
+  PricingLineInput,
+  PricingQuoteDto,
+  ResolvedCoupon,
+} from "modules/promotions/promotions.types";
+import { calculatePromotionPricing } from "modules/promotions/promotion-pricing";
 import {
   toPromotionDetailDto,
   toPromotionSummaryDto,
   toRedemptionDto,
   toFlashSaleAllocationDto,
 } from "modules/promotions/promotions.mapper";
-import { calculatePromotionPricing } from "modules/promotions/promotion-pricing";
-import { createPricingFingerprint } from "modules/promotions/promotion-fingerprint";
+import {
+  type AdminPromotionQuery,
+  type CreatePromotionBody,
+  type PromotionRedemptionQuery,
+  type FlashSaleAllocationQuery,
+  type UpdatePromotionBody,
+  createPromotionBody,
+} from "modules/promotions/promotions.schema";
 import {
   resolveProductPromotions,
   type PrismaClientLike,
 } from "modules/promotions/promotion-resolver";
-import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
+import { createPricingFingerprint } from "modules/promotions/promotion-fingerprint";
+import {
+  flashSaleAllocationInclude,
+  promotionInclude,
+  redemptionInclude,
+  type PromotionRow,
+} from "modules/promotions/promotions.repository";
 import { refreshCatalogPriceWindows } from "modules/pricing/catalog-price-projection.repository";
-import type {
-  PricingLineInput,
-  PricingQuoteDto,
-  ResolvedCoupon,
-} from "modules/promotions/promotions.types";
 
-const pricingFields = new Set([
-  "kind",
-  "discountKind",
-  "discountValue",
-  "startsAt",
-  "endsAt",
-  "coupon",
-  "automatic",
-  "targetProductIds",
-]);
+// endsAt is not here: an active promotion may still be extended
+const lockedWhenActive = new Set(["discountKind", "discountValue", "startsAt"]);
+const couponFieldsOpenWhenActive = new Set(["isPublic", "maxUses"]);
+
+// rebuilds the create body from a stored row so a PATCH can be validated by the create rules
+const toCreateShape = (row: PromotionRow) => ({
+  kind: row.kind,
+  name: row.name,
+  description: row.description ?? undefined,
+  discountKind: row.discountKind,
+  discountValue: row.discountValue,
+  startsAt: row.startsAt,
+  endsAt: row.endsAt,
+  coupon: row.couponPolicy
+    ? {
+        code: row.couponPolicy.code,
+        scope: row.couponPolicy.scope,
+        minOrderValue: row.couponPolicy.minOrderValue,
+        maxDiscount: row.couponPolicy.maxDiscount,
+        maxUses: row.couponPolicy.maxUses,
+        maxUsesPerUser: row.couponPolicy.maxUsesPerUser,
+        isPublic: row.couponPolicy.isPublic,
+        targetProductIds: row.products.map((target) => target.productId),
+      }
+    : undefined,
+  automatic: row.automaticPolicy
+    ? {
+        priority: row.automaticPolicy.priority,
+        stackableWithCoupon: row.automaticPolicy.stackableWithCoupon,
+        targetProductIds: row.products.map((target) => target.productId),
+      }
+    : undefined,
+  flashSale: row.flashSalePolicy
+    ? {
+        priority: row.flashSalePolicy.priority,
+        stackableWithCoupon: row.flashSalePolicy.stackableWithCoupon,
+        showRemainingQuota: row.flashSalePolicy.showRemainingQuota,
+        items: row.flashSalePolicy.quotas.map((quota) => ({
+          productId: quota.productId,
+          totalQuota: quota.totalQuota,
+          maxUnitsPerUser: quota.maxUnitsPerUser,
+        })),
+      }
+    : undefined,
+});
 
 const promotionWhere = (query: AdminPromotionQuery): Prisma.PromotionWhereInput => ({
   ...(query.kind ? { kind: query.kind } : {}),
@@ -173,9 +211,7 @@ export const getPromotion = async (id: number) => toPromotionDetailDto(await get
 export const updatePromotion = async (id: number, actorId: number, body: UpdatePromotionBody) => {
   const current = await getRow(id);
   if (current.activatedAt) {
-    const attemptedLockedField = Object.keys(body).some(
-      (key) => pricingFields.has(key) && key !== "endsAt",
-    );
+    const attemptedLockedField = Object.keys(body).some((key) => lockedWhenActive.has(key));
     const couponCore = body.coupon
       ? Object.keys(body.coupon).some((key) =>
           [
@@ -237,104 +273,154 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
       }
     }
   }
-  const updated = await prisma.$transaction(async (tx) => {
-    if (body.coupon) {
-      await tx.couponPolicy.update({
-        where: { promotionId: id },
-        data: {
-          ...(body.coupon.isPublic !== undefined ? { isPublic: body.coupon.isPublic } : {}),
-          ...(body.coupon.maxUses !== undefined ? { maxUses: body.coupon.maxUses } : {}),
-        },
-      });
-    }
-    if (body.flashSale) {
-      if (current.activatedAt) {
-        if (body.flashSale.showRemainingQuota !== undefined) {
-          await tx.flashSalePolicy.update({
-            where: { promotionId: id },
-            data: { showRemainingQuota: body.flashSale.showRemainingQuota },
-          });
-        }
-        for (const item of body.flashSale.items ?? []) {
-          await tx.flashSaleProductQuota.update({
-            where: { promotionId_productId: { promotionId: id, productId: item.productId } },
-            data: { totalQuota: item.totalQuota },
-          });
-        }
-      } else {
-        await tx.flashSalePolicy.update({
+  const shape = toCreateShape(current);
+  // the merged state must satisfy the same rules as a new promotion; ZodError becomes 400
+  const parsed = createPromotionBody.parse({
+    ...shape,
+    name: body.name ?? shape.name,
+    description: body.description ?? shape.description,
+    discountKind: body.discountKind ?? shape.discountKind,
+    discountValue: body.discountValue ?? shape.discountValue,
+    startsAt: body.startsAt ?? shape.startsAt,
+    endsAt: body.endsAt ?? shape.endsAt,
+    coupon: body.coupon ? { ...shape.coupon, ...body.coupon } : shape.coupon,
+    automatic: body.automatic ? { ...shape.automatic, ...body.automatic } : shape.automatic,
+    flashSale: body.flashSale ? { ...shape.flashSale, ...body.flashSale } : shape.flashSale,
+  });
+  const newTargets =
+    body.coupon?.targetProductIds !== undefined || body.automatic?.targetProductIds !== undefined
+      ? (parsed.coupon?.targetProductIds ?? parsed.automatic?.targetProductIds ?? [])
+      : null;
+  if (newTargets) await assertProductsExist(newTargets);
+  const pricingChanged = current.activatedAt
+    ? body.endsAt !== undefined
+    : body.discountKind !== undefined ||
+      body.discountValue !== undefined ||
+      body.startsAt !== undefined ||
+      body.endsAt !== undefined ||
+      Object.keys(body.coupon ?? {}).some((key) => !couponFieldsOpenWhenActive.has(key)) ||
+      Boolean(body.automatic) ||
+      Boolean(body.flashSale);
+  const updated = await prisma
+    .$transaction(async (tx) => {
+      if (body.coupon) {
+        await tx.couponPolicy.update({
+          where: { promotionId: id },
+          data: current.activatedAt
+            ? {
+                ...(body.coupon.isPublic !== undefined ? { isPublic: body.coupon.isPublic } : {}),
+                ...(body.coupon.maxUses !== undefined ? { maxUses: body.coupon.maxUses } : {}),
+              }
+            : {
+                code: parsed.coupon!.code,
+                scope: parsed.coupon!.scope,
+                minOrderValue: parsed.coupon!.minOrderValue,
+                maxDiscount: parsed.coupon!.maxDiscount ?? null,
+                maxUses: parsed.coupon!.maxUses ?? null,
+                maxUsesPerUser: parsed.coupon!.maxUsesPerUser,
+                isPublic: parsed.coupon!.isPublic,
+              },
+        });
+      }
+      if (body.automatic && !current.activatedAt) {
+        await tx.automaticPromotionPolicy.update({
           where: { promotionId: id },
           data: {
-            ...(body.flashSale.priority !== undefined ? { priority: body.flashSale.priority } : {}),
-            ...(body.flashSale.stackableWithCoupon !== undefined
-              ? { stackableWithCoupon: body.flashSale.stackableWithCoupon }
-              : {}),
-            ...(body.flashSale.showRemainingQuota !== undefined
-              ? { showRemainingQuota: body.flashSale.showRemainingQuota }
-              : {}),
+            priority: parsed.automatic!.priority,
+            stackableWithCoupon: parsed.automatic!.stackableWithCoupon,
           },
         });
-        if (body.flashSale.items) {
-          if (
-            body.flashSale.items.some(
-              (item) =>
-                item.productId === undefined ||
-                item.totalQuota === undefined ||
-                item.maxUnitsPerUser === undefined,
-            )
-          ) {
-            throw new AppError("Flash Sale quota items are incomplete", 400, "VALIDATION_ERROR");
+      }
+      if (newTargets) {
+        await tx.promotionProduct.deleteMany({ where: { promotionId: id } });
+        await tx.promotionProduct.createMany({
+          data: newTargets.map((productId) => ({ promotionId: id, productId })),
+        });
+      }
+      if (body.flashSale) {
+        if (current.activatedAt) {
+          if (body.flashSale.showRemainingQuota !== undefined) {
+            await tx.flashSalePolicy.update({
+              where: { promotionId: id },
+              data: { showRemainingQuota: body.flashSale.showRemainingQuota },
+            });
           }
-          await assertProductsExist(body.flashSale.items.map((item) => item.productId!));
-          await tx.flashSaleProductQuota.deleteMany({ where: { promotionId: id } });
-          await tx.flashSaleProductQuota.createMany({
-            data: body.flashSale.items.map((item) => ({
-              promotionId: id,
-              productId: item.productId!,
-              totalQuota: item.totalQuota!,
-              maxUnitsPerUser: item.maxUnitsPerUser!,
-            })),
+          for (const item of body.flashSale.items ?? []) {
+            await tx.flashSaleProductQuota.update({
+              where: { promotionId_productId: { promotionId: id, productId: item.productId } },
+              data: { totalQuota: item.totalQuota },
+            });
+          }
+        } else {
+          await tx.flashSalePolicy.update({
+            where: { promotionId: id },
+            data: {
+              ...(body.flashSale.priority !== undefined
+                ? { priority: body.flashSale.priority }
+                : {}),
+              ...(body.flashSale.stackableWithCoupon !== undefined
+                ? { stackableWithCoupon: body.flashSale.stackableWithCoupon }
+                : {}),
+              ...(body.flashSale.showRemainingQuota !== undefined
+                ? { showRemainingQuota: body.flashSale.showRemainingQuota }
+                : {}),
+            },
           });
+          if (body.flashSale.items) {
+            await assertProductsExist(body.flashSale.items.map((item) => item.productId!));
+            await tx.flashSaleProductQuota.deleteMany({ where: { promotionId: id } });
+            await tx.flashSaleProductQuota.createMany({
+              data: body.flashSale.items.map((item) => ({
+                promotionId: id,
+                productId: item.productId!,
+                totalQuota: item.totalQuota!,
+                maxUnitsPerUser: item.maxUnitsPerUser!,
+              })),
+            });
+          }
         }
       }
-    }
-    const pricingChanged =
-      Object.keys(body).some((key) => pricingFields.has(key)) ||
-      (Boolean(body.flashSale) && !current.activatedAt);
-    const updated = await tx.promotion.update({
-      where: { id },
-      data: {
-        ...(body.name !== undefined ? { name: body.name } : {}),
-        ...(body.description !== undefined ? { description: body.description } : {}),
-        ...(body.discountKind !== undefined ? { discountKind: body.discountKind } : {}),
-        ...(body.discountValue !== undefined ? { discountValue: body.discountValue } : {}),
-        ...(body.startsAt !== undefined ? { startsAt: body.startsAt } : {}),
-        ...(body.endsAt !== undefined ? { endsAt: body.endsAt } : {}),
-        updatedById: actorId,
-        ...(pricingChanged ? { pricingVersion: { increment: 1 } } : {}),
-      },
-      include: promotionInclude,
-    });
-    if (pricingChanged) {
-      const productIds = [
-        ...(current.products ?? []).map((target) => target.productId),
-        ...(current.flashSalePolicy?.quotas ?? []).map((quota) => quota.productId),
-      ];
-      await requestPricingReevaluation(tx, {
-        productIds,
-        eventVersion: `${id}-${updated.pricingVersion}`,
-        availableAt: body.startsAt && body.startsAt > new Date() ? body.startsAt : undefined,
+      const updated = await tx.promotion.update({
+        where: { id },
+        data: {
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.description !== undefined ? { description: body.description } : {}),
+          ...(body.discountKind !== undefined ? { discountKind: body.discountKind } : {}),
+          ...(body.discountValue !== undefined ? { discountValue: body.discountValue } : {}),
+          ...(body.startsAt !== undefined ? { startsAt: body.startsAt } : {}),
+          ...(body.endsAt !== undefined ? { endsAt: body.endsAt } : {}),
+          updatedById: actorId,
+          ...(pricingChanged ? { pricingVersion: { increment: 1 } } : {}),
+        },
+        include: promotionInclude,
       });
-      if (current.kind === "AUTOMATIC") {
-        await refreshCatalogPriceWindows(
-          tx,
-          current.products.map((target) => target.productId),
-          new Date(),
-        );
+      if (pricingChanged) {
+        const productIds = [
+          ...(current.products ?? []).map((target) => target.productId),
+          ...(newTargets ?? []),
+          ...(current.flashSalePolicy?.quotas ?? []).map((quota) => quota.productId),
+        ];
+        await requestPricingReevaluation(tx, {
+          productIds,
+          eventVersion: `${id}-${updated.pricingVersion}`,
+          availableAt: body.startsAt && body.startsAt > new Date() ? body.startsAt : undefined,
+        });
+        if (current.kind === "AUTOMATIC") {
+          await refreshCatalogPriceWindows(
+            tx,
+            [...current.products.map((target) => target.productId), ...(newTargets ?? [])],
+            new Date(),
+          );
+        }
       }
-    }
-    return updated;
-  });
+      return updated;
+    })
+    .catch((error) => {
+      if (isUniqueViolation(error)) {
+        throw new AppError("Coupon code already exists", 409, "COUPON_CODE_TAKEN");
+      }
+      throw error;
+    });
   return toPromotionDetailDto(updated);
 };
 
@@ -580,7 +666,7 @@ const couponFromRow = (row: any): ResolvedCoupon => ({
 export const resolveCoupon = async (
   client: PrismaClientLike,
   code: string,
-  _userId: number,
+  userId: number,
   _lines: PricingLineInput[],
   now: Date,
 ): Promise<ResolvedCoupon> => {
@@ -592,7 +678,33 @@ export const resolveCoupon = async (
   if (row.state !== "ACTIVE" || now < row.startsAt || now >= row.endsAt || !row.couponPolicy) {
     throw new AppError("Promotion is not active", 409, "PROMOTION_NOT_ACTIVE");
   }
+  // early feedback only: claimCouponUsage re-checks both limits inside the checkout transaction
+  if (row.couponPolicy.maxUses != null && row.couponPolicy.usedCount >= row.couponPolicy.maxUses) {
+    throw new AppError("Promotion usage limit reached", 409, "PROMOTION_USAGE_LIMIT");
+  }
+  const usage = await (client as any).promotionUserUsage.findUnique({
+    where: { promotionId_userId: { promotionId: row.id, userId } },
+  });
+  if (usage && usage.usedCount >= row.couponPolicy.maxUsesPerUser) {
+    throw new AppError("Promotion user limit reached", 409, "PROMOTION_USER_LIMIT");
+  }
   return couponFromRow(row);
+};
+
+export const assertCouponApplies = (
+  coupon: ResolvedCoupon,
+  pricing: ReturnType<typeof calculatePromotionPricing>,
+) => {
+  const minimumBase =
+    coupon.scope === "PRODUCT"
+      ? pricing.couponEligibleSubtotal
+      : pricing.subtotalPrice - pricing.productDiscountAmount;
+  if (minimumBase < coupon.minOrderValue) {
+    throw new AppError("Minimum order value is not met", 409, "MIN_ORDER_NOT_MET");
+  }
+  if (pricing.couponDiscountAmount === 0) {
+    throw new AppError("Coupon does not apply to this cart", 409, "COUPON_NOT_APPLICABLE");
+  }
 };
 
 const quoteLineInput = (
@@ -625,13 +737,7 @@ export const quoteOrder = async (
   const inputs = lines.map((line) => quoteLineInput(line, promotions));
   const coupon = couponCode ? await resolveCoupon(prisma, couponCode, userId, inputs, now) : null;
   const pricing = calculatePromotionPricing({ lines: inputs, coupon });
-  const minimumBase =
-    coupon?.scope === "PRODUCT"
-      ? pricing.couponEligibleSubtotal
-      : pricing.subtotalPrice - pricing.productDiscountAmount;
-  if (coupon && minimumBase < coupon.minOrderValue) {
-    throw new AppError("Minimum order value is not met", 409, "MIN_ORDER_NOT_MET");
-  }
+  if (coupon) assertCouponApplies(coupon, pricing);
   const fingerprint = createPricingFingerprint({
     lines: inputs.map((line) => ({
       productId: line.productId,
@@ -668,19 +774,27 @@ export const listAvailablePromotions = async (now = new Date()) => {
     include: { couponPolicy: true, products: { select: { productId: true } } },
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
   });
-  return rows
-    .filter((row: any) => row.couponPolicy?.isPublic)
-    .map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description ?? null,
-      code: row.couponPolicy.code,
-      scope: row.couponPolicy.scope,
-      discountKind: row.discountKind,
-      discountValue: row.discountValue,
-      minOrderValue: row.couponPolicy.minOrderValue,
-      maxDiscount: row.couponPolicy.maxDiscount,
-      startsAt: row.startsAt,
-      endsAt: row.endsAt,
-    }));
+  return (
+    rows
+      // Prisma cannot compare two columns, so the usage cap is checked here
+      .filter(
+        (row: any) =>
+          row.couponPolicy?.isPublic &&
+          (row.couponPolicy.maxUses == null ||
+            row.couponPolicy.usedCount < row.couponPolicy.maxUses),
+      )
+      .map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description ?? null,
+        code: row.couponPolicy.code,
+        scope: row.couponPolicy.scope,
+        discountKind: row.discountKind,
+        discountValue: row.discountValue,
+        minOrderValue: row.couponPolicy.minOrderValue,
+        maxDiscount: row.couponPolicy.maxDiscount,
+        startsAt: row.startsAt,
+        endsAt: row.endsAt,
+      }))
+  );
 };
