@@ -666,7 +666,7 @@ const couponFromRow = (row: any): ResolvedCoupon => ({
 export const resolveCoupon = async (
   client: PrismaClientLike,
   code: string,
-  _userId: number,
+  userId: number,
   _lines: PricingLineInput[],
   now: Date,
 ): Promise<ResolvedCoupon> => {
@@ -678,7 +678,33 @@ export const resolveCoupon = async (
   if (row.state !== "ACTIVE" || now < row.startsAt || now >= row.endsAt || !row.couponPolicy) {
     throw new AppError("Promotion is not active", 409, "PROMOTION_NOT_ACTIVE");
   }
+  // early feedback only: claimCouponUsage re-checks both limits inside the checkout transaction
+  if (row.couponPolicy.maxUses != null && row.couponPolicy.usedCount >= row.couponPolicy.maxUses) {
+    throw new AppError("Promotion usage limit reached", 409, "PROMOTION_USAGE_LIMIT");
+  }
+  const usage = await (client as any).promotionUserUsage.findUnique({
+    where: { promotionId_userId: { promotionId: row.id, userId } },
+  });
+  if (usage && usage.usedCount >= row.couponPolicy.maxUsesPerUser) {
+    throw new AppError("Promotion user limit reached", 409, "PROMOTION_USER_LIMIT");
+  }
   return couponFromRow(row);
+};
+
+export const assertCouponApplies = (
+  coupon: ResolvedCoupon,
+  pricing: ReturnType<typeof calculatePromotionPricing>,
+) => {
+  const minimumBase =
+    coupon.scope === "PRODUCT"
+      ? pricing.couponEligibleSubtotal
+      : pricing.subtotalPrice - pricing.productDiscountAmount;
+  if (minimumBase < coupon.minOrderValue) {
+    throw new AppError("Minimum order value is not met", 409, "MIN_ORDER_NOT_MET");
+  }
+  if (pricing.couponDiscountAmount === 0) {
+    throw new AppError("Coupon does not apply to this cart", 409, "COUPON_NOT_APPLICABLE");
+  }
 };
 
 const quoteLineInput = (
@@ -711,13 +737,7 @@ export const quoteOrder = async (
   const inputs = lines.map((line) => quoteLineInput(line, promotions));
   const coupon = couponCode ? await resolveCoupon(prisma, couponCode, userId, inputs, now) : null;
   const pricing = calculatePromotionPricing({ lines: inputs, coupon });
-  const minimumBase =
-    coupon?.scope === "PRODUCT"
-      ? pricing.couponEligibleSubtotal
-      : pricing.subtotalPrice - pricing.productDiscountAmount;
-  if (coupon && minimumBase < coupon.minOrderValue) {
-    throw new AppError("Minimum order value is not met", 409, "MIN_ORDER_NOT_MET");
-  }
+  if (coupon) assertCouponApplies(coupon, pricing);
   const fingerprint = createPricingFingerprint({
     lines: inputs.map((line) => ({
       productId: line.productId,
