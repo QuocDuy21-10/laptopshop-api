@@ -1785,7 +1785,7 @@ op({
   auth: "user",
   request: {
     params: reviewImageParams,
-    body: multipart(z.object({ images: z.array(binary).min(1).max(3) })),
+    body: multipart(z.object({ images: z.array(binary.describe("JPEG, PNG or WebP; maximum 3145728 bytes (3 MiB), inclusive")).min(1).max(3) })),
   },
   ok: [201, "Created", data(z.array(ReviewImage))],
   deprecated: true,
@@ -1808,7 +1808,7 @@ op({
     body: multipart(
       z.object({
         manifest: z.string().describe("JSON-encoded ReviewImageSyncManifest"),
-        files: z.array(binary).max(3).optional(),
+        files: z.array(binary.describe("JPEG, PNG or WebP; maximum 3145728 bytes (3 MiB), inclusive")).max(3).optional(),
       }),
     ),
   },

@@ -1,20 +1,23 @@
 import multer from "multer";
 import { Router } from "express";
 import type { RequestHandler } from "express";
-import { authenticate } from "middlewares/authenticate";
+
 import { validate } from "middlewares/validate";
-import { requireReviewImageOwner } from "modules/reviews/review-images.authorization";
-import { createReviewImageHandlers } from "modules/reviews/reviews.controller";
+import { authenticate } from "middlewares/authenticate";
 import {
   reviewImageDeleteParams,
   reviewImageOrderBody,
   reviewImageParams,
 } from "modules/reviews/reviews.schema";
+import { createReviewImageHandlers } from "modules/reviews/reviews.controller";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
+import { MAX_REVIEW_IMAGE_INPUT_BYTES } from "modules/reviews/review-images.constants";
+import { requireReviewImageOwner } from "modules/reviews/review-images.authorization";
 
 const reviewImageUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 3 * 1024 * 1024, files: 3 },
+  // Busboy emits "limit" on equality; the processor enforces the inclusive limit.
+  limits: { fileSize: MAX_REVIEW_IMAGE_INPUT_BYTES + 1, files: 3 },
 });
 
 export const createReviewImageRoutes = (

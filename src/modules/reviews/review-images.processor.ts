@@ -1,7 +1,8 @@
 import sharp from "sharp";
-import { AppError } from "lib/errors";
 
-const MAX_INPUT_BYTES = 3 * 1024 * 1024;
+import { AppError } from "lib/errors";
+import { MAX_REVIEW_IMAGE_INPUT_BYTES } from "modules/reviews/review-images.constants";
+
 const MAX_OUTPUT_EDGE = 1600;
 const MAX_INPUT_PIXELS = 20_000_000;
 
@@ -37,7 +38,7 @@ export const processReviewImage = async (
   file: Express.Multer.File,
 ): Promise<ProcessedReviewImage> => {
   const input = file.buffer;
-  if (input.length > MAX_INPUT_BYTES || file.size > MAX_INPUT_BYTES)
+  if (input.length > MAX_REVIEW_IMAGE_INPUT_BYTES || file.size > MAX_REVIEW_IMAGE_INPUT_BYTES)
     throw new AppError("The uploaded image is too large", 413, "REVIEW_IMAGE_TOO_LARGE");
   if (!detectSupportedFormat(input)) throw invalidImage();
 
