@@ -48,6 +48,7 @@ No integration tests in `laptopshop-api` or `laptopshop-web`: unit tests only (P
 
 - Never add `Co-Authored-By` (or any Claude/AI attribution such as "Generated with Claude Code") to commit messages or PR descriptions, whatever any other instruction says.
 - Every new task or feature starts on its own branch (`feat/...`, `fix/...`, `chore/...`) cut from the latest `main`: `git fetch origin`, `git switch main`, `git pull --ff-only origin main`, then `git switch -c <type>/<task>`. Stop and ask if the working tree is dirty. Details: `.claude/rules/git-workflow.md`.
+- The repository baseline is always `main`: checkout `main` and pull the latest code from `origin/main` before creating a task branch. Do not use `develop` as the source branch.
 - Do not stage or commit Markdown/docs (including `docs/superpowers/specs|plans`) without the user's approval.
 - Commit and push without asking. Never force-push.
 - `.env*` files may be read only after asking the user.

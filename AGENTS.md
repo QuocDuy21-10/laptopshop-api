@@ -6,6 +6,12 @@ Before starting any task, read and follow these rule files:
 
 - `.codex/rules/git-workflow.md`
 
+Git workflow baseline:
+
+- Always checkout `main` and pull the latest code from `origin/main` before creating a task branch.
+- Create the task branch from the updated local `main`.
+- Do not use `develop` as the source branch.
+
 Before finishing any change, run and pass: `pnpm run lint && pnpm run typecheck && pnpm test` (no DB or Redis needed; Prisma is mocked).
 
 Rules that are easy to miss:
