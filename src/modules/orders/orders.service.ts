@@ -1,15 +1,21 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "config/client";
+import { type Prisma } from "@prisma/client";
+
+import { assertExportSize, type CsvColumn, toCsv } from "lib/csv";
+import { pageArgs, pageMeta, type PageQuery } from "lib/http";
 import { env } from "config/env";
 import { AppError, notFound } from "lib/errors";
-import { pageArgs, pageMeta, PageQuery } from "lib/http";
-import { withPrismaTransactionRetry } from "lib/prisma-retry";
-import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
+import { prisma } from "config/client";
 import { assertDayRange, createdAtRange, formatShopDateTime } from "lib/shop-time";
+import { withPrismaTransactionRetry } from "lib/prisma-retry";
 import { productUnavailable } from "modules/cart/cart.service";
-import { moveStock } from "modules/inventory/inventory.service";
-import { warrantySnapshotForCompletion } from "modules/orders/order-warranty";
 import { lockProductRows } from "modules/orders/order-locks";
+import {
+  canTransition,
+  invalidTransition,
+  ORDER_STATUS,
+  type OrderStatus,
+  PAYMENT_STATUS,
+} from "modules/orders/order-status";
 import {
   adminOrderDetailInclude,
   adminOrderInclude,
@@ -19,32 +25,27 @@ import {
   toOrderDto,
 } from "modules/orders/orders.mapper";
 import {
-  AdminExportOrdersQuery,
-  AdminListOrdersQuery,
-  PlaceOrderBody,
+  type AdminExportOrdersQuery,
+  type AdminListOrdersQuery,
+  type PlaceOrderBody,
 } from "modules/orders/orders.schema";
-import {
-  canTransition,
-  invalidTransition,
-  ORDER_STATUS,
-  OrderStatus,
-  PAYMENT_STATUS,
-} from "modules/orders/order-status";
+import { warrantySnapshotForCompletion } from "modules/orders/order-warranty";
 import { createTransferCode } from "modules/payments/payment-reference";
-import { calculatePromotionPricing } from "modules/promotions/promotion-pricing";
-import {
-  createCheckoutRequestHash,
-  createPricingFingerprint,
-} from "modules/promotions/promotion-fingerprint";
-import { resolveProductPromotions } from "modules/promotions/promotion-resolver";
-import { resolveCoupon } from "modules/promotions/promotions.service";
 import { claimCouponUsage, recordCouponRedemption } from "modules/promotions/promotion-usage";
+import { moveStock } from "modules/inventory/inventory.service";
 import {
   claimFlashSaleQuotas,
   recordFlashSaleAllocations,
 } from "modules/promotions/flash-sale-quota";
-import { cancelOrder } from "modules/orders/order-cancellation.service";
 import type { PricingLineInput } from "modules/promotions/promotions.types";
+import { calculatePromotionPricing } from "modules/promotions/promotion-pricing";
+import { resolveProductPromotions } from "modules/promotions/promotion-resolver";
+import { assertCouponApplies, resolveCoupon } from "modules/promotions/promotions.service";
+import {
+  createCheckoutRequestHash,
+  createPricingFingerprint,
+} from "modules/promotions/promotion-fingerprint";
+import { cancelOrder } from "modules/orders/order-cancellation.service";
 
 const findByKey = (userId: number, idempotencyKey: string) =>
   prisma.order.findUnique({
@@ -136,13 +137,7 @@ export const placeOrder = async (userId: number, key: string, receiver: PlaceOrd
             ? await resolveCoupon(tx, receiver.couponCode, userId, pricingLines, now)
             : null;
           const pricing = calculatePromotionPricing({ lines: pricingLines, coupon });
-          const minimumBase =
-            coupon?.scope === "PRODUCT"
-              ? pricing.couponEligibleSubtotal
-              : pricing.subtotalPrice - pricing.productDiscountAmount;
-          if (coupon && minimumBase < coupon.minOrderValue) {
-            throw new AppError("Minimum order value is not met", 409, "MIN_ORDER_NOT_MET");
-          }
+          if (coupon) assertCouponApplies(coupon, pricing);
           const fingerprint = createPricingFingerprint({
             lines: pricingLines.map((line) => ({
               productId: line.productId,

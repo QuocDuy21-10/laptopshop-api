@@ -528,6 +528,51 @@ describe("POST /api/v1/orders", () => {
     expect(getRes.body.data.items[0]).toEqual(res.body.data.items[0]);
   });
 
+  const productCoupon = (couponPolicy: Record<string, unknown> = {}) => ({
+    id: 20,
+    state: "ACTIVE",
+    name: "Product only",
+    discountKind: "FIXED",
+    discountValue: 10,
+    pricingVersion: 1,
+    startsAt: new Date("2026-01-01T00:00:00Z"),
+    endsAt: new Date("2099-01-01T00:00:00Z"),
+    couponPolicy: {
+      code: "AONLY",
+      scope: "PRODUCT",
+      minOrderValue: 0,
+      maxDiscount: null,
+      maxUses: null,
+      usedCount: 0,
+      maxUsesPerUser: 1,
+      ...couponPolicy,
+    },
+    products: [{ productId: 99 }],
+  });
+
+  it("rejects a coupon that discounts nothing before usage, stock or order writes", async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.cartDetail.findMany.mockResolvedValue(lines);
+    prismaMock.promotion.findFirst.mockResolvedValue(productCoupon());
+    const res = await post().send({ ...receiver, couponCode: "AONLY" });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("COUPON_NOT_APPLICABLE");
+    expect(prismaMock.couponPolicy.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.product.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.order.create).not.toHaveBeenCalled();
+  });
+
+  it("rejects an exhausted coupon before stock or order writes", async () => {
+    prismaMock.order.findUnique.mockResolvedValue(null);
+    prismaMock.cartDetail.findMany.mockResolvedValue(lines);
+    prismaMock.promotion.findFirst.mockResolvedValue(productCoupon({ maxUses: 1, usedCount: 1 }));
+    const res = await post().send({ ...receiver, couponCode: "AONLY" });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("PROMOTION_USAGE_LIMIT");
+    expect(prismaMock.product.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.order.create).not.toHaveBeenCalled();
+  });
+
   it("retries only the transaction operation after a deadlock", async () => {
     prismaMock.order.findUnique.mockResolvedValue(null);
     prismaMock.cartDetail.findMany.mockResolvedValue(lines);
