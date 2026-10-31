@@ -1,4 +1,5 @@
-import { Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
+
 import { reviewImageSelect, type ReviewImageRow } from "modules/reviews/review-images.mapper";
 
 export type ReviewImageDto = {
@@ -77,6 +78,7 @@ export const ownerReviewSelect = {
   content: true,
   isAnonymous: true,
   status: true,
+  imageVersion: true,
   deletedAt: true,
   createdAt: true,
   contentUpdatedAt: true,
@@ -100,6 +102,7 @@ export const toOwnerReviewDto = (
   content: review.content,
   isAnonymous: review.isAnonymous,
   status: review.status,
+  imageVersion: review.imageVersion,
   deletedAt: review.deletedAt,
   verifiedPurchase: true,
   images,
