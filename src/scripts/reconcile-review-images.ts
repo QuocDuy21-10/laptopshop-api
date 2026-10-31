@@ -1,15 +1,24 @@
-import { prisma } from "config/client";
-import { env } from "config/env";
-import { logger } from "lib/logger";
-import { createS3ObjectStorage } from "lib/storage/s3-object-storage";
-import type { ObjectStorage } from "lib/storage/object-storage";
 import { randomUUID } from "node:crypto";
+import type { ReviewImageSyncOperation } from "@prisma/client";
+
+import { env } from "config/env";
+import { AppError } from "lib/errors";
+import { logger } from "lib/logger";
+import { prisma } from "config/client";
+import type { ObjectStorage } from "lib/storage/object-storage";
+import { createS3ObjectStorage } from "lib/storage/s3-object-storage";
+import { reviewImageSelect } from "modules/reviews/review-images.mapper";
 import {
-  finalizeReviewImageSync,
-  type ReviewImageSyncDeps,
-} from "modules/reviews/review-image-sync.service";
-import { reviewImageSelect, type ReviewImageRow } from "modules/reviews/review-images.mapper";
-import type { ReviewImageSyncManifest } from "modules/reviews/review-image-sync.types";
+  failClaimedReviewImageSync,
+  waitForClaimedReviewImageSyncRetry,
+  isReviewImageSyncRetryExpired,
+} from "modules/reviews/review-image-sync.state";
+import { parseReviewImageSyncManifest } from "modules/reviews/review-image-sync.schema";
+import { finalizeReviewImageSync } from "modules/reviews/review-image-sync.service";
+import {
+  lockOwnedReviewStateForSync,
+  lockOwnedSyncOperation,
+} from "modules/reviews/review-image-sync.repository";
 
 export type ReconcileResult = {
   pending: number;
@@ -27,6 +36,133 @@ export type ReviewImageSyncReconcileResult = {
   errors: number;
 };
 
+const reconcileReviewImageSyncOperation = async (
+  deps: ReconcileDeps,
+  operation: ReviewImageSyncOperation,
+  now: Date,
+): Promise<"finalized" | "failed" | "expired" | "waiting" | "skipped"> => {
+  if (
+    operation.status === "PROCESSING" &&
+    operation.leaseExpiresAt &&
+    operation.leaseExpiresAt > now
+  )
+    return "skipped";
+  const leaseOwner = randomUUID();
+  const claimed = await prisma.$transaction(async (tx) => {
+    const review = await lockOwnedReviewStateForSync(tx, operation.userId, operation.reviewId);
+    const current = await lockOwnedSyncOperation(
+      tx,
+      operation.userId,
+      operation.reviewId,
+      operation.id,
+    );
+    if (
+      !current ||
+      !["PROCESSING", "WAITING_RETRY"].includes(current.status) ||
+      (current.leaseExpiresAt && current.leaseExpiresAt > now)
+    )
+      return null;
+    const leaseExpiresAt = new Date(now.getTime() + env.REVIEW_IMAGE_SYNC_LEASE_MS);
+    const result = await tx.reviewImageSyncOperation.updateMany({
+      where: {
+        id: current.id,
+        userId: current.userId,
+        reviewId: current.reviewId,
+        status: current.status,
+        leaseOwner: current.leaseOwner,
+      },
+      data: { status: "PROCESSING", leaseOwner, leaseExpiresAt, attemptCount: { increment: 1 } },
+    });
+    if (result.count !== 1) return null;
+    const rows = await tx.reviewImage.findMany({
+      where: { syncOperationId: current.id, status: { in: ["PENDING", "READY"] }, deletedAt: null },
+      select: reviewImageSelect,
+    });
+    return {
+      review,
+      operation: { ...current, status: "PROCESSING" as const, leaseOwner, leaseExpiresAt },
+      rows,
+    };
+  });
+  if (!claimed) return "skipped";
+  const claim = {
+    operationId: operation.id,
+    userId: operation.userId,
+    reviewId: operation.reviewId,
+    leaseOwner,
+  };
+  const transition = async (error?: AppError) =>
+    prisma.$transaction(async (tx) => {
+      await lockOwnedReviewStateForSync(tx, operation.userId, operation.reviewId);
+      await lockOwnedSyncOperation(tx, operation.userId, operation.reviewId, operation.id);
+      return error
+        ? failClaimedReviewImageSync(tx, claim, error, now)
+        : waitForClaimedReviewImageSyncRetry(tx, claim, now);
+    });
+  if (!claimed.review || claimed.review.deletedAt) {
+    return (await transition(new AppError("Review not found", 404, "REVIEW_NOT_FOUND")))
+      ? "failed"
+      : "skipped";
+  }
+  if (isReviewImageSyncRetryExpired(claimed.operation, now)) {
+    return (await transition(
+      new AppError("Image retry deadline has expired", 503, "REVIEW_IMAGE_STORAGE_UNAVAILABLE"),
+    ))
+      ? "expired"
+      : "skipped";
+  }
+  let manifest;
+  try {
+    manifest = parseReviewImageSyncManifest(claimed.operation.manifest, claimed.rows.length);
+    const items = manifest.items.filter((item) => item.kind === "new");
+    if (
+      items.some(
+        (item) =>
+          !claimed.rows.some(
+            (row) => row.syncClientId === item.clientId && row.status === "PENDING",
+          ),
+      )
+    )
+      throw new Error("Missing reservation");
+  } catch {
+    return (await transition(
+      new AppError("Image reservations are incomplete", 409, "REVIEW_IMAGE_SYNC_FAILED"),
+    ))
+      ? "failed"
+      : "skipped";
+  }
+  const objectsPresent = await Promise.all(
+    claimed.rows.map((row) => deps.storage.objectExists(row.objectKey)),
+  );
+  if (objectsPresent.some((present) => !present))
+    return (await transition()) ? "waiting" : "skipped";
+  try {
+    await finalizeReviewImageSync(
+      { storage: deps.storage, now: () => now },
+      operation.userId,
+      claimed.operation,
+      claimed.rows,
+      manifest,
+      leaseOwner,
+    );
+    return "finalized";
+  } catch (error) {
+    if (error instanceof AppError) {
+      if (error.code === "REVIEW_IMAGE_SYNC_LEASE_LOST") return "skipped";
+      if (
+        [
+          "REVIEW_IMAGE_VERSION_CONFLICT",
+          "REVIEW_IMAGE_SET_CHANGED",
+          "REVIEW_NOT_FOUND",
+          "REVIEW_IMAGE_SYNC_FAILED",
+        ].includes(error.code)
+      )
+        return "failed";
+    }
+    throw error;
+  }
+};
+
 export const reconcileReviewImageSyncOperations = async (
   deps: ReconcileDeps,
   now = new Date(),
@@ -38,112 +174,19 @@ export const reconcileReviewImageSyncOperations = async (
       orderBy: { updatedAt: "asc" },
       take: batchSize,
     })) ?? [];
-  let finalized = 0;
-  let skipped = 0;
-  let expired = 0;
-  let errors = 0;
+  const result = { finalized: 0, skipped: 0, expired: 0, errors: 0, failed: 0, waiting: 0 };
   for (const operation of operations) {
-    if (
-      operation.status === "PROCESSING" &&
-      operation.leaseExpiresAt &&
-      operation.leaseExpiresAt > now
-    ) {
-      skipped += 1;
-      continue;
-    }
-    const rows = (await prisma.reviewImage.findMany({
-      where: {
-        syncOperationId: operation.id,
-        status: { in: ["PENDING", "READY"] },
-        deletedAt: null,
-      },
-      select: reviewImageSelect,
-    })) as ReviewImageRow[];
-    const objectsPresent = await Promise.all(
-      rows.map((row) => deps.storage.objectExists(row.objectKey)),
-    );
-    const retryExpired =
-      now.getTime() - operation.updatedAt.getTime() >= env.REVIEW_IMAGE_SYNC_RETRY_TTL_MS;
-    if (objectsPresent.some((present) => !present)) {
-      if (!retryExpired) {
-        await prisma.reviewImageSyncOperation.update({
-          where: { id: operation.id },
-          data: { status: "WAITING_RETRY", leaseOwner: null, leaseExpiresAt: null },
-        });
-      } else {
-        await prisma.reviewImageSyncOperation.update({
-          where: { id: operation.id },
-          data: {
-            status: "FAILED",
-            errorCode: "REVIEW_IMAGE_STORAGE_UNAVAILABLE",
-            errorDetails: { status: 503, message: "Review image storage is unavailable" },
-            leaseOwner: null,
-            leaseExpiresAt: null,
-            completedAt: now,
-            expiresAt: new Date(now.getTime() + env.REVIEW_IMAGE_IDEMPOTENCY_RETENTION_MS),
-          },
-        });
-        if (rows.length)
-          await prisma.reviewImage.updateMany({
-            where: { id: { in: rows.map((row) => row.id) }, status: "PENDING" },
-            data: {
-              status: "DELETING",
-              deletedAt: now,
-              purgeAfter: new Date(now.getTime() + env.REVIEW_IMAGE_IDEMPOTENCY_RETENTION_MS),
-            },
-          });
-        expired += 1;
-      }
-      continue;
-    }
-    const leaseOwner = randomUUID();
-    const claimed = await prisma.reviewImageSyncOperation.updateMany({
-      where: {
-        id: operation.id,
-        status: { in: ["PROCESSING", "WAITING_RETRY"] },
-        OR: [{ leaseExpiresAt: null }, { leaseExpiresAt: { lt: now } }],
-      },
-      data: {
-        status: "PROCESSING",
-        leaseOwner,
-        leaseExpiresAt: new Date(now.getTime() + env.REVIEW_IMAGE_SYNC_LEASE_MS),
-        attemptCount: { increment: 1 },
-      },
-    });
-    if (claimed.count !== 1) {
-      skipped += 1;
-      continue;
-    }
-    const claimedOperation = await prisma.reviewImageSyncOperation.findUnique({
-      where: { id: operation.id },
-    });
-    if (!claimedOperation) {
-      skipped += 1;
-      continue;
-    }
     try {
-      await finalizeReviewImageSync(
-        {
-          storage: deps.storage,
-          urlTtlSeconds: env.REVIEW_IMAGE_URL_TTL_SECONDS,
-          now: () => now,
-        } as ReviewImageSyncDeps,
-        operation.userId,
-        claimedOperation,
-        rows as never,
-        claimedOperation.manifest as unknown as ReviewImageSyncManifest,
-        leaseOwner,
-      );
-      finalized += 1;
+      result[await reconcileReviewImageSyncOperation(deps, operation, now)] += 1;
     } catch (error) {
-      errors += 1;
+      result.errors += 1;
       logger.error(
         { err: error, operationId: operation.id },
         "review image sync reconciliation failed",
       );
     }
   }
-  return { finalized, skipped, expired, errors };
+  return result;
 };
 
 export const reconcileReviewImages = async (

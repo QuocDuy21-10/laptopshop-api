@@ -21,8 +21,9 @@ export function installSyncTransaction(initial: State) {
       return op[key as keyof ReviewImageSyncOperation] === value;
     });
   };
-  prismaMock.$transaction.mockImplementation(
-    async (callback: (tx: unknown) => Promise<unknown>) => {
+  let queue = Promise.resolve();
+  prismaMock.$transaction.mockImplementation((callback: (tx: unknown) => Promise<unknown>) => {
+    const execution = queue.then(async () => {
       current = structuredClone(store.committed);
       try {
         const result = await callback(prismaMock);
@@ -31,8 +32,13 @@ export function installSyncTransaction(initial: State) {
       } finally {
         current = store.committed;
       }
-    },
-  );
+    });
+    queue = execution.then(
+      () => undefined,
+      () => undefined,
+    );
+    return execution;
+  });
   prismaMock.$queryRaw.mockImplementation(async (sql: TemplateStringsArray) =>
     sql.join("").includes("review_image_sync_operations")
       ? current.operation
@@ -66,8 +72,20 @@ export function installSyncTransaction(initial: State) {
       return { count: 1 };
     },
   );
-  prismaMock.reviewImage.findMany.mockImplementation(async () =>
-    current.images.filter((row) => row.status === "READY" && !row.deletedAt),
+  prismaMock.reviewImage.findMany.mockImplementation(
+    async ({
+      where,
+    }: {
+      where: { status?: string | { in: string[] }; syncOperationId?: number };
+    }) =>
+      current.images.filter(
+        (row) =>
+          !row.deletedAt &&
+          (where.syncOperationId === undefined || row.syncOperationId === where.syncOperationId) &&
+          (typeof where.status === "string"
+            ? row.status === where.status
+            : !where.status || where.status.in.includes(row.status)),
+      ),
   );
   prismaMock.reviewImage.updateMany.mockImplementation(
     async ({
