@@ -1,8 +1,9 @@
-import { Prisma } from "@prisma/client";
-import { prisma } from "config/client";
+import { type Prisma } from "@prisma/client";
+
+import { pageArgs, pageMeta } from "lib/http";
 import { env } from "config/env";
 import { AppError, isUniqueViolation, notFound } from "lib/errors";
-import { pageArgs, pageMeta } from "lib/http";
+import { prisma } from "config/client";
 import { assertDayRange, createdAtRange } from "lib/shop-time";
 import {
   publicReviewSelect,
@@ -24,12 +25,6 @@ import {
   type ReviewSummaryDto,
   type ReviewImageDto,
 } from "modules/reviews/reviews.mapper";
-import type { ReviewImageRow } from "modules/reviews/review-images.mapper";
-import {
-  reviewImageNow,
-  reviewImageTtl,
-  type ReviewImageRuntime,
-} from "modules/reviews/review-image-runtime";
 import type { ListProductReviewsQuery } from "modules/reviews/reviews.schema";
 import type {
   AdminListReviewsQuery,
@@ -37,6 +32,12 @@ import type {
   ModerateReviewBody,
   UpdateReviewBody,
 } from "modules/reviews/reviews.schema";
+import {
+  reviewImageNow,
+  reviewImageTtl,
+  type ReviewImageRuntime,
+} from "modules/reviews/review-image-runtime";
+import type { ReviewImageRow } from "modules/reviews/review-images.mapper";
 
 const defaultReviewImageRuntime: ReviewImageRuntime = {
   storage: null,
@@ -404,7 +405,7 @@ export const deleteMyReview = async (
     const images =
       (await tx.reviewImage.findMany({
         where: { reviewId, status: { in: ["PENDING", "READY"] }, deletedAt: null },
-        select: { id: true, objectKey: true },
+        select: { id: true, objectKey: true, status: true },
       })) ?? [];
     if (images.length)
       await tx.reviewImage.updateMany({
@@ -416,7 +417,9 @@ export const deleteMyReview = async (
         where: { id: { in: images.map((image) => image.id) }, status: "PENDING" },
         data: { deletedAt: now },
       });
-    return images;
+    // PENDING uploads may still write after a DELETE acknowledgement. Their uploader
+    // or reconciler retires them; an immediate-delete marker would suppress that purge.
+    return images.filter((image) => image.status === "READY");
   });
   if (runtime.storage && deletedImages.length) {
     await Promise.all(

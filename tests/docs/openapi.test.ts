@@ -281,6 +281,14 @@ describe("openapi document", () => {
     expect(op("/api/v1/reviews/{id}/images/{imageId}", "delete").deprecated).toBe(true);
   });
 
+  it("documents the inclusive review image upload size limit", () => {
+    for (const [path, method, field] of [["/api/v1/reviews/{id}/images", "post", "images"], ["/api/v1/reviews/{id}/images/sync", "put", "files"]]) {
+      const description = op(path, method).requestBody.content["multipart/form-data"].schema.properties[field].items.description;
+      expect(description).toContain("3145728");
+      expect(description).toContain("inclusive");
+    }
+  });
+
   it("documents the checkout idempotency header", () => {
     const params = op("/api/v1/orders", "post").parameters as any[];
     expect(params).toContainEqual(

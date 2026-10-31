@@ -10,6 +10,7 @@ jest.mock("modules/reviews/review-images.processor", () => ({
 }));
 
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
+import { installSyncTransaction } from "../../helpers/review-image-sync-transaction";
 import { createReviewImageSyncFingerprint } from "modules/reviews/review-image-sync.fingerprint";
 import {
   finalizeReviewImageSync,
@@ -94,10 +95,107 @@ beforeEach(() => {
   prismaMock.reviewImage.create.mockResolvedValue(pendingImage);
   prismaMock.reviewImage.update.mockResolvedValue(pendingImage);
   prismaMock.reviewImage.updateMany.mockResolvedValue({ count: 1 });
-  prismaMock.reviewImageSyncOperation.update.mockResolvedValue(operation({ status: "SUCCEEDED" }));
+  prismaMock.reviewImageSyncOperation.update.mockImplementation(async ({ data }) =>
+    operation(data),
+  );
+  prismaMock.reviewImageSyncOperation.updateMany.mockResolvedValue({ count: 1 });
 });
 
 describe("review image sync service", () => {
+  it("rearms cleanup for an upload that completed after review deletion", async () => {
+    const deletedAt = new Date();
+    const store = installSyncTransaction({
+      operation: operation(),
+      images: [{ ...pendingImage, deletedAt, storageDeletedAt: deletedAt }],
+      review: { ...review, deletedAt },
+    });
+    await expect(
+      finalizeReviewImageSync(deps(), 7, operation(), [pendingImage], manifest, "lease"),
+    ).rejects.toMatchObject({ code: "REVIEW_NOT_FOUND" });
+    expect(store.committed.images[0]).toMatchObject({ status: "DELETING", storageDeletedAt: null });
+  });
+  it("commits reserve failure before rejecting and replays the terminal status", async () => {
+    const store = installSyncTransaction({
+      operation: operation(),
+      images: [],
+      review: { ...review, imageVersion: 2 },
+    });
+    prismaMock.reviewImageSyncOperation.findUnique.mockResolvedValueOnce(null);
+    await expect(
+      syncReviewImages(deps(), 7, 18, "sync-key", manifest, [file()]),
+    ).rejects.toMatchObject({ code: "REVIEW_IMAGE_VERSION_CONFLICT" });
+    expect(store.committed.operation).toMatchObject({
+      status: "FAILED",
+      errorCode: "REVIEW_IMAGE_VERSION_CONFLICT",
+    });
+    await expect(getReviewImageSyncStatus(deps(), 7, 18, "sync-key")).resolves.toMatchObject({
+      status: "FAILED",
+      error: { code: "REVIEW_IMAGE_VERSION_CONFLICT" },
+    });
+  });
+
+  it.each(["version", "set", "deleted"])(
+    "commits finalize %s failure and retires only its pending images",
+    async (reason) => {
+      const winner = { ...pendingImage, id: 22, syncOperationId: 91, status: "READY" as const };
+      const store = installSyncTransaction({
+        operation: operation(),
+        images: [pendingImage, winner],
+        review: {
+          ...review,
+          imageVersion: reason === "version" ? 1 : 0,
+          deletedAt: reason === "deleted" ? new Date() : null,
+        },
+      });
+      const desired =
+        reason === "set"
+          ? {
+              expectedVersion: 0,
+              items: [{ kind: "existing" as const, clientId: "missing", imageId: 99 }],
+            }
+          : manifest;
+      await expect(
+        finalizeReviewImageSync(deps(), 7, operation(), [pendingImage], desired, "lease"),
+      ).rejects.toMatchObject({ status: reason === "deleted" ? 404 : 409 });
+      expect(store.committed.operation?.status).toBe("FAILED");
+      expect(store.committed.images[0].status).toBe("DELETING");
+      expect(store.committed.images[1]).toEqual(winner);
+    },
+  );
+
+  it("rolls back terminal state if reservation cleanup fails", async () => {
+    const store = installSyncTransaction({
+      operation: operation(),
+      images: [pendingImage],
+      review: { ...review, imageVersion: 1 },
+    });
+    prismaMock.reviewImage.updateMany.mockRejectedValueOnce(new Error("database write failed"));
+    await expect(
+      finalizeReviewImageSync(deps(), 7, operation(), [pendingImage], manifest, "lease"),
+    ).rejects.toThrow("database write failed");
+    expect(store.committed.operation?.status).toBe("PROCESSING");
+    expect(store.committed.images[0].status).toBe("PENDING");
+  });
+
+  it("does not overwrite succeeded operation from an old upload lease", async () => {
+    const runtime = deps();
+    prismaMock.reviewImageSyncOperation.findUnique.mockResolvedValueOnce(null);
+    const store = installSyncTransaction({
+      operation: operation(),
+      images: [pendingImage],
+      review,
+    });
+    prismaMock.reviewImageSyncOperation.findUnique.mockResolvedValueOnce(null);
+    runtime.storage.putObject = jest.fn(async () => {
+      store.committed.operation!.status = "SUCCEEDED";
+      store.committed.operation!.leaseOwner = null;
+      throw new Error("old upload failed late");
+    });
+    await expect(
+      syncReviewImages(runtime, 7, 18, "sync-key", manifest, [file()]),
+    ).rejects.toBeDefined();
+    expect(store.committed.operation?.status).toBe("SUCCEEDED");
+  });
   it("reserves, uploads and returns one committed image set", async () => {
     const runtime = deps();
     prismaMock.reviewImageSyncOperation.findUnique
@@ -163,6 +261,9 @@ describe("review image sync service", () => {
     const runtime = deps();
     (runtime.storage.putObject as jest.Mock).mockRejectedValueOnce(new Error("storage down"));
     prismaMock.reviewImage.findMany.mockResolvedValueOnce([]);
+    prismaMock.reviewImageSyncOperation.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(operation());
 
     await expect(
       syncReviewImages(runtime, 7, 18, "sync-key", manifest, [file()]),
@@ -170,7 +271,7 @@ describe("review image sync service", () => {
       code: "REVIEW_IMAGE_STORAGE_UNAVAILABLE",
       status: 503,
     });
-    expect(prismaMock.reviewImageSyncOperation.update).toHaveBeenCalledWith(
+    expect(prismaMock.reviewImageSyncOperation.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "WAITING_RETRY" }) }),
     );
   });
@@ -184,7 +285,7 @@ describe("review image sync service", () => {
       code: "REVIEW_IMAGE_VERSION_CONFLICT",
       status: 409,
     });
-    expect(prismaMock.reviewImageSyncOperation.update).toHaveBeenCalledWith(
+    expect(prismaMock.reviewImageSyncOperation.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "FAILED" }) }),
     );
   });

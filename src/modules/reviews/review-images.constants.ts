@@ -1,0 +1,1 @@
+export const MAX_REVIEW_IMAGE_INPUT_BYTES = 3 * 1024 * 1024;
