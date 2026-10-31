@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+
 import { AppError } from "lib/errors";
 import {
   assertProductSpecState,
@@ -92,6 +93,36 @@ describe("product spec normalization", () => {
       kind: "CONFIDENT",
       value: "DEDICATED",
     });
+  });
+
+  it("infers Intel Iris Xe Graphics as an integrated Intel GPU", () => {
+    expect(inferGpuType("Intel Iris Xe Graphics")).toMatchObject({
+      kind: "CONFIDENT",
+      value: "INTEGRATED",
+    });
+    expect(inferGpuProfile("Intel Iris Xe Graphics")).toEqual({
+      gpuBrand: "INTEL",
+      gpuType: "INTEGRATED",
+    });
+  });
+
+  it("replaces a stale GPU type when changed text proves integrated graphics", () => {
+    expect(reconcileProductSpecs(state(), { gpu: "Intel Iris Xe Graphics" })).toMatchObject({
+      gpuBrand: "INTEL",
+      gpuType: "INTEGRATED",
+    });
+  });
+
+  it("asks for the GPU type again instead of keeping a stale one", () => {
+    expect(() => reconcileProductSpecs(state(), { gpu: "Intel Arc Graphics" })).toThrow(
+      expect.objectContaining({ code: "INVALID_PRODUCT_SPECS" }),
+    );
+  });
+
+  it("asks for the CPU brand again instead of keeping a stale one", () => {
+    expect(() => reconcileProductSpecs(state(), { cpu: "MediaTek Kompanio 1380" })).toThrow(
+      expect.objectContaining({ code: "INVALID_PRODUCT_SPECS" }),
+    );
   });
 
   it("accepts an explicit type for an ambiguous GPU text", () => {
