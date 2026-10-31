@@ -774,19 +774,27 @@ export const listAvailablePromotions = async (now = new Date()) => {
     include: { couponPolicy: true, products: { select: { productId: true } } },
     orderBy: [{ startsAt: "asc" }, { id: "asc" }],
   });
-  return rows
-    .filter((row: any) => row.couponPolicy?.isPublic)
-    .map((row: any) => ({
-      id: row.id,
-      name: row.name,
-      description: row.description ?? null,
-      code: row.couponPolicy.code,
-      scope: row.couponPolicy.scope,
-      discountKind: row.discountKind,
-      discountValue: row.discountValue,
-      minOrderValue: row.couponPolicy.minOrderValue,
-      maxDiscount: row.couponPolicy.maxDiscount,
-      startsAt: row.startsAt,
-      endsAt: row.endsAt,
-    }));
+  return (
+    rows
+      // Prisma cannot compare two columns, so the usage cap is checked here
+      .filter(
+        (row: any) =>
+          row.couponPolicy?.isPublic &&
+          (row.couponPolicy.maxUses == null ||
+            row.couponPolicy.usedCount < row.couponPolicy.maxUses),
+      )
+      .map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description ?? null,
+        code: row.couponPolicy.code,
+        scope: row.couponPolicy.scope,
+        discountKind: row.discountKind,
+        discountValue: row.discountValue,
+        minOrderValue: row.couponPolicy.minOrderValue,
+        maxDiscount: row.couponPolicy.maxDiscount,
+        startsAt: row.startsAt,
+        endsAt: row.endsAt,
+      }))
+  );
 };

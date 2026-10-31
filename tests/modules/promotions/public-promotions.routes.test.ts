@@ -50,6 +50,35 @@ beforeEach(() => {
   ]);
 });
 
+it("hides public coupons whose usage is exhausted", async () => {
+  prismaMock.promotion.findMany.mockResolvedValue([
+    {
+      id: 3,
+      kind: "COUPON",
+      state: "ACTIVE",
+      name: "Sold out",
+      discountKind: "PERCENT",
+      discountValue: 10,
+      startsAt: new Date("2026-10-01T00:00:00Z"),
+      endsAt: new Date("2026-11-01T00:00:00Z"),
+      couponPolicy: {
+        code: "SOLDOUT",
+        scope: "ORDER",
+        minOrderValue: 0,
+        maxDiscount: null,
+        maxUses: 5,
+        usedCount: 5,
+        isPublic: true,
+      },
+      automaticPolicy: null,
+      products: [],
+    },
+  ]);
+  const response = await request(buildApp()).get(endpoint);
+  expect(response.status).toBe(200);
+  expect(response.body.data).toEqual([]);
+});
+
 it("returns only explicitly public running promotions without auth", async () => {
   const response = await request(buildApp()).get(endpoint);
   expect(response.status).toBe(200);
