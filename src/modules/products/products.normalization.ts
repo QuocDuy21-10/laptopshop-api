@@ -1,10 +1,10 @@
 import { AppError } from "lib/errors";
 import {
-  CPU_BRANDS,
-  GPU_BRANDS,
-  GPU_TYPES,
-  PANEL_TYPES,
-  RESOLUTION_TIERS,
+  type CPU_BRANDS,
+  type GPU_BRANDS,
+  type GPU_TYPES,
+  type PANEL_TYPES,
+  type RESOLUTION_TIERS,
 } from "modules/products/products.facets";
 
 export type CpuBrand = (typeof CPU_BRANDS)[number];
@@ -47,7 +47,7 @@ export const inferGpuProfile = (
   if (/\bnvidia\b/i.test(text)) return { gpuBrand: "NVIDIA", gpuType: "DEDICATED" };
   if (/\bapple\b/i.test(text)) return { gpuBrand: "APPLE", gpuType: "INTEGRATED" };
   if (/\bqualcomm\b|\badreno\b/i.test(text)) return { gpuBrand: "QUALCOMM", gpuType: "INTEGRATED" };
-  if (/\bintel\b/i.test(text) && /\b(?:iris|uhd|hd)\s+graphics\b/i.test(text)) {
+  if (/\bintel\b/i.test(text) && /\b(?:iris(?:\s+xe)?|uhd|hd)\s+graphics\b/i.test(text)) {
     return { gpuBrand: "INTEL", gpuType: "INTEGRATED" };
   }
   if (/\bintel\b/i.test(text) && /\barc\b/i.test(text)) {
@@ -80,7 +80,7 @@ export const inferGpuType = (text: string | null | undefined): Inference<GpuType
     return { kind: "CONFIDENT", value: "DEDICATED", evidence: text };
   }
   if (
-    /\b(?:uhd|iris|hd)\s+graphics\b/i.test(text) ||
+    /\b(?:uhd|iris(?:\s+xe)?|hd)\s+graphics\b/i.test(text) ||
     /\badreno\b/i.test(text) ||
     /\bapple\b/i.test(text)
   ) {
@@ -157,6 +157,12 @@ export const reconcileProductSpecs = (
     next.gpuBrand = null;
     next.gpuType = null;
   }
+  // new text the old brand/type was never checked against: drop them unless the patch restates them
+  if (cpuTextChanged && !patch.cpuBrand && !inferCpuBrand(next.cpu)) next.cpuBrand = null;
+  if (gpuTextChanged && !patch.gpuBrand && inferGpuBrand(next.gpu).kind !== "CONFIDENT")
+    next.gpuBrand = null;
+  if (gpuTextChanged && !patch.gpuType && inferGpuType(next.gpu).kind !== "CONFIDENT")
+    next.gpuType = null;
 
   if (next.cpu) {
     const inferred = inferCpuBrand(next.cpu);
