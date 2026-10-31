@@ -3,6 +3,7 @@ jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").pris
 import { describe, expect, it } from "@jest/globals";
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
 import { queryCatalogProductPage } from "modules/products/products.catalog.repository";
+import { logger } from "lib/logger";
 
 const query = {
   factory: [],
@@ -67,5 +68,44 @@ describe("public catalog repository", () => {
     await queryCatalogProductPage(query, { asOf: new Date(), mode: "LIST_PRICE" });
     const sql = (prismaMock.$queryRaw.mock.calls[0][0] as { strings: string[] }).strings.join(" ");
     expect(sql).not.toContain("catalog_price_windows");
+  });
+
+  it("keeps products without an active window by falling back to the list price", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    await queryCatalogProductPage(query, { asOf: new Date(), mode: "PROJECTED" });
+    const sql = (prismaMock.$queryRaw.mock.calls[0][0] as { strings: string[] }).strings.join(" ");
+    expect(sql).toContain("LEFT JOIN (");
+    expect(sql).toContain("COALESCE(cpw.effectiveCatalogPrice, p.price)");
+    expect(sql).toContain("cpw.windowRank = 1");
+    expect(sql).not.toContain("INNER JOIN catalog_price_windows");
+  });
+
+  it("warns about page rows priced without exactly one active window", async () => {
+    const warn = jest.spyOn(logger, "warn").mockImplementation(() => undefined);
+    prismaMock.$queryRaw.mockResolvedValue([
+      {
+        productId: 3,
+        effectiveCatalogPrice: 15_000_000,
+        averageRating: null,
+        totalReviews: 0,
+        windowCount: null,
+        total: 2,
+      },
+      {
+        productId: 5,
+        effectiveCatalogPrice: 20_000_000,
+        averageRating: null,
+        totalReviews: 0,
+        windowCount: BigInt(2),
+        total: 2,
+      },
+    ]);
+    const result = await queryCatalogProductPage(query, { asOf: new Date(), mode: "PROJECTED" });
+    expect(result.rows.map((row) => row.productId)).toEqual([3, 5]);
+    expect(warn).toHaveBeenCalledWith(
+      expect.objectContaining({ missing: [3], overlapping: [5] }),
+      expect.any(String),
+    );
+    warn.mockRestore();
   });
 });

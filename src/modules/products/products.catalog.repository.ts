@@ -1,8 +1,13 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "config/client";
+
 import { pageArgs } from "lib/http";
-import { andSql, catalogFilterConditions } from "modules/products/products.catalog-sql";
+import { prisma } from "config/client";
 import type { ListProductsQuery } from "modules/products/products.schema";
+import { andSql, catalogFilterConditions } from "modules/products/products.catalog-sql";
+import {
+  activeCatalogPriceWindows,
+  warnOnUnhealthyCatalogWindows,
+} from "modules/pricing/catalog-price-projection.repository";
 
 export type CatalogPricingContext = { asOf: Date; mode: "LIST_PRICE" | "PROJECTED" };
 export type CatalogPageRow = {
@@ -18,6 +23,7 @@ type CatalogRow = {
   effectiveCatalogPrice: number | string | null;
   averageRating: number | string | null;
   totalReviews: bigint | number;
+  windowCount: bigint | number | null;
   total: bigint | number;
 };
 
@@ -41,32 +47,35 @@ export const queryCatalogProductPage = async (
   });
   if (query.minRating !== undefined)
     conditions.push(Prisma.sql`b.averageRating >= ${query.minRating}`);
-  const projectionJoin =
-    context.mode === "PROJECTED"
-      ? Prisma.sql`INNER JOIN catalog_price_windows cpw ON cpw.productId = p.id AND cpw.validFrom <= ${context.asOf} AND (cpw.validUntil IS NULL OR cpw.validUntil > ${context.asOf})`
-      : Prisma.empty;
-  const effectiveSelect =
-    context.mode === "PROJECTED" ? Prisma.sql`cpw.effectiveCatalogPrice` : Prisma.sql`p.price`;
+  const projected = context.mode === "PROJECTED";
+  const projectionJoin = projected
+    ? Prisma.sql`LEFT JOIN (${activeCatalogPriceWindows(context.asOf)}) cpw ON cpw.productId = p.id AND cpw.windowRank = 1`
+    : Prisma.empty;
+  const effectiveSelect = projected
+    ? Prisma.sql`COALESCE(cpw.effectiveCatalogPrice, p.price)`
+    : Prisma.sql`p.price`;
+  const windowCountSelect = projected ? Prisma.sql`cpw.windowCount` : Prisma.sql`1`;
   const rows = await prisma.$queryRaw<CatalogRow[]>(Prisma.sql`
     WITH review_stats AS (
       SELECT productId, ROUND(AVG(rating), 1) AS averageRating, COUNT(*) AS totalReviews
       FROM reviews WHERE status = 'PUBLISHED' AND deletedAt IS NULL GROUP BY productId
     ), base AS (
-      SELECT p.id AS productId, p.price, ${effectiveSelect} AS effectiveCatalogPrice,
+      SELECT p.id AS productId, p.price, ${effectiveSelect} AS effectiveCatalogPrice, ${windowCountSelect} AS windowCount,
              rs.averageRating, COALESCE(rs.totalReviews, 0) AS totalReviews,
              p.isActive, p.name, p.factory, p.target, p.cpuBrand, p.gpuBrand, p.gpuType,
              p.ramGb, p.storageGb, p.screenSizeInch, p.resolutionTier, p.panelType,
              p.refreshRateHz, p.batteryWh, p.weightGrams, p.warrantyMonths, p.quantity
       FROM products p LEFT JOIN review_stats rs ON rs.productId = p.id ${projectionJoin}
     ), filtered AS (
-      SELECT b.productId, b.effectiveCatalogPrice, b.averageRating, b.totalReviews
+      SELECT b.productId, b.effectiveCatalogPrice, b.averageRating, b.totalReviews, b.windowCount
       FROM base b ${andSql(conditions)}
     ), page AS (
       SELECT * FROM filtered ORDER BY ${orderBy(query.sort)} LIMIT ${take} OFFSET ${skip}
     ), total_count AS (SELECT COUNT(*) AS total FROM filtered)
-    SELECT page.productId, page.effectiveCatalogPrice, page.averageRating, page.totalReviews, total_count.total
+    SELECT page.productId, page.effectiveCatalogPrice, page.averageRating, page.totalReviews, page.windowCount, total_count.total
     FROM total_count LEFT JOIN page ON TRUE
   `);
+  if (projected) warnOnUnhealthyCatalogWindows(rows);
   return {
     rows: rows
       .filter((row) => row.productId !== null)
