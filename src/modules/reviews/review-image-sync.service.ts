@@ -1,9 +1,25 @@
-import { Prisma, type ReviewImageSyncOperation } from "@prisma/client";
 import { randomUUID } from "node:crypto";
+import { type Prisma, type ReviewImageSyncOperation } from "@prisma/client";
+
 import { env } from "config/env";
-import { prisma } from "config/client";
 import { AppError, isUniqueViolation } from "lib/errors";
-import { createReviewImageSyncFingerprint } from "modules/reviews/review-image-sync.fingerprint";
+import { prisma } from "config/client";
+import { reviewImageNow, reviewImageTtl } from "modules/reviews/review-image-runtime";
+import { type ReviewImageRow, reviewImageSelect } from "modules/reviews/review-images.mapper";
+import type { ReviewImageDeps } from "modules/reviews/review-images.service";
+import {
+  failClaimedReviewImageSync,
+  waitForClaimedReviewImageSyncRetry,
+  isReviewImageSyncRetryExpired,
+} from "modules/reviews/review-image-sync.state";
+import type {
+  ReviewImageSyncItem,
+  ReviewImageSyncManifest,
+} from "modules/reviews/review-image-sync.types";
+import {
+  processReviewImage,
+  type ProcessedReviewImage,
+} from "modules/reviews/review-images.processor";
 import {
   snapshotFromJson,
   type ReviewImageSyncResultDto,
@@ -14,28 +30,33 @@ import {
 import {
   activeReviewImages,
   findSyncOperation,
-  lockOwnedReviewForSync,
-  type ReviewImageSyncClient,
+  lockOwnedReviewStateForSync,
+  lockOwnedSyncOperation,
 } from "modules/reviews/review-image-sync.repository";
-import {
-  processReviewImage,
-  type ProcessedReviewImage,
-} from "modules/reviews/review-images.processor";
-import { reviewImageNow, reviewImageTtl } from "modules/reviews/review-image-runtime";
-import type { ReviewImageDeps } from "modules/reviews/review-images.service";
-import type { ReviewImageRow } from "modules/reviews/review-images.mapper";
-import { reviewImageSelect } from "modules/reviews/review-images.mapper";
-import type {
-  ReviewImageSyncItem,
-  ReviewImageSyncManifest,
-} from "modules/reviews/review-image-sync.types";
+import { createReviewImageSyncFingerprint } from "modules/reviews/review-image-sync.fingerprint";
 
 export type ReviewImageSyncDeps = ReviewImageDeps;
 
-type ReservedImage = ReviewImageRow & {
-  syncClientId: string | null;
-  syncOperationId: number | null;
+type ReservedImage = ReviewImageRow;
+type Outcome<T> = { ok: true; value: T } | { ok: false; error: AppError };
+const resultOf = <T>(outcome: Outcome<T>): T => {
+  if (outcome.ok === false) throw outcome.error;
+  return outcome.value;
 };
+type Reservation = {
+  operation: ReviewImageSyncOperation;
+  rows: ReservedImage[];
+  replay: boolean;
+  leaseOwner?: string;
+};
+const leaseLost = () =>
+  new AppError("Review image sync lease was lost", 409, "REVIEW_IMAGE_SYNC_LEASE_LOST");
+const claimFor = (operation: ReviewImageSyncOperation, leaseOwner: string) => ({
+  operationId: operation.id,
+  userId: operation.userId,
+  reviewId: operation.reviewId,
+  leaseOwner,
+});
 
 const inProgress = () =>
   new AppError("Review image sync is already in progress", 409, "REVIEW_IMAGE_SYNC_IN_PROGRESS");
@@ -55,12 +76,6 @@ const setConflict = () =>
   new AppError("Review image set has changed", 409, "REVIEW_IMAGE_SET_CHANGED");
 const storageUnavailable = () =>
   new AppError("Review image storage is unavailable", 503, "REVIEW_IMAGE_STORAGE_UNAVAILABLE");
-
-const errorDetails = (error: AppError) => ({
-  status: error.status,
-  message: error.message,
-  details: (error.details ?? null) as Prisma.InputJsonValue,
-});
 
 const replayFailure = (operation: ReviewImageSyncOperation): never => {
   const details = (operation.errorDetails ?? {}) as {
@@ -138,26 +153,6 @@ const signSnapshot = async (
   return { ...snapshot, replayed, images };
 };
 
-const markOperationFailure = async (
-  tx: ReviewImageSyncClient,
-  operationId: number,
-  error: AppError,
-  now: Date,
-) => {
-  await tx.reviewImageSyncOperation.update({
-    where: { id: operationId },
-    data: {
-      status: "FAILED",
-      errorCode: error.code,
-      errorDetails: errorDetails(error),
-      leaseOwner: null,
-      leaseExpiresAt: null,
-      completedAt: now,
-      expiresAt: new Date(now.getTime() + env.REVIEW_IMAGE_IDEMPOTENCY_RETENTION_MS),
-    },
-  });
-};
-
 const reserveOperation = async (
   deps: ReviewImageSyncDeps,
   userId: number,
@@ -169,8 +164,8 @@ const reserveOperation = async (
 ) => {
   const now = reviewImageNow(deps);
   const leaseOwner = randomUUID();
-  return prisma.$transaction(async (tx) => {
-    const locked = await lockOwnedReviewForSync(tx, userId, reviewId);
+  const outcome = await prisma.$transaction<Outcome<Reservation>>(async (tx) => {
+    const locked = await lockOwnedReviewStateForSync(tx, userId, reviewId);
     if (!locked) throw notFound();
 
     let operation = await tx.reviewImageSyncOperation.findUnique({
@@ -179,7 +174,7 @@ const reserveOperation = async (
     if (operation) {
       if (operation.requestFingerprint !== fingerprint) throw idempotencyConflict();
       if (operation.status === "SUCCEEDED")
-        return { operation, rows: [] as ReservedImage[], replay: true };
+        return { ok: true, value: { operation, rows: [], replay: true } };
       if (operation.status === "FAILED") replayFailure(operation);
       if (
         operation.status === "PROCESSING" &&
@@ -187,6 +182,7 @@ const reserveOperation = async (
         operation.leaseExpiresAt > now
       )
         throw inProgress();
+      const expired = isReviewImageSyncRetryExpired(operation, now);
       operation = await tx.reviewImageSyncOperation.update({
         where: { id: operation.id },
         data: {
@@ -196,6 +192,16 @@ const reserveOperation = async (
           attemptCount: { increment: 1 },
         },
       });
+      if (expired || locked.deletedAt) {
+        const error = locked.deletedAt ? notFound() : storageUnavailable();
+        await failClaimedReviewImageSync(
+          tx,
+          claimFor(operation, operation.leaseOwner ?? leaseOwner),
+          error,
+          now,
+        );
+        return { ok: false, error };
+      }
       const rows = (await tx.reviewImage.findMany({
         where: {
           syncOperationId: operation.id,
@@ -204,8 +210,12 @@ const reserveOperation = async (
         },
         select: reviewImageSelect,
       })) as ReservedImage[];
-      return { operation, rows, replay: false, leaseOwner: operation.leaseOwner ?? leaseOwner };
+      return {
+        ok: true,
+        value: { operation, rows, replay: false, leaseOwner: operation.leaseOwner ?? leaseOwner },
+      };
     } else {
+      if (locked.deletedAt) throw notFound();
       operation = await tx.reviewImageSyncOperation.create({
         data: {
           userId,
@@ -224,16 +234,26 @@ const reserveOperation = async (
 
     if (locked.imageVersion !== manifest.expectedVersion) {
       const error = versionConflict(manifest.expectedVersion, locked.imageVersion);
-      await markOperationFailure(tx, operation.id, error, now);
-      throw error;
+      await failClaimedReviewImageSync(
+        tx,
+        claimFor(operation, operation.leaseOwner ?? leaseOwner),
+        error,
+        now,
+      );
+      return { ok: false, error };
     }
 
     const active = await activeReviewImages(tx, reviewId);
     const existingIds = manifestExistingIds(manifest);
     if (existingIds.some((id) => !active.some((image) => image.id === id))) {
       const error = setConflict();
-      await markOperationFailure(tx, operation.id, error, now);
-      throw error;
+      await failClaimedReviewImageSync(
+        tx,
+        claimFor(operation, operation.leaseOwner ?? leaseOwner),
+        error,
+        now,
+      );
+      return { ok: false, error };
     }
 
     const rows: ReservedImage[] = [];
@@ -258,8 +278,12 @@ const reserveOperation = async (
       });
       rows.push(created as ReservedImage);
     }
-    return { operation, rows, replay: false, leaseOwner: operation.leaseOwner ?? leaseOwner };
+    return {
+      ok: true,
+      value: { operation, rows, replay: false, leaseOwner: operation.leaseOwner ?? leaseOwner },
+    };
   });
+  return resultOf(outcome);
 };
 
 export const finalizeReviewImageSync = async (
@@ -271,35 +295,50 @@ export const finalizeReviewImageSync = async (
   leaseOwner: string,
 ): Promise<ReviewImageSyncSnapshot> => {
   const now = reviewImageNow(deps);
-  return prisma.$transaction(async (tx) => {
-    const currentOperation = await tx.reviewImageSyncOperation.findUnique({
-      where: { id: operation.id },
-    });
-    if (!currentOperation || currentOperation.leaseOwner !== leaseOwner)
-      throw new AppError("Review image sync lease was lost", 409, "REVIEW_IMAGE_SYNC_LEASE_LOST");
-    const locked = await lockOwnedReviewForSync(tx, userId, operation.reviewId);
-    if (!locked) throw notFound();
-    if (locked.imageVersion !== manifest.expectedVersion) {
-      const error = versionConflict(manifest.expectedVersion, locked.imageVersion);
-      await markOperationFailure(tx, operation.id, error, now);
-      await tx.reviewImage.updateMany({
-        where: { syncOperationId: operation.id, status: "PENDING" },
-        data: {
-          status: "DELETING",
-          deletedAt: now,
-          purgeAfter: new Date(now.getTime() + env.REVIEW_IMAGE_IDEMPOTENCY_RETENTION_MS),
-        },
-      });
-      throw error;
-    }
+  const outcome = await prisma.$transaction<Outcome<ReviewImageSyncSnapshot>>(async (tx) => {
+    const locked = await lockOwnedReviewStateForSync(tx, userId, operation.reviewId);
+    const currentOperation = await lockOwnedSyncOperation(
+      tx,
+      userId,
+      operation.reviewId,
+      operation.id,
+    );
+    if (
+      !currentOperation ||
+      currentOperation.status !== "PROCESSING" ||
+      currentOperation.leaseOwner !== leaseOwner
+    )
+      throw leaseLost();
+    const fail = async (error: AppError): Promise<Outcome<ReviewImageSyncSnapshot>> => {
+      if (
+        !(await failClaimedReviewImageSync(tx, claimFor(currentOperation, leaseOwner), error, now))
+      )
+        throw leaseLost();
+      return { ok: false, error };
+    };
+    if (!locked || locked.deletedAt) return fail(notFound());
+    if (locked.imageVersion !== manifest.expectedVersion)
+      return fail(versionConflict(manifest.expectedVersion, locked.imageVersion));
 
     const active = await activeReviewImages(tx, operation.reviewId);
     const existingIds = manifestExistingIds(manifest);
-    if (existingIds.some((id) => !active.some((image) => image.id === id))) {
-      const error = setConflict();
-      await markOperationFailure(tx, operation.id, error, now);
-      throw error;
-    }
+    if (existingIds.some((id) => !active.some((image) => image.id === id)))
+      return fail(setConflict());
+    if (
+      manifestNewItems(manifest).some(
+        (item) =>
+          !reservations.some(
+            (row) =>
+              row.syncOperationId === operation.id &&
+              row.syncClientId === item.clientId &&
+              row.status === "PENDING" &&
+              !row.deletedAt,
+          ),
+      )
+    )
+      return fail(
+        new AppError("Image reservations are incomplete", 409, "REVIEW_IMAGE_SYNC_FAILED"),
+      );
 
     const reservationsByClient = new Map(
       reservations.flatMap((row) => (row.syncClientId ? [[row.syncClientId, row] as const] : [])),
@@ -368,8 +407,9 @@ export const finalizeReviewImageSync = async (
         expiresAt: new Date(now.getTime() + env.REVIEW_IMAGE_IDEMPOTENCY_RETENTION_MS),
       },
     });
-    return snapshot;
+    return { ok: true, value: snapshot };
   });
+  return resultOf(outcome);
 };
 
 export const syncReviewImages = async (
@@ -425,9 +465,19 @@ export const syncReviewImages = async (
         }),
       );
     } catch {
-      await prisma.reviewImageSyncOperation.update({
-        where: { id: reservation.operation.id },
-        data: { status: "WAITING_RETRY", leaseOwner: null, leaseExpiresAt: null },
+      await prisma.$transaction(async (tx) => {
+        await lockOwnedReviewStateForSync(tx, userId, reviewId);
+        const current = await lockOwnedSyncOperation(
+          tx,
+          userId,
+          reviewId,
+          reservation.operation.id,
+        );
+        if (!current) return;
+        const claim = claimFor(current, reservation.leaseOwner!);
+        if (isReviewImageSyncRetryExpired(current, reviewImageNow(deps)))
+          await failClaimedReviewImageSync(tx, claim, storageUnavailable(), reviewImageNow(deps));
+        else await waitForClaimedReviewImageSyncRetry(tx, claim, reviewImageNow(deps));
       });
       throw storageUnavailable();
     }
