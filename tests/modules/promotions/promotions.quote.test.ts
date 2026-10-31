@@ -17,7 +17,7 @@ const couponPromotion = {
   discountValue: 10,
   pricingVersion: 1,
   startsAt: new Date("2026-10-01T00:00:00Z"),
-  endsAt: new Date("2026-11-01T00:00:00Z"),
+  endsAt: new Date("2099-01-01T00:00:00Z"),
   couponPolicy: {
     promotionId: 10,
     code: "WELCOME10",
@@ -47,7 +47,7 @@ const flashSalePromotion = (overrides: Record<string, unknown> = {}) => ({
   discountValue: 5_000_000,
   pricingVersion: 3,
   startsAt: new Date("2026-10-01T00:00:00Z"),
-  endsAt: new Date("2026-11-01T00:00:00Z"),
+  endsAt: new Date("2099-01-01T00:00:00Z"),
   automaticPolicy: null,
   products: [],
   flashSalePolicy: {
@@ -75,7 +75,7 @@ const automaticPromotion = (overrides: Record<string, unknown> = {}) => ({
   discountValue: 1_000_000,
   pricingVersion: 2,
   startsAt: new Date("2026-10-01T00:00:00Z"),
-  endsAt: new Date("2026-11-01T00:00:00Z"),
+  endsAt: new Date("2099-01-01T00:00:00Z"),
   automaticPolicy: { priority: 1, stackableWithCoupon: true },
   products: [{ productId: 1, product: { price: 20_000_000 } }],
   flashSalePolicy: null,
@@ -124,7 +124,7 @@ describe("quoteOrder", () => {
         discountValue: 20,
         pricingVersion: 3,
         startsAt: new Date("2026-10-01T00:00:00Z"),
-        endsAt: new Date("2026-11-01T00:00:00Z"),
+        endsAt: new Date("2099-01-01T00:00:00Z"),
         automaticPolicy: null,
         products: [],
         flashSalePolicy: {
