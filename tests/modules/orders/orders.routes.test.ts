@@ -45,7 +45,7 @@ const flashWinner = {
   stackableWithCoupon: true,
   pricingVersion: 1,
   startsAt: new Date("2026-10-01T00:00:00.000Z"),
-  endsAt: new Date("2026-11-01T00:00:00.000Z"),
+  endsAt: new Date("2099-01-01T00:00:00.000Z"),
   unitDiscount: 200,
   totalQuota: 10,
   claimedUnits: 0,
