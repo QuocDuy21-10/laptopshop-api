@@ -102,6 +102,18 @@ beforeEach(() => {
 });
 
 describe("review image sync service", () => {
+  it("rearms cleanup for an upload that completed after review deletion", async () => {
+    const deletedAt = new Date();
+    const store = installSyncTransaction({
+      operation: operation(),
+      images: [{ ...pendingImage, deletedAt, storageDeletedAt: deletedAt }],
+      review: { ...review, deletedAt },
+    });
+    await expect(
+      finalizeReviewImageSync(deps(), 7, operation(), [pendingImage], manifest, "lease"),
+    ).rejects.toMatchObject({ code: "REVIEW_NOT_FOUND" });
+    expect(store.committed.images[0]).toMatchObject({ status: "DELETING", storageDeletedAt: null });
+  });
   it("commits reserve failure before rejecting and replays the terminal status", async () => {
     const store = installSyncTransaction({
       operation: operation(),

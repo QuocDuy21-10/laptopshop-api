@@ -46,7 +46,8 @@ export const failClaimedReviewImageSync = async (
   if (changed.count !== 1) return false;
   await tx.reviewImage.updateMany({
     where: { syncOperationId: claim.operationId, status: "PENDING" },
-    data: { status: "DELETING", deletedAt: now, purgeAfter: expiresAt },
+    // A review deletion may have attempted storage deletion before the PUT finished.
+    data: { status: "DELETING", deletedAt: now, storageDeletedAt: null, purgeAfter: expiresAt },
   });
   return true;
 };
