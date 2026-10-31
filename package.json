@@ -89,6 +89,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@jest/globals": "30.5.2",
     "@types/bcrypt": "5.0.2",
     "@types/compression": "1.8.1",
     "@types/cors": "2.8.17",
