@@ -77,8 +77,15 @@ export const listProducts = async (
       meta: pageMeta(q, page.total),
     };
   }
-  if (!admin && (q.minRating !== undefined || q.sort === "rating_desc")) {
-    const ratedPage = await queryRatedProductPage(q);
+  // Prisma cannot compare claimedUnits < totalQuota, so a flash sale listing uses the SQL path
+  const publicQuery = admin ? null : (q as ListProductsQuery);
+  if (
+    publicQuery &&
+    (publicQuery.minRating !== undefined ||
+      publicQuery.sort === "rating_desc" ||
+      publicQuery.flashSale === true)
+  ) {
+    const ratedPage = await queryRatedProductPage(publicQuery);
     const rows = await prisma.product.findMany({
       where: { id: { in: ratedPage.productIds }, isActive: true },
     });

@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+
 import { PRICE_RANGES, type ProductFacetKey } from "modules/products/products.facets";
 import type { ProductFilterQuery } from "modules/products/products.schema";
 
@@ -99,3 +100,14 @@ export const catalogFilterConditions = (
 
 export const andSql = (conditions: Prisma.Sql[]) =>
   conditions.length ? Prisma.sql`WHERE ${Prisma.join(conditions, " AND ")}` : Prisma.empty;
+
+// mirrors promotion-resolver: flash sale candidates come only from quota rows, so the filter
+// never lists a product the resolver would not price as a flash sale (sold-out quotas excluded)
+export const flashSalePredicate = (productId: Prisma.Sql, now: Date) => Prisma.sql`EXISTS (
+  SELECT 1 FROM flash_sale_product_quotas q
+  JOIN promotions pr ON pr.id = q.promotionId
+  WHERE q.productId = ${productId}
+    AND pr.kind = ${"FLASH_SALE"} AND pr.state = ${"ACTIVE"}
+    AND pr.startsAt <= ${now} AND pr.endsAt > ${now}
+    AND q.claimedUnits < q.totalQuota
+)`;

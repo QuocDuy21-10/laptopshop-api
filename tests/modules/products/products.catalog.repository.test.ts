@@ -32,6 +32,28 @@ const query = {
 beforeEach(resetPrisma);
 
 describe("public catalog repository", () => {
+  it("restricts to products with a running flash sale that still has quota", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    const asOf = new Date("2026-10-27T00:00:00.000Z");
+    await queryCatalogProductPage({ ...query, flashSale: true }, { asOf, mode: "LIST_PRICE" });
+    const [statement] = prismaMock.$queryRaw.mock.calls[0];
+    const sql = statement.strings.join(" ");
+    expect(sql).toContain("flash_sale_product_quotas");
+    expect(sql).toContain("b.productId");
+    expect(sql).toContain("claimedUnits < q.totalQuota");
+    expect(statement.values).toEqual(expect.arrayContaining(["FLASH_SALE", "ACTIVE", asOf]));
+  });
+
+  it("does not touch flash sale tables when the filter is absent", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    await queryCatalogProductPage(query, {
+      asOf: new Date("2026-10-27T00:00:00.000Z"),
+      mode: "LIST_PRICE",
+    });
+    const [statement] = prismaMock.$queryRaw.mock.calls[0];
+    expect(statement.strings.join(" ")).not.toContain("flash_sale_product_quotas");
+  });
+
   it("orders by units sold with null treated as zero", async () => {
     prismaMock.$queryRaw.mockResolvedValue([]);
     await queryCatalogProductPage(

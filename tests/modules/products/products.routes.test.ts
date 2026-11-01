@@ -183,6 +183,33 @@ describe("GET /api/v1/products", () => {
     const invalid = await request(buildApp()).get("/api/v1/products?sort=name_asc");
     expect(invalid.status).toBe(400);
   });
+
+  it("uses the SQL path with the flash sale predicate when flashSale=true", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([
+      { id: 1, averageRating: null, totalReviews: BigInt(0), total: BigInt(1) },
+    ]);
+    prismaMock.product.findMany.mockResolvedValue([product]);
+
+    const res = await request(buildApp()).get("/api/v1/products?flashSale=true&sort=sold_desc");
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.map((p: { id: number }) => p.id)).toEqual([1]);
+    expect(res.body.meta).toMatchObject({ total: 1 });
+    const [statement] = prismaMock.$queryRaw.mock.calls[0];
+    expect(statement.strings.join(" ")).toContain("flash_sale_product_quotas");
+    expect(prismaMock.product.count).not.toHaveBeenCalled();
+  });
+
+  it("keeps the plain Prisma path when flashSale=false and rejects a malformed flag", async () => {
+    prismaMock.product.count.mockResolvedValue(0);
+    prismaMock.product.findMany.mockResolvedValue([]);
+    const res = await request(buildApp()).get("/api/v1/products?flashSale=false");
+    expect(res.status).toBe(200);
+    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+
+    const invalid = await request(buildApp()).get("/api/v1/products?flashSale=abc");
+    expect(invalid.status).toBe(400);
+  });
 });
 
 describe("GET /api/v1/products/:id", () => {
