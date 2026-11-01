@@ -32,6 +32,7 @@ const orderBy = (sort: ListProductsQuery["sort"]) => {
     return Prisma.sql`averageRating IS NULL ASC, averageRating DESC, totalReviews DESC, productId ASC`;
   if (sort === "price_desc") return Prisma.sql`effectiveCatalogPrice DESC, productId ASC`;
   if (sort === "price_asc") return Prisma.sql`effectiveCatalogPrice ASC, productId ASC`;
+  if (sort === "sold_desc") return Prisma.sql`COALESCE(sold, 0) DESC, productId ASC`;
   return Prisma.sql`productId ASC`;
 };
 
@@ -64,10 +65,10 @@ export const queryCatalogProductPage = async (
              rs.averageRating, COALESCE(rs.totalReviews, 0) AS totalReviews,
              p.isActive, p.name, p.factory, p.target, p.cpuBrand, p.gpuBrand, p.gpuType,
              p.ramGb, p.storageGb, p.screenSizeInch, p.resolutionTier, p.panelType,
-             p.refreshRateHz, p.batteryWh, p.weightGrams, p.warrantyMonths, p.quantity
+             p.refreshRateHz, p.batteryWh, p.weightGrams, p.warrantyMonths, p.quantity, p.sold
       FROM products p LEFT JOIN review_stats rs ON rs.productId = p.id ${projectionJoin}
     ), filtered AS (
-      SELECT b.productId, b.effectiveCatalogPrice, b.averageRating, b.totalReviews, b.windowCount
+      SELECT b.productId, b.effectiveCatalogPrice, b.averageRating, b.totalReviews, b.windowCount, b.sold
       FROM base b ${andSql(conditions)}
     ), page AS (
       SELECT * FROM filtered ORDER BY ${orderBy(query.sort)} LIMIT ${take} OFFSET ${skip}

@@ -32,6 +32,18 @@ const query = {
 beforeEach(resetPrisma);
 
 describe("public catalog repository", () => {
+  it("orders by units sold with null treated as zero", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    await queryCatalogProductPage(
+      { ...query, sort: "sold_desc" },
+      { asOf: new Date("2026-10-27T00:00:00.000Z"), mode: "LIST_PRICE" },
+    );
+    const [statement] = prismaMock.$queryRaw.mock.calls[0];
+    const sql = statement.strings.join(" ");
+    expect(sql).toContain("COALESCE(sold, 0) DESC, productId ASC");
+    expect(sql).toContain("p.sold");
+  });
+
   it("maps projected page rows and preserves total when a page row exists", async () => {
     prismaMock.$queryRaw.mockResolvedValue([
       {

@@ -9,6 +9,15 @@ beforeEach(resetPrisma);
 const query = (input: Record<string, unknown> = {}) => listProductsQuery.parse(input);
 
 describe("rated catalog repository", () => {
+  it("orders by units sold with null treated as zero", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    await queryRatedProductPage(query({ minRating: "3", sort: "sold_desc" }));
+    const [statement] = prismaMock.$queryRaw.mock.calls[0];
+    const sql = statement.strings.join(" ");
+    expect(sql).toContain("COALESCE(sold, 0) DESC, id ASC");
+    expect(sql).toContain("p.sold");
+  });
+
   it("binds user values and restores rating tie-breakers with nulls last", async () => {
     prismaMock.$queryRaw.mockResolvedValue([
       { id: 2, averageRating: null, totalReviews: BigInt(0), total: BigInt(3) },
