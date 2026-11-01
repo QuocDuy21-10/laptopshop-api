@@ -282,8 +282,12 @@ describe("openapi document", () => {
   });
 
   it("documents the inclusive review image upload size limit", () => {
-    for (const [path, method, field] of [["/api/v1/reviews/{id}/images", "post", "images"], ["/api/v1/reviews/{id}/images/sync", "put", "files"]]) {
-      const description = op(path, method).requestBody.content["multipart/form-data"].schema.properties[field].items.description;
+    for (const [path, method, field] of [
+      ["/api/v1/reviews/{id}/images", "post", "images"],
+      ["/api/v1/reviews/{id}/images/sync", "put", "files"],
+    ]) {
+      const description = op(path, method).requestBody.content["multipart/form-data"].schema
+        .properties[field].items.description;
       expect(description).toContain("3145728");
       expect(description).toContain("inclusive");
     }
@@ -359,6 +363,18 @@ describe("openapi document", () => {
     expect(
       (doc.components?.schemas?.PromotionDetail as any).allOf[1].properties.flashSale,
     ).toBeDefined();
+  });
+
+  it("documents every coupon policy field on the promotion detail", () => {
+    const coupon = (doc.components?.schemas?.PromotionDetail as any).allOf[1].properties.coupon;
+    expect(Object.keys(coupon.properties)).toEqual(
+      expect.arrayContaining([
+        "minOrderValue",
+        "maxDiscount",
+        "maxUsesPerUser",
+        "targetProductIds",
+      ]),
+    );
   });
 
   it("documents product visibility and the admin product filters", () => {
