@@ -47,8 +47,7 @@
   },
   "keywords": [
     "nodejs",
-    "express",
-    "mongodb"
+    "express"
   ],
   "author": "duy",
   "license": "ISC",
