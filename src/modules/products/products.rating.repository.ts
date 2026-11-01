@@ -3,7 +3,11 @@ import { Prisma } from "@prisma/client";
 import { pageArgs } from "lib/http";
 import { prisma } from "config/client";
 import type { ListProductsQuery } from "modules/products/products.schema";
-import { andSql, catalogFilterConditions } from "modules/products/products.catalog-sql";
+import {
+  andSql,
+  catalogFilterConditions,
+  flashSalePredicate,
+} from "modules/products/products.catalog-sql";
 import type { ProductReviewSummary } from "modules/products/products.review-stats.repository";
 
 type RatingRow = {
@@ -30,10 +34,12 @@ const orderBy = (sort: ListProductsQuery["sort"]) => {
 
 export const queryRatedProductPage = async (
   query: ListProductsQuery,
+  now: Date = new Date(),
 ): Promise<RatedProductPage> => {
   const { skip, take } = pageArgs(query);
   const conditions = catalogFilterConditions(query, "p");
   conditions.push(Prisma.sql`COALESCE(rs.averageRating, 0) >= ${query.minRating ?? 0}`);
+  if (query.flashSale) conditions.push(flashSalePredicate(Prisma.raw("p.id"), now));
   const rows = await prisma.$queryRaw<RatingRow[]>(Prisma.sql`
     WITH review_stats AS (
       SELECT productId, ROUND(AVG(rating), 1) AS averageRating, COUNT(*) AS totalReviews

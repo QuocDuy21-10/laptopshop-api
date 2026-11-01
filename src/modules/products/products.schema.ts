@@ -117,14 +117,17 @@ export type ProductFilterQuery = z.infer<typeof productFacetsQuery>;
 export const listProductsQuery = pageQuery.extend({
   ...productFilterFields,
   sort: z.enum(["price_asc", "price_desc", "rating_desc", "sold_desc"]).optional(),
+  flashSale: flag.optional(),
 });
 export type ListProductsQuery = z.infer<typeof listProductsQuery>;
 
-export const adminListProductsQuery = listProductsQuery.omit({ sort: true }).extend({
-  sort: z.enum(["price_asc", "price_desc"]).optional(),
-  isActive: flag.optional(),
-  stock: z.enum(["low"]).optional(),
-});
+export const adminListProductsQuery = listProductsQuery
+  .omit({ sort: true, flashSale: true })
+  .extend({
+    sort: z.enum(["price_asc", "price_desc"]).optional(),
+    isActive: flag.optional(),
+    stock: z.enum(["low"]).optional(),
+  });
 export type AdminListProductsQuery = z.infer<typeof adminListProductsQuery>;
 
 export const productBody = z.object({

@@ -9,6 +9,30 @@ beforeEach(resetPrisma);
 const query = (input: Record<string, unknown> = {}) => listProductsQuery.parse(input);
 
 describe("rated catalog repository", () => {
+  it("restricts to running flash sales with quota and combines with sort and filters", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    const now = new Date("2026-11-01T00:00:00.000Z");
+    await queryRatedProductPage(
+      query({ flashSale: "true", sort: "sold_desc", target: "GAMING" }),
+      now,
+    );
+    const [statement] = prismaMock.$queryRaw.mock.calls[0];
+    const sql = statement.strings.join(" ");
+    expect(sql).toContain("flash_sale_product_quotas");
+    expect(sql).toContain("q.productId = p.id");
+    expect(sql).toContain("COALESCE(sold, 0) DESC");
+    expect(statement.values).toEqual(
+      expect.arrayContaining(["GAMING", "FLASH_SALE", "ACTIVE", now]),
+    );
+  });
+
+  it("does not touch flash sale tables when flashSale is false", async () => {
+    prismaMock.$queryRaw.mockResolvedValue([]);
+    await queryRatedProductPage(query({ flashSale: "false", sort: "rating_desc" }));
+    const [statement] = prismaMock.$queryRaw.mock.calls[0];
+    expect(statement.strings.join(" ")).not.toContain("flash_sale_product_quotas");
+  });
+
   it("orders by units sold with null treated as zero", async () => {
     prismaMock.$queryRaw.mockResolvedValue([]);
     await queryRatedProductPage(query({ minRating: "3", sort: "sold_desc" }));

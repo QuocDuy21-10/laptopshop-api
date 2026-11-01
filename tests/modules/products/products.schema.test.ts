@@ -67,6 +67,14 @@ describe("product facet query", () => {
     expect(() => adminListProductsQuery.parse({ sort: "sold_desc" })).toThrow();
   });
 
+  it("accepts flashSale on the public listing only", () => {
+    expect(listProductsQuery.parse({ flashSale: "true" }).flashSale).toBe(true);
+    expect(listProductsQuery.parse({ flashSale: "false" }).flashSale).toBe(false);
+    expect(listProductsQuery.parse({}).flashSale).toBeUndefined();
+    expect(() => listProductsQuery.parse({ flashSale: "yes" })).toThrow();
+    expect(adminListProductsQuery.parse({ flashSale: "true" })).not.toHaveProperty("flashSale");
+  });
+
   it("keeps admin sort allow-list explicit", () => {
     expect(adminListProductsQuery.parse({ sort: "price_desc" }).sort).toBe("price_desc");
     expect(() => adminListProductsQuery.parse({ sort: "rating_desc" })).toThrow();

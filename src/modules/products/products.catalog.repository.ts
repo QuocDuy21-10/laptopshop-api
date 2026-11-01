@@ -3,7 +3,11 @@ import { Prisma } from "@prisma/client";
 import { pageArgs } from "lib/http";
 import { prisma } from "config/client";
 import type { ListProductsQuery } from "modules/products/products.schema";
-import { andSql, catalogFilterConditions } from "modules/products/products.catalog-sql";
+import {
+  andSql,
+  catalogFilterConditions,
+  flashSalePredicate,
+} from "modules/products/products.catalog-sql";
 import {
   activeCatalogPriceWindows,
   warnOnUnhealthyCatalogWindows,
@@ -48,6 +52,7 @@ export const queryCatalogProductPage = async (
   });
   if (query.minRating !== undefined)
     conditions.push(Prisma.sql`b.averageRating >= ${query.minRating}`);
+  if (query.flashSale) conditions.push(flashSalePredicate(Prisma.raw("b.productId"), context.asOf));
   const projected = context.mode === "PROJECTED";
   const projectionJoin = projected
     ? Prisma.sql`LEFT JOIN (${activeCatalogPriceWindows(context.asOf)}) cpw ON cpw.productId = p.id AND cpw.windowRank = 1`
