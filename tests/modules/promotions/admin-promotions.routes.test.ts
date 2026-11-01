@@ -218,6 +218,19 @@ describe("admin promotion routes", () => {
       .set("Cookie", cookieFor(ADMIN));
     expect(response.status).toBe(200);
     expect(response.body.meta).toMatchObject({ page: 2, pageSize: 10, total: 1 });
+    expect(response.body.data).toEqual([expect.objectContaining({ id: 10, name: "Welcome" })]);
+    expect(response.body).not.toHaveProperty("items");
+  });
+
+  it("lists redemptions under data", async () => {
+    prismaMock.promotionRedemption.count.mockResolvedValue(0);
+    prismaMock.promotionRedemption.findMany.mockResolvedValue([]);
+    const response = await request(buildApp())
+      .get(`${endpoint}/10/redemptions`)
+      .set("Cookie", cookieFor(ADMIN));
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ data: [], meta: { total: 0 } });
+    expect(response.body).not.toHaveProperty("items");
   });
 
   it("activates a draft and exposes a locked-field conflict", async () => {
