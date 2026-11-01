@@ -1,11 +1,12 @@
 // import data type
 /// <reference path="./types/index.d.ts" />
 
-import express, { Express } from "express";
-import cors from "cors";
 import hpp from "hpp";
+import cors from "cors";
+import express, { type Express } from "express";
 import pinoHttp from "pino-http";
-import { Store } from "express-rate-limit";
+import { type Store } from "express-rate-limit";
+
 import { env } from "config/env";
 import { logger } from "lib/logger";
 import { createApiV1Router } from "routes/index";
@@ -13,15 +14,15 @@ import { registerHealthRoutes } from "routes/health";
 import { applySecurity } from "middlewares/security";
 import { createLimiters } from "middlewares/rate-limit";
 import { errorHandler, notFoundHandler } from "middlewares/error.middleware";
-import { paymentWebhookRoutes } from "modules/payments/payments.routes";
-import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
+import { createS3ObjectStorage } from "lib/storage/s3-object-storage";
 import {
   createAdvisorService,
   priceAdvisorCandidates,
   type AdvisorService,
 } from "modules/advisor/advisor.service";
+import { paymentWebhookRoutes } from "modules/payments/payments.routes";
+import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
 import type { ReviewImageDeps } from "modules/reviews/review-images.service";
-import { createS3ObjectStorage } from "lib/storage/s3-object-storage";
 import type { AttachmentDeps } from "modules/after-sales/after-sales.attachments";
 
 export interface AppDeps {
@@ -33,6 +34,7 @@ export interface AppDeps {
     reviewHelpful?: Store;
     reviewMutations?: Store;
     afterSalesImages?: Store;
+    newsletter?: Store;
   };
   advisor?: { service: AdvisorService; identitySecret: string };
   reviewImages?: ReviewImageDeps | null;
@@ -69,6 +71,7 @@ export const createApp = (deps: AppDeps = {}): Express => {
     reviewHelpfulLimiter,
     reviewMutationLimiter,
     afterSalesImagesLimiter,
+    newsletterLimiter,
   } = createLimiters(deps.limitStores);
   app.use(globalLimiter);
   app.post(
@@ -80,6 +83,7 @@ export const createApp = (deps: AppDeps = {}): Express => {
     ],
     authLimiter,
   );
+  app.post("/api/v1/newsletter/subscribe", newsletterLimiter);
 
   const advisor =
     deps.advisor ??

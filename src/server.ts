@@ -1,15 +1,15 @@
 import "./instrument"; // must stay first: Sentry initialises on import
-import { env } from "config/env";
-import { prisma } from "config/client";
-import { createRedisClient } from "config/redis";
-import { createRedisLimitStore } from "middlewares/rate-limit";
-import { logger } from "lib/logger";
-import { registerDocs } from "docs/openapi";
-import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
-import { RedisAdvisorAdmission } from "modules/advisor/advisor.admission";
-import { createAdvisorService, priceAdvisorCandidates } from "modules/advisor/advisor.service";
-import { GroqAdvisorProvider } from "modules/advisor/providers/groq-advisor.provider";
 import { createApp } from "./app";
+import { env } from "config/env";
+import { logger } from "lib/logger";
+import { createRedisClient } from "config/redis";
+import { registerDocs } from "docs/openapi";
+import { prisma } from "config/client";
+import { createRedisLimitStore } from "middlewares/rate-limit";
+import { createAdvisorService, priceAdvisorCandidates } from "modules/advisor/advisor.service";
+import { RedisAdvisorAdmission } from "modules/advisor/advisor.admission";
+import { PrismaAdvisorRepository } from "modules/advisor/advisor.repository";
+import { GroqAdvisorProvider } from "modules/advisor/providers/groq-advisor.provider";
 
 const main = async () => {
   const redis = createRedisClient(env.REDIS_URL);
@@ -51,6 +51,7 @@ const main = async () => {
       reviewHelpful: createRedisLimitStore(redis, "rl:review-helpful:"),
       reviewMutations: createRedisLimitStore(redis, "rl:review-mutations:"),
       afterSalesImages: createRedisLimitStore(redis, "rl:after-sales-images:"),
+      newsletter: createRedisLimitStore(redis, "rl:newsletter:"),
     },
     advisor,
     registerExtras: registerDocs,
