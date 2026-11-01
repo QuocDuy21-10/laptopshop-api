@@ -1356,3 +1356,33 @@ model StockReceiptItem {
   @@index([productId])
   @@map("stock_receipt_items")
 }
+
+enum HomeBannerPlacement {
+  HERO
+  SIDE
+}
+
+model HomeBanner {
+  id               Int                 @id @default(autoincrement())
+  placement        HomeBannerPlacement
+  eyebrow          String?             @db.VarChar(60)
+  title            String              @db.VarChar(80)
+  highlight        String?             @db.VarChar(80)
+  description      String?             @db.VarChar(200)
+  ctaText          String?             @db.VarChar(30)
+  linkUrl          String?             @db.VarChar(255)
+  secondaryCtaText String?             @db.VarChar(30)
+  secondaryLinkUrl String?             @db.VarChar(255)
+  badges           Json
+  imagePath        String?             @db.VarChar(255)
+  imageAlt         String?             @db.VarChar(120)
+  position         Int                 @default(0)
+  isActive         Boolean             @default(false)
+  startsAt         DateTime?
+  endsAt           DateTime?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([placement, isActive, position])
+  @@map("home_banners")
+}
