@@ -1,7 +1,9 @@
 import {
   ownerReviewSelect,
+  reviewAuthorName,
   toOwnerReviewDto,
   toPublicReviewDto,
+  toReviewHighlightDto,
 } from "modules/reviews/reviews.mapper";
 
 const baseRow = {
@@ -109,5 +111,51 @@ describe("toPublicReviewDto", () => {
       updatedAt: new Date("2026-10-21T05:00:00.000Z"),
     });
     expect(dto.officialReply).not.toHaveProperty("createdById");
+  });
+});
+
+describe("reviewAuthorName", () => {
+  it("masks anonymous authors", () => {
+    expect(reviewAuthorName({ isAnonymous: true, user: { fullName: "Nguyễn Văn A" } })).toBe(
+      "****",
+    );
+  });
+
+  it("trims the name and falls back for an empty one", () => {
+    expect(reviewAuthorName({ isAnonymous: false, user: { fullName: "  Lan  " } })).toBe("Lan");
+    expect(reviewAuthorName({ isAnonymous: false, user: { fullName: "  " } })).toBe(
+      "Khách hàng LaptopShop",
+    );
+    expect(reviewAuthorName({ isAnonymous: false, user: { fullName: null } })).toBe(
+      "Khách hàng LaptopShop",
+    );
+  });
+});
+
+describe("toReviewHighlightDto", () => {
+  it("exposes only public fields and builds the product image path", () => {
+    const dto = toReviewHighlightDto(
+      {
+        id: 42,
+        rating: 5,
+        title: null,
+        content: "Máy chạy êm, pin trâu, màn hình đẹp.",
+        isAnonymous: false,
+        createdAt: new Date("2026-10-20T08:00:00.000Z"),
+        user: { fullName: "Lan" },
+        product: { id: 3, name: "Asus TUF", image: "a.webp" },
+      },
+      7,
+    );
+    expect(dto).toEqual({
+      id: 42,
+      rating: 5,
+      title: null,
+      content: "Máy chạy êm, pin trâu, màn hình đẹp.",
+      createdAt: new Date("2026-10-20T08:00:00.000Z"),
+      helpfulCount: 7,
+      author: { name: "Lan", anonymous: false },
+      product: { id: 3, name: "Asus TUF", image: "/images/product/a.webp" },
+    });
   });
 });

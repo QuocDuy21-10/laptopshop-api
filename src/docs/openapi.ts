@@ -36,6 +36,7 @@ import {
   adminListReviewsQuery,
   createReviewBody,
   listProductReviewsQuery,
+  reviewHighlightsQuery,
   moderateReviewBody,
   reviewImageDeleteParams,
   reviewImageOrderBody,
@@ -868,6 +869,27 @@ const ReviewSummary = registry.register(
     averageRating: z.number().nullable(),
     totalReviews: z.number().int(),
     distribution: z.record(z.enum(["1", "2", "3", "4", "5"]), z.number().int()),
+  }),
+);
+const ReviewHighlights = registry.register(
+  "ReviewHighlights",
+  z.object({
+    summary: z.object({
+      averageRating: z.number().nullable(),
+      totalReviews: z.number().int().min(0),
+    }),
+    items: z.array(
+      z.object({
+        id: z.number(),
+        rating: z.number().int().min(1).max(5),
+        title: z.string().nullable(),
+        content: z.string(),
+        createdAt: z.string().datetime(),
+        helpfulCount: z.number().int().min(0),
+        author: ReviewAuthor,
+        product: z.object({ id: z.number(), name: z.string(), image: z.string().nullable() }),
+      }),
+    ),
   }),
 );
 const OwnerReview = registry.register(
@@ -1744,6 +1766,15 @@ op({
     404: "Product not found",
     409: "Already reviewed or public name unavailable",
   },
+});
+op({
+  method: "get",
+  path: `${v1}/reviews/highlights`,
+  summary: "List highlighted public reviews with a shop-wide summary",
+  tag: "reviews",
+  request: { query: reviewHighlightsQuery },
+  ok: [200, "OK", data(ReviewHighlights)],
+  errors: { 400: "Invalid limit" },
 });
 op({
   method: "patch",

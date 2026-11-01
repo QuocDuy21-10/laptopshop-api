@@ -3,6 +3,7 @@ import {
   listProductReviewsQuery,
   helpfulReviewIdsQuery,
   putReviewReplyBody,
+  reviewHighlightsQuery,
 } from "modules/reviews/reviews.schema";
 
 describe("review schemas", () => {
@@ -61,5 +62,18 @@ describe("review schemas", () => {
     expect(() => putReviewReplyBody.parse({ content: "" })).toThrow();
     expect(() => putReviewReplyBody.parse({ content: "x", extra: true })).toThrow();
     expect(() => putReviewReplyBody.parse({ content: "x".repeat(1001) })).toThrow();
+  });
+});
+
+describe("reviewHighlightsQuery", () => {
+  it("defaults the limit to 6 and coerces strings", () => {
+    expect(reviewHighlightsQuery.parse({}).limit).toBe(6);
+    expect(reviewHighlightsQuery.parse({ limit: "12" }).limit).toBe(12);
+  });
+
+  it("rejects a limit outside 1..12", () => {
+    expect(() => reviewHighlightsQuery.parse({ limit: "0" })).toThrow();
+    expect(() => reviewHighlightsQuery.parse({ limit: "13" })).toThrow();
+    expect(() => reviewHighlightsQuery.parse({ limit: "1.5" })).toThrow();
   });
 });

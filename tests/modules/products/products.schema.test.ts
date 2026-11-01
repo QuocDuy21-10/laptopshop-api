@@ -62,6 +62,11 @@ describe("product facet query", () => {
     expect(() => listProductsQuery.parse({ sort: "name_asc" })).toThrow();
   });
 
+  it("allows sold_desc for public listing but not for admin", () => {
+    expect(listProductsQuery.parse({ sort: "sold_desc" }).sort).toBe("sold_desc");
+    expect(() => adminListProductsQuery.parse({ sort: "sold_desc" })).toThrow();
+  });
+
   it("keeps admin sort allow-list explicit", () => {
     expect(adminListProductsQuery.parse({ sort: "price_desc" }).sort).toBe("price_desc");
     expect(() => adminListProductsQuery.parse({ sort: "rating_desc" })).toThrow();

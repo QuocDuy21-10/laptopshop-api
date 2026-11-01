@@ -1,4 +1,5 @@
 import { z } from "zod";
+
 import { pageQuery } from "lib/http";
 import { idParams } from "lib/http";
 
@@ -8,6 +9,11 @@ export const listProductReviewsQuery = pageQuery.extend({
 });
 
 export type ListProductReviewsQuery = z.infer<typeof listProductReviewsQuery>;
+
+export const reviewHighlightsQuery = z.object({
+  limit: z.coerce.number().int().min(1).max(12).default(6),
+});
+export type ReviewHighlightsQuery = z.infer<typeof reviewHighlightsQuery>;
 
 export const createReviewBody = z
   .object({

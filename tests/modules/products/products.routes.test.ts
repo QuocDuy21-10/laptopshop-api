@@ -131,6 +131,16 @@ describe("GET /api/v1/products", () => {
     });
   });
 
+  it("sorts by units sold on the plain Prisma path", async () => {
+    prismaMock.product.count.mockResolvedValue(0);
+    prismaMock.product.findMany.mockResolvedValue([]);
+    const res = await request(buildApp()).get("/api/v1/products?sort=sold_desc");
+    expect(res.status).toBe(200);
+    expect(prismaMock.product.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: [{ sold: "desc" }, { id: "asc" }] }),
+    );
+  });
+
   it("searches by name", async () => {
     prismaMock.product.count.mockResolvedValue(0);
     prismaMock.product.findMany.mockResolvedValue([]);

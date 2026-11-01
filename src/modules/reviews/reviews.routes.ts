@@ -1,12 +1,8 @@
 import { Router, type RequestHandler } from "express";
+
 import { idParams } from "lib/http";
-import { authenticate } from "middlewares/authenticate";
 import { validate } from "middlewares/validate";
-import {
-  createReviewHelpfulHandlers,
-  createReviewHandlers,
-} from "modules/reviews/reviews.controller";
-import type { ReviewImageRuntime } from "modules/reviews/review-image-runtime";
+import { authenticate } from "middlewares/authenticate";
 import {
   adminListReviewsQuery,
   createReviewBody,
@@ -15,7 +11,13 @@ import {
   updateReviewBody,
   helpfulReviewIdsQuery,
   putReviewReplyBody,
+  reviewHighlightsQuery,
 } from "modules/reviews/reviews.schema";
+import {
+  createReviewHelpfulHandlers,
+  createReviewHandlers,
+} from "modules/reviews/reviews.controller";
+import type { ReviewImageRuntime } from "modules/reviews/review-image-runtime";
 
 export const createReviewHelpfulRoutes = (limiter?: RequestHandler) => {
   const router = Router();
@@ -67,6 +69,11 @@ export const createProductReviewRoutes = (
 export const createReviewRoutes = (runtime?: ReviewImageRuntime, limiter?: RequestHandler) => {
   const router = Router();
   const handlers = createReviewHandlers(runtime);
+  router.get(
+    "/highlights",
+    validate({ query: reviewHighlightsQuery }),
+    handlers.getReviewHighlights,
+  );
   router.patch(
     "/:id",
     authenticate,

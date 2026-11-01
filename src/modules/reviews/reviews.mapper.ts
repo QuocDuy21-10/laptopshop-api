@@ -1,5 +1,6 @@
 import { type Prisma } from "@prisma/client";
 
+import { productImage } from "modules/products/products.mapper";
 import { reviewImageSelect, type ReviewImageRow } from "modules/reviews/review-images.mapper";
 
 export type ReviewImageDto = {
@@ -36,6 +37,11 @@ export const publicReviewSelect = {
 
 export type PublicReviewRow = Prisma.ReviewGetPayload<{ select: typeof publicReviewSelect }>;
 
+export const reviewAuthorName = (review: {
+  isAnonymous: boolean;
+  user: { fullName: string | null };
+}) => (review.isAnonymous ? "****" : review.user.fullName?.trim() || "Khách hàng LaptopShop");
+
 export const toPublicReviewDto = (
   review:
     | PublicReviewRow
@@ -51,7 +57,7 @@ export const toPublicReviewDto = (
   title: review.title,
   content: review.content,
   author: {
-    name: review.isAnonymous ? "****" : review.user.fullName?.trim() || "Khách hàng LaptopShop",
+    name: reviewAuthorName(review),
     anonymous: review.isAnonymous,
   },
   verifiedPurchase: true,
@@ -69,6 +75,38 @@ export const toPublicReviewDto = (
 });
 
 export type PublicReviewDto = ReturnType<typeof toPublicReviewDto>;
+
+export const reviewHighlightSelect = {
+  id: true,
+  rating: true,
+  title: true,
+  content: true,
+  isAnonymous: true,
+  createdAt: true,
+  user: { select: { fullName: true } },
+  product: { select: { id: true, name: true, image: true } },
+} satisfies Prisma.ReviewSelect;
+
+export type ReviewHighlightRow = Prisma.ReviewGetPayload<{
+  select: typeof reviewHighlightSelect;
+}>;
+
+export const toReviewHighlightDto = (review: ReviewHighlightRow, helpfulCount: number) => ({
+  id: review.id,
+  rating: review.rating,
+  title: review.title,
+  content: review.content,
+  createdAt: review.createdAt,
+  helpfulCount,
+  author: { name: reviewAuthorName(review), anonymous: review.isAnonymous },
+  product: {
+    id: review.product.id,
+    name: review.product.name,
+    image: productImage(review.product.image),
+  },
+});
+
+export type ReviewHighlightDto = ReturnType<typeof toReviewHighlightDto>;
 
 export const ownerReviewSelect = {
   id: true,

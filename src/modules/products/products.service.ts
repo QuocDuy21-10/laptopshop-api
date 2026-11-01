@@ -1,30 +1,31 @@
-import { Prisma, Product } from "@prisma/client";
-import { prisma } from "config/client";
+import { type Prisma, type Product } from "@prisma/client";
+
+import { assertExportSize, type CsvColumn, toCsv } from "lib/csv";
+import { pageArgs, pageMeta } from "lib/http";
 import { env } from "config/env";
 import { AppError, isNotFound, notFound } from "lib/errors";
-import { assertExportSize, CsvColumn, toCsv } from "lib/csv";
-import { pageArgs, pageMeta } from "lib/http";
-import { moveStock } from "modules/inventory/inventory.service";
-import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
+import { prisma } from "config/client";
+import { productWhere } from "modules/products/products.filter";
 import { toCatalogProductDto, toProductDto } from "modules/products/products.mapper";
 import {
-  AdminExportProductsQuery,
-  AdminListProductsQuery,
-  ListProductsQuery,
-  ProductBody,
-  ProductPatchBody,
+  type AdminExportProductsQuery,
+  type AdminListProductsQuery,
+  type ListProductsQuery,
+  type ProductBody,
+  type ProductPatchBody,
 } from "modules/products/products.schema";
+import { moveStock } from "modules/inventory/inventory.service";
+import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
+import { resolveProductPromotions } from "modules/promotions/promotion-resolver";
 import {
   reconcileProductSpecs,
   type ProductSpecState,
 } from "modules/products/products.normalization";
-import { productWhere } from "modules/products/products.filter";
-import { getReviewStatsForProductIds } from "modules/products/products.review-stats.repository";
 import { queryRatedProductPage } from "modules/products/products.rating.repository";
-import { resolveProductPromotions } from "modules/promotions/promotion-resolver";
+import { queryCatalogProductPage } from "modules/products/products.catalog.repository";
+import { getReviewStatsForProductIds } from "modules/products/products.review-stats.repository";
 import { refreshCatalogPriceWindows } from "modules/pricing/catalog-price-projection.repository";
 import { getEffectiveCatalogPrices } from "modules/pricing/catalog-price-projection.repository";
-import { queryCatalogProductPage } from "modules/products/products.catalog.repository";
 
 const resolveCatalogPromotions = (productIds: number[]) =>
   resolveProductPromotions(
@@ -37,6 +38,15 @@ const nonNullEntries = (data: Record<string, unknown>) =>
   Object.fromEntries(
     Object.entries(data).filter(([, value]) => value !== null && value !== undefined),
   );
+
+const plainOrderBy = (
+  sort: ListProductsQuery["sort"] | AdminListProductsQuery["sort"],
+): Prisma.ProductOrderByWithRelationInput[] => {
+  if (sort === "sold_desc") return [{ sold: "desc" }, { id: "asc" }];
+  if (sort === "price_asc" || sort === "price_desc")
+    return [{ price: sort === "price_asc" ? "asc" : "desc" }, { id: "asc" }];
+  return [{ id: "asc" }];
+};
 
 export const listProducts = async (
   q: ListProductsQuery | AdminListProductsQuery,
@@ -85,8 +95,7 @@ export const listProducts = async (
     };
   }
   const where = productWhere(q, { admin });
-  const orderBy: Prisma.ProductOrderByWithRelationInput | Prisma.ProductOrderByWithRelationInput[] =
-    q.sort ? [{ price: q.sort === "price_asc" ? "asc" : "desc" }, { id: "asc" }] : [{ id: "asc" }];
+  const orderBy = plainOrderBy(q.sort);
   const [total, rows] = await Promise.all([
     prisma.product.count({ where }),
     prisma.product.findMany({ where, orderBy, ...pageArgs(q) }),
