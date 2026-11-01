@@ -1,6 +1,6 @@
-import rateLimit, { ipKeyGenerator, type Store } from "express-rate-limit";
+import { type RedisClientType } from "redis";
 import { RedisStore } from "rate-limit-redis";
-import { RedisClientType } from "redis";
+import rateLimit, { ipKeyGenerator, type Store } from "express-rate-limit";
 
 const tooMany = { data: null, message: "Too many requests, please try again later" };
 const advisorTooMany = {
@@ -21,6 +21,7 @@ export const createLimiters = (stores?: {
   reviewHelpful?: Store;
   reviewMutations?: Store;
   afterSalesImages?: Store;
+  newsletter?: Store;
 }) => ({
   globalLimiter: rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -81,5 +82,13 @@ export const createLimiters = (stores?: {
     legacyHeaders: false,
     message: tooMany,
     store: stores?.afterSalesImages,
+  }),
+  newsletterLimiter: rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 5,
+    standardHeaders: "draft-7",
+    legacyHeaders: false,
+    message: tooMany,
+    store: stores?.newsletter,
   }),
 });

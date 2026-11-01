@@ -1386,3 +1386,25 @@ model HomeBanner {
   @@index([placement, isActive, position])
   @@map("home_banners")
 }
+
+enum NewsletterStatus {
+  PENDING
+  CONFIRMED
+  UNSUBSCRIBED
+}
+
+model NewsletterSubscriber {
+  id                     Int              @id @default(autoincrement())
+  email                  String           @unique @db.VarChar(254)
+  status                 NewsletterStatus @default(PENDING)
+  confirmTokenHash       String?          @unique @db.VarChar(64)
+  confirmExpiresAt       DateTime?
+  lastConfirmationSentAt DateTime?
+  confirmedAt            DateTime?
+  unsubscribedAt         DateTime?
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+
+  @@index([status, createdAt])
+  @@map("newsletter_subscribers")
+}

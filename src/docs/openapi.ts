@@ -77,6 +77,12 @@ import {
   listMovementsQuery,
 } from "modules/inventory/inventory.schema";
 import {
+  adminExportSubscribersQuery,
+  adminListSubscribersQuery,
+  subscribeBody,
+  tokenBody,
+} from "modules/newsletter/newsletter.schema";
+import {
   adminPromotionQuery,
   createPromotionBody,
   promotionIdParams,
@@ -928,6 +934,17 @@ const ReviewHighlights = registry.register(
     ),
   }),
 );
+const NewsletterSubscriber = registry.register(
+  "NewsletterSubscriber",
+  z.object({
+    id: z.number(),
+    email: z.string(),
+    status: z.enum(["PENDING", "CONFIRMED", "UNSUBSCRIBED"]),
+    confirmedAt: z.string().datetime().nullable(),
+    unsubscribedAt: z.string().datetime().nullable(),
+    createdAt: z.string().datetime(),
+  }),
+);
 const OwnerReview = registry.register(
   "OwnerReview",
   z.object({
@@ -1530,6 +1547,58 @@ op({
   request: id,
   ok: [200, "Updated", data(AdminHomeBanner)],
   errors: { 404: "Banner not found" },
+});
+op({
+  method: "post",
+  path: `${v1}/newsletter/subscribe`,
+  summary: "Subscribe an email to the newsletter (sends a confirmation email)",
+  tag: "newsletter",
+  request: { body: json(subscribeBody) },
+  ok: [
+    202,
+    "Accepted (same answer whether or not the email was already subscribed)",
+    data(z.object({ accepted: z.literal(true) })),
+  ],
+  errors: { 400: "Invalid email", 429: "Too many requests", 503: "Email delivery unavailable" },
+});
+op({
+  method: "post",
+  path: `${v1}/newsletter/confirm`,
+  summary: "Confirm a newsletter subscription",
+  tag: "newsletter",
+  request: { body: json(tokenBody) },
+  ok: [200, "Confirmed", data(z.object({ status: z.literal("CONFIRMED") }))],
+  errors: { 400: "Invalid, expired or used token" },
+});
+op({
+  method: "post",
+  path: `${v1}/newsletter/unsubscribe`,
+  summary: "Unsubscribe from the newsletter",
+  tag: "newsletter",
+  request: { body: json(tokenBody) },
+  ok: [200, "Unsubscribed", data(z.object({ status: z.literal("UNSUBSCRIBED") }))],
+  errors: { 400: "Invalid token" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/newsletter/subscribers`,
+  summary: "List newsletter subscribers",
+  tag: "admin",
+  auth: "admin",
+  request: { query: adminListSubscribersQuery },
+  ok: [200, "OK", page(NewsletterSubscriber)],
+  errors: { 400: "Invalid filter" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/newsletter/subscribers/export.csv`,
+  summary: "Export newsletter subscribers (confirmed by default) as CSV",
+  tag: "admin",
+  auth: "admin",
+  request: { query: adminExportSubscribersQuery },
+  ok: [200, "CSV file"],
+  csv: true,
+  errors: { 400: "Invalid filter or too many rows" },
 });
 op({
   method: "post",

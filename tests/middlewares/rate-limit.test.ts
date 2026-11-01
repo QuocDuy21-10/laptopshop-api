@@ -29,6 +29,20 @@ describe("rate limiters", () => {
     expect((await request(app).get("/")).status).toBe(200);
   });
 
+  it("blocks the 6th newsletter subscription within the window", async () => {
+    const app = express();
+    const { newsletterLimiter } = createLimiters();
+    app.post("/subscribe", newsletterLimiter, (_req, res) => {
+      res.sendStatus(202);
+    });
+    for (let i = 0; i < 5; i++) {
+      expect((await request(app).post("/subscribe")).status).toBe(202);
+    }
+    const blocked = await request(app).post("/subscribe");
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.message).toMatch(/too many/i);
+  });
+
   it("exposes a dedicated review image limiter", () => {
     const { reviewImagesLimiter } = createLimiters();
     expect(reviewImagesLimiter).toBeDefined();
