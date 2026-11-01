@@ -116,7 +116,7 @@ export type ProductFilterQuery = z.infer<typeof productFacetsQuery>;
 
 export const listProductsQuery = pageQuery.extend({
   ...productFilterFields,
-  sort: z.enum(["price_asc", "price_desc", "rating_desc"]).optional(),
+  sort: z.enum(["price_asc", "price_desc", "rating_desc", "sold_desc"]).optional(),
 });
 export type ListProductsQuery = z.infer<typeof listProductsQuery>;
 

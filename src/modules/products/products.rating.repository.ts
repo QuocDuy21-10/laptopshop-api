@@ -1,9 +1,10 @@
 import { Prisma } from "@prisma/client";
+
 import { pageArgs } from "lib/http";
-import type { ProductReviewSummary } from "modules/products/products.review-stats.repository";
-import type { ListProductsQuery } from "modules/products/products.schema";
 import { prisma } from "config/client";
+import type { ListProductsQuery } from "modules/products/products.schema";
 import { andSql, catalogFilterConditions } from "modules/products/products.catalog-sql";
+import type { ProductReviewSummary } from "modules/products/products.review-stats.repository";
 
 type RatingRow = {
   id: number | null;
@@ -23,6 +24,7 @@ const orderBy = (sort: ListProductsQuery["sort"]) => {
     return Prisma.sql`averageRating IS NULL ASC, averageRating DESC, totalReviews DESC, id ASC`;
   if (sort === "price_desc") return Prisma.sql`price DESC, id ASC`;
   if (sort === "price_asc") return Prisma.sql`price ASC, id ASC`;
+  if (sort === "sold_desc") return Prisma.sql`COALESCE(sold, 0) DESC, id ASC`;
   return Prisma.sql`id ASC`;
 };
 
@@ -40,7 +42,7 @@ export const queryRatedProductPage = async (
       GROUP BY productId
     )
     , filtered AS (
-      SELECT p.id, p.price, rs.averageRating, COALESCE(rs.totalReviews, 0) AS totalReviews
+      SELECT p.id, p.price, p.sold, rs.averageRating, COALESCE(rs.totalReviews, 0) AS totalReviews
       FROM products p
       LEFT JOIN review_stats rs ON rs.productId = p.id
       ${andSql(conditions)}
