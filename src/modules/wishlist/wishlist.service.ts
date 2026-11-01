@@ -1,7 +1,9 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "config/client";
-import { AppError, isUniqueViolation, notFound } from "lib/errors";
+
 import { pageArgs, pageMeta, type PageQuery } from "lib/http";
+import { env } from "config/env";
+import { AppError, isUniqueViolation, notFound } from "lib/errors";
+import { prisma } from "config/client";
 import {
   toWishlistItemDto,
   wishlistItemInclude,
@@ -9,11 +11,11 @@ import {
   type WishlistItemRow,
 } from "modules/wishlist/wishlist.mapper";
 import { type ConfigurePriceAlertBody, type WishlistQuery } from "modules/wishlist/wishlist.schema";
+import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
 import {
   resolveAlertPriceSnapshots,
   type AlertPriceRequest,
 } from "modules/pricing/alert-price-resolver";
-import { requestPricingReevaluation } from "modules/price-alerts/pricing-events";
 
 const WISHLIST_LIMIT = 100;
 
@@ -59,7 +61,7 @@ export const listWishlist = async (userId: number, query: WishlistQuery) => {
   );
   return {
     items: rows.map((row) => toWishlistItemDto(row, null, snapshots.get(row.id) ?? null)),
-    meta: pageMeta(query, total),
+    meta: { ...pageMeta(query, total), flashSaleAlertEnabled: env.FLASH_SALE_PRICE_ALERT_ENABLED },
   };
 };
 
@@ -160,6 +162,9 @@ export const configureWishlistAlert = async (
   if (!existing.product.isActive) throw productUnavailable(productId);
   const now = new Date();
   const includeFlashSale = "includeFlashSale" in input ? (input.includeFlashSale ?? false) : false;
+  if (includeFlashSale && !env.FLASH_SALE_PRICE_ALERT_ENABLED) {
+    throw new AppError("Flash Sale price alerts are disabled", 409, "FLASH_SALE_ALERT_UNAVAILABLE");
+  }
   const snapshot = (
     await resolveAlertPriceSnapshots(
       prisma,

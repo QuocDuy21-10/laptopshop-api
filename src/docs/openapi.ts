@@ -1436,7 +1436,14 @@ op({
   tag: "wishlist",
   auth: "user",
   request: { query: wishlistQuery },
-  ok: [200, "OK", page(WishlistItem)],
+  ok: [
+    200,
+    "OK",
+    z.object({
+      data: z.array(WishlistItem),
+      meta: Meta.extend({ flashSaleAlertEnabled: z.boolean() }),
+    }),
+  ],
 });
 op({
   method: "get",
@@ -1477,7 +1484,7 @@ op({
   errors: {
     400: "Invalid target price",
     404: "Wishlist item not found",
-    409: "Product unavailable",
+    409: "Product unavailable or Flash Sale alerts disabled",
   },
 });
 op({

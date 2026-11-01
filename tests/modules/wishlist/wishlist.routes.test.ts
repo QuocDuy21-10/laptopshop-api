@@ -7,6 +7,7 @@ jest.mock("modules/pricing/alert-price-resolver", () => ({
 }));
 
 import request from "supertest";
+import { env } from "config/env";
 import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
 import { resolveAlertPriceSnapshots } from "modules/pricing/alert-price-resolver";
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
@@ -143,6 +144,7 @@ describe("Wishlist authentication and reads", () => {
       userId: USER.id,
     });
     expect(res.body.data[0].product.password).toBeUndefined();
+    expect(res.body.meta.flashSaleAlertEnabled).toBe(env.FLASH_SALE_PRICE_ALERT_ENABLED);
   });
 
   it("scopes summary and status to the authenticated user", async () => {
@@ -288,7 +290,22 @@ describe("Wishlist mutations", () => {
     });
   });
 
+  it("rejects Flash Sale opt-in while the server flag is off", async () => {
+    jest.replaceProperty(env, "FLASH_SALE_PRICE_ALERT_ENABLED", false);
+    prismaMock.wishlistItem.findFirst.mockResolvedValue(row);
+
+    const res = await request(buildApp())
+      .patch("/api/v1/wishlist/items/" + product.id)
+      .set("Cookie", auth())
+      .send({ mode: "PERCENT_DROP", includeFlashSale: true });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("FLASH_SALE_ALERT_UNAVAILABLE");
+    expect(prismaMock.wishlistItem.update).not.toHaveBeenCalled();
+  });
+
   it("stores Flash Sale opt-in and uses stable price as the reference baseline", async () => {
+    jest.replaceProperty(env, "FLASH_SALE_PRICE_ALERT_ENABLED", true);
     prismaMock.wishlistItem.findFirst.mockResolvedValue(row);
     prismaMock.wishlistItem.update.mockResolvedValue({
       ...row,

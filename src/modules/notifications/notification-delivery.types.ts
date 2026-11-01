@@ -10,7 +10,7 @@ export type DeliveryProviderRegistry = {
 };
 
 export type DeliveryProcessResult =
-  "noop" | "missing" | "suppressed" | "delivered" | "retrying" | "failed" | "dead";
+  "noop" | "missing" | "suppressed" | "cancelled" | "delivered" | "retrying" | "failed" | "dead";
 
 export type DeliveryRecord = {
   id: number;
@@ -41,6 +41,7 @@ export type DeliveryRecord = {
     newPrice: number | null;
     priceSource: string | null;
     validUntil: Date | null;
+    product?: { name: string } | null;
     user?: {
       username: string;
       emailVerifiedAt: Date | null;

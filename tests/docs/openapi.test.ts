@@ -176,6 +176,8 @@ describe("openapi document", () => {
     expect(body.anyOf[1].properties.includeFlashSale).toBeDefined();
     expect((doc.components?.schemas?.WishlistItem as any).properties.priceSnapshot).toBeDefined();
     expect(op("/api/v1/wishlist/items/{productId}", "delete").responses[204]).toBeDefined();
+    const list = op("/api/v1/wishlist", "get").responses[200].content["application/json"].schema;
+    expect(list.properties.meta.properties.flashSaleAlertEnabled).toBeDefined();
   });
 
   it("documents sanitized notification operations metrics", () => {

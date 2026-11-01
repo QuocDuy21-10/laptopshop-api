@@ -28,6 +28,20 @@ describe("notification email templates", () => {
     expect(result.html).toContain("FLASH_SALE");
   });
 
+  it("escapes the product name in price alert HTML", () => {
+    const result = renderPriceAlertEmail({
+      productName: "<b>Laptop</b>",
+      oldPrice: 1_000,
+      newPrice: 500,
+      source: "AUTOMATIC",
+      validUntil: null,
+      productUrl: "https://shop.example/products/7",
+      settingsUrl: "https://shop.example/account/notifications/settings",
+    });
+    expect(result.html).not.toContain("<b>Laptop");
+    expect(result.html).toContain("&lt;b&gt;Laptop");
+  });
+
   it("escapes after-sales message HTML and uses an absolute request URL", () => {
     const result = renderAfterSalesEmail({
       title: "Cập nhật",
