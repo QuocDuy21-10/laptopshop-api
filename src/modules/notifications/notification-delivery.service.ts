@@ -127,13 +127,16 @@ const providerInput = (d: DeliveryRecord) => {
     return {
       to: d.destinationKey,
       ...renderPriceAlertEmail({
-        productName: n.title,
+        productName: n.product?.name ?? n.title,
         oldPrice: n.oldPrice ?? 0,
         newPrice: n.newPrice ?? 0,
         source: n.priceSource ?? "UNKNOWN",
         validUntil: n.validUntil,
-        productUrl: n.productId ? `/products/${n.productId}` : "/account/notifications",
-        settingsUrl: "/account/notifications/settings",
+        productUrl: new URL(
+          n.productId ? `/products/${n.productId}` : "/account/notifications",
+          env.STOREFRONT_ORIGIN,
+        ).toString(),
+        settingsUrl: new URL("/account/notifications/settings", env.STOREFRONT_ORIGIN).toString(),
       }),
       idempotencyKey: `delivery-${d.id}`,
     };
@@ -149,7 +152,12 @@ export const processNotificationDelivery = async (
   const delivery = await deps.client.notificationDelivery.findUnique({
     where: { id: deliveryId },
     include: {
-      notification: { include: { user: { include: { notificationPreference: true } } } },
+      notification: {
+        include: {
+          user: { include: { notificationPreference: true } },
+          product: { select: { name: true } },
+        },
+      },
       pushSubscription: true,
       emailVerificationChallenge: true,
     },
@@ -173,7 +181,12 @@ export const processNotificationDelivery = async (
     (await deps.client.notificationDelivery.findUnique({
       where: { id: delivery.id },
       include: {
-        notification: { include: { user: { include: { notificationPreference: true } } } },
+        notification: {
+          include: {
+            user: { include: { notificationPreference: true } },
+            product: { select: { name: true } },
+          },
+        },
         pushSubscription: true,
         emailVerificationChallenge: true,
       },
@@ -184,6 +197,19 @@ export const processNotificationDelivery = async (
       data: { status: "SUPPRESSED", leaseOwner: null, leaseExpiresAt: null },
     });
     return "suppressed";
+  }
+  const validUntil = current.notification?.validUntil;
+  if (validUntil && validUntil <= now) {
+    await deps.client.notificationDelivery.updateMany({
+      where: { id: delivery.id, leaseOwner: deps.leaseOwner },
+      data: {
+        status: "CANCELLED",
+        normalizedErrorCode: "PRICE_EXPIRED",
+        leaseOwner: null,
+        leaseExpiresAt: null,
+      },
+    });
+    return "cancelled";
   }
   const provider = deps.providers[current.channel];
   if (!provider) {

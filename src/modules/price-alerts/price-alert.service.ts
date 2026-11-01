@@ -1,7 +1,8 @@
-import { Prisma, Product } from "@prisma/client";
-import { prisma } from "config/client";
+import { Prisma, type Product } from "@prisma/client";
+
 import { env } from "config/env";
 import { isUniqueViolation } from "lib/errors";
+import { type prisma } from "config/client";
 import {
   resolveAlertPriceSnapshots,
   type PriceSnapshot,
@@ -61,6 +62,7 @@ export type PriceAlertCandidate = {
 };
 
 class StaleAlertConfiguration extends Error {}
+class AlreadyAlerted extends Error {}
 
 const chunk = <T>(items: T[], size: number) => {
   const chunks: T[][] = [];
@@ -107,9 +109,12 @@ export const commitPriceAlertCandidate = async (
         candidate.referencePrice,
         candidate.currentPrice,
         candidate.source,
+        // pricingVersion is left out: a re-versioned promotion at the same price is not a new alert
         candidate.promotionId ?? "none",
-        candidate.pricingVersion ?? "none",
       ].join("-");
+      // Flash Sale keeps referencePrice, so it re-triggers every sweep; stop before touching the item
+      if (await tx.notification.findUnique({ where: { dedupeKey }, select: { id: true } }))
+        throw new AlreadyAlerted();
 
       const data =
         candidate.mode === "TARGET_PRICE"
@@ -138,6 +143,7 @@ export const commitPriceAlertCandidate = async (
           includeFlashSale: candidate.includeFlashSale,
           referencePrice: candidate.referencePrice,
           targetPrice: candidate.targetPrice,
+          product: { isActive: true, quantity: { gt: 0 } },
         },
         data,
       });
@@ -161,7 +167,7 @@ export const commitPriceAlertCandidate = async (
     return "created";
   } catch (error) {
     if (error instanceof StaleAlertConfiguration) return "stale";
-    if (isUniqueViolation(error)) return "duplicate";
+    if (error instanceof AlreadyAlerted || isUniqueViolation(error)) return "duplicate";
     throw error;
   }
 };

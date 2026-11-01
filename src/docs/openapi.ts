@@ -1,38 +1,30 @@
-import { Express } from "express";
-import helmet from "helmet";
-import swaggerUi from "swagger-ui-express";
 import { z } from "zod";
+import helmet from "helmet";
+import { type Express } from "express";
+import swaggerUi from "swagger-ui-express";
 import {
   extendZodWithOpenApi,
   OpenAPIRegistry,
   OpenApiGeneratorV3,
-  RouteConfig,
+  type RouteConfig,
 } from "@asteasolutions/zod-to-openapi";
-import { env } from "config/env";
+
 import { idParams, pageQuery } from "lib/http";
+import { env } from "config/env";
 import {
   forgotPasswordBody,
   loginBody,
   registerBody,
   resetPasswordBody,
 } from "modules/auth/auth.schema";
+import { addItemBody, updateItemBody } from "modules/cart/cart.schema";
 import {
   adminCreateUserBody,
   adminListUsersQuery,
   adminUpdateUserBody,
   updateMeBody,
 } from "modules/users/users.schema";
-import {
-  adminExportProductsQuery,
-  adminListProductsQuery,
-  compareQuery,
-  listProductsQuery,
-  productFacetsQuery,
-  productBody,
-  productPatchBody,
-} from "modules/products/products.schema";
-import { PRODUCT_FACET_KEYS } from "modules/products/products.facets";
-import { addItemBody, updateItemBody } from "modules/cart/cart.schema";
+import { ORDER_STATUSES } from "modules/orders/order-status";
 import {
   adminExportOrdersQuery,
   adminListOrdersQuery,
@@ -40,29 +32,6 @@ import {
   quoteOrderBody,
   updateStatusBody,
 } from "modules/orders/orders.schema";
-import { salesQuery } from "modules/dashboard/dashboard.schema";
-import {
-  adjustmentBody,
-  exportMovementsQuery,
-  listMovementsQuery,
-} from "modules/inventory/inventory.schema";
-import {
-  createReceiptBody,
-  listReceiptsQuery,
-  postReceiptBody,
-  receiptIdParams,
-  updateReceiptBody,
-} from "modules/inventory/inventory-receipts.schema";
-import { ORDER_STATUSES } from "modules/orders/order-status";
-import {
-  extendPaymentReviewCaseBody,
-  paymentEventQuery,
-  paymentProviderParam,
-  paymentReviewCaseIdParams,
-  paymentReviewCaseQuery,
-  releasePaymentReviewCaseBody,
-  resolvePaymentEventBody,
-} from "modules/payments/payments.schema";
 import {
   adminListReviewsQuery,
   createReviewBody,
@@ -76,6 +45,37 @@ import {
   putReviewReplyBody,
 } from "modules/reviews/reviews.schema";
 import {
+  extendPaymentReviewCaseBody,
+  paymentEventQuery,
+  paymentProviderParam,
+  paymentReviewCaseIdParams,
+  paymentReviewCaseQuery,
+  releasePaymentReviewCaseBody,
+  resolvePaymentEventBody,
+} from "modules/payments/payments.schema";
+import { PRODUCT_FACET_KEYS } from "modules/products/products.facets";
+import {
+  adminExportProductsQuery,
+  adminListProductsQuery,
+  compareQuery,
+  listProductsQuery,
+  productFacetsQuery,
+  productBody,
+  productPatchBody,
+} from "modules/products/products.schema";
+import {
+  configurePriceAlertBody,
+  wishlistProductParams,
+  wishlistQuery,
+  wishlistStatusQuery,
+} from "modules/wishlist/wishlist.schema";
+import { salesQuery } from "modules/dashboard/dashboard.schema";
+import {
+  adjustmentBody,
+  exportMovementsQuery,
+  listMovementsQuery,
+} from "modules/inventory/inventory.schema";
+import {
   adminPromotionQuery,
   createPromotionBody,
   promotionIdParams,
@@ -85,14 +85,7 @@ import {
   flashSaleAvailabilityQuery,
   flashSaleAllocationQuery,
 } from "modules/promotions/promotions.schema";
-import {
-  configurePriceAlertBody,
-  wishlistProductParams,
-  wishlistQuery,
-  wishlistStatusQuery,
-} from "modules/wishlist/wishlist.schema";
-import { notificationsQuery } from "modules/notifications/notifications.schema";
-import { updateNotificationPreferencesBody } from "modules/notifications/notification-preferences.schema";
+import { webPushSubscriptionBody } from "modules/notifications/web-push.schema";
 import {
   deviceEligibilityQuery,
   transitionItemBody,
@@ -100,12 +93,20 @@ import {
   warrantyVerificationBody,
   adminServiceRequestQuery,
 } from "modules/after-sales/after-sales.schema";
-import { webPushSubscriptionBody } from "modules/notifications/web-push.schema";
-import { confirmEmailVerificationBody } from "modules/email-verification/email-verification.schema";
+import { notificationsQuery } from "modules/notifications/notifications.schema";
+import {
+  createReceiptBody,
+  listReceiptsQuery,
+  postReceiptBody,
+  receiptIdParams,
+  updateReceiptBody,
+} from "modules/inventory/inventory-receipts.schema";
 import {
   notificationDeliveryQuery,
   retryNotificationDeliveryBody,
 } from "modules/notifications/admin-notifications.schema";
+import { confirmEmailVerificationBody } from "modules/email-verification/email-verification.schema";
+import { updateNotificationPreferencesBody } from "modules/notifications/notification-preferences.schema";
 
 extendZodWithOpenApi(z);
 
@@ -1422,7 +1423,14 @@ op({
   tag: "wishlist",
   auth: "user",
   request: { query: wishlistQuery },
-  ok: [200, "OK", page(WishlistItem)],
+  ok: [
+    200,
+    "OK",
+    z.object({
+      data: z.array(WishlistItem),
+      meta: Meta.extend({ flashSaleAlertEnabled: z.boolean() }),
+    }),
+  ],
 });
 op({
   method: "get",
@@ -1463,7 +1471,7 @@ op({
   errors: {
     400: "Invalid target price",
     404: "Wishlist item not found",
-    409: "Product unavailable",
+    409: "Product unavailable or Flash Sale alerts disabled",
   },
 });
 op({
@@ -1785,7 +1793,14 @@ op({
   auth: "user",
   request: {
     params: reviewImageParams,
-    body: multipart(z.object({ images: z.array(binary.describe("JPEG, PNG or WebP; maximum 3145728 bytes (3 MiB), inclusive")).min(1).max(3) })),
+    body: multipart(
+      z.object({
+        images: z
+          .array(binary.describe("JPEG, PNG or WebP; maximum 3145728 bytes (3 MiB), inclusive"))
+          .min(1)
+          .max(3),
+      }),
+    ),
   },
   ok: [201, "Created", data(z.array(ReviewImage))],
   deprecated: true,
@@ -1808,7 +1823,10 @@ op({
     body: multipart(
       z.object({
         manifest: z.string().describe("JSON-encoded ReviewImageSyncManifest"),
-        files: z.array(binary.describe("JPEG, PNG or WebP; maximum 3145728 bytes (3 MiB), inclusive")).max(3).optional(),
+        files: z
+          .array(binary.describe("JPEG, PNG or WebP; maximum 3145728 bytes (3 MiB), inclusive"))
+          .max(3)
+          .optional(),
       }),
     ),
   },

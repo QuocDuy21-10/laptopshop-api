@@ -176,6 +176,8 @@ describe("openapi document", () => {
     expect(body.anyOf[1].properties.includeFlashSale).toBeDefined();
     expect((doc.components?.schemas?.WishlistItem as any).properties.priceSnapshot).toBeDefined();
     expect(op("/api/v1/wishlist/items/{productId}", "delete").responses[204]).toBeDefined();
+    const list = op("/api/v1/wishlist", "get").responses[200].content["application/json"].schema;
+    expect(list.properties.meta.properties.flashSaleAlertEnabled).toBeDefined();
   });
 
   it("documents sanitized notification operations metrics", () => {
@@ -282,8 +284,12 @@ describe("openapi document", () => {
   });
 
   it("documents the inclusive review image upload size limit", () => {
-    for (const [path, method, field] of [["/api/v1/reviews/{id}/images", "post", "images"], ["/api/v1/reviews/{id}/images/sync", "put", "files"]]) {
-      const description = op(path, method).requestBody.content["multipart/form-data"].schema.properties[field].items.description;
+    for (const [path, method, field] of [
+      ["/api/v1/reviews/{id}/images", "post", "images"],
+      ["/api/v1/reviews/{id}/images/sync", "put", "files"],
+    ]) {
+      const description = op(path, method).requestBody.content["multipart/form-data"].schema
+        .properties[field].items.description;
       expect(description).toContain("3145728");
       expect(description).toContain("inclusive");
     }

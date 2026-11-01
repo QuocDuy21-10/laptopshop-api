@@ -68,13 +68,13 @@ export const renderPriceAlertEmail = (input: {
       input.settingsUrl,
     html:
       "<p><strong>" +
-      input.productName +
+      escapeHtml(input.productName) +
       "</strong> đã giảm giá.</p><p>Nguồn giá: " +
       input.source +
       '</p><p><a href="' +
-      input.productUrl +
+      escapeHtml(input.productUrl) +
       '">Xem sản phẩm</a></p><p><a href="' +
-      input.settingsUrl +
+      escapeHtml(input.settingsUrl) +
       '">Quản lý thông báo</a></p>',
   };
 };

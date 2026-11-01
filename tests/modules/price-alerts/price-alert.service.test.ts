@@ -226,6 +226,87 @@ describe("runPriceAlertSweep", () => {
     );
   });
 
+  it("skips an unchanged Flash Sale alert across sweeps and pricing versions", async () => {
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ productId: 1 }]).mockResolvedValueOnce([]);
+    prismaMock.wishlistItem.findMany.mockResolvedValueOnce([item(11, 1, 1_000)]);
+    prismaMock.wishlistItem.findMany.mockResolvedValueOnce([]);
+    prismaMock.product.findMany.mockResolvedValue([product(1, 1_000)]);
+    (resolveAlertPriceSnapshots as jest.Mock).mockResolvedValue(
+      new Map([
+        [
+          11,
+          {
+            productId: 1,
+            listPrice: 1_000,
+            stablePrice: 1_000,
+            effectivePrice: 500,
+            source: "FLASH_SALE",
+            promotionId: 20,
+            pricingVersion: 8,
+            validUntil: new Date("2026-10-23T00:00:00.000Z"),
+            purchasable: true,
+          },
+        ],
+      ]),
+    );
+    prismaMock.notification.findUnique.mockResolvedValue({ id: 1 });
+
+    const result = await runPriceAlertSweep({
+      client: prismaMock,
+      now: new Date(),
+      productBatchSize: 10,
+    });
+
+    expect(prismaMock.notification.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { dedupeKey: "price-alert-11-1-PERCENT_DROP-1000-500-FLASH_SALE-20" },
+      }),
+    );
+    expect(result.stats).toMatchObject({ notificationsCreated: 0, duplicatesSkipped: 1 });
+    expect(prismaMock.wishlistItem.updateMany).not.toHaveBeenCalled();
+    expect(prismaMock.notification.upsert).not.toHaveBeenCalled();
+  });
+
+  it("only commits an alert while the product is still active and in stock", async () => {
+    prismaMock.$queryRaw.mockResolvedValueOnce([{ productId: 1 }]).mockResolvedValueOnce([]);
+    prismaMock.wishlistItem.findMany.mockResolvedValueOnce([item(11, 1, 1_000)]);
+    prismaMock.wishlistItem.findMany.mockResolvedValueOnce([]);
+    prismaMock.product.findMany.mockResolvedValue([product(1, 1_000)]);
+    (resolveAlertPriceSnapshots as jest.Mock).mockResolvedValue(
+      new Map([
+        [
+          11,
+          {
+            productId: 1,
+            listPrice: 1_000,
+            stablePrice: 900,
+            effectivePrice: 900,
+            source: "AUTOMATIC",
+            promotionId: 4,
+            pricingVersion: 1,
+            validUntil: null,
+            purchasable: true,
+          },
+        ],
+      ]),
+    );
+    prismaMock.wishlistItem.updateMany.mockResolvedValue({ count: 0 });
+
+    const result = await runPriceAlertSweep({
+      client: prismaMock,
+      now: new Date(),
+      productBatchSize: 10,
+    });
+
+    expect(prismaMock.wishlistItem.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ product: { isActive: true, quantity: { gt: 0 } } }),
+      }),
+    );
+    expect(result.stats.notificationsCreated).toBe(0);
+    expect(prismaMock.notification.upsert).not.toHaveBeenCalled();
+  });
+
   it("counts malformed alert state without throwing", async () => {
     prismaMock.$queryRaw.mockResolvedValueOnce([{ productId: 1 }]).mockResolvedValueOnce([]);
     prismaMock.wishlistItem.findMany.mockResolvedValueOnce([item(11, 1, null)]);

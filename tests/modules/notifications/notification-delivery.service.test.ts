@@ -120,6 +120,50 @@ describe("processNotificationDelivery", () => {
     );
   });
 
+  const priceAlertNotification = (validUntil: Date | null) => ({
+    id: 11,
+    title: "Sản phẩm yêu thích vừa giảm giá",
+    message: "Laptop X đã giảm",
+    type: "PRICE_DROP",
+    serviceRequestId: null,
+    productId: 5,
+    oldPrice: 1_000,
+    newPrice: 900,
+    priceSource: "FLASH_SALE",
+    validUntil,
+    product: { name: "Laptop X" },
+  });
+
+  it("emails the product name with absolute storefront links", async () => {
+    const provider = { send: jest.fn().mockResolvedValue({ providerMessageId: "mail-8" }) };
+    const runtime = deps(baseDelivery({ notification: priceAlertNotification(null) }), provider);
+
+    await expect(processNotificationDelivery(runtime, 7)).resolves.toBe("delivered");
+    const sent = provider.send.mock.calls[0][0];
+    expect(sent.text).toContain("Laptop X đã giảm");
+    expect(sent.text).toContain("http://localhost:3000/products/5");
+    expect(sent.html).toContain('href="http://localhost:3000/account/notifications/settings"');
+  });
+
+  it("cancels a price alert whose price expired before send", async () => {
+    const provider = { send: jest.fn() };
+    const runtime = deps(
+      baseDelivery({ notification: priceAlertNotification(new Date("2026-10-22T23:00:00.000Z")) }),
+      provider,
+    );
+
+    await expect(processNotificationDelivery(runtime, 7)).resolves.toBe("cancelled");
+    expect(provider.send).not.toHaveBeenCalled();
+    expect(runtime.client.notificationDelivery.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "CANCELLED",
+          normalizedErrorCode: "PRICE_EXPIRED",
+        }),
+      }),
+    );
+  });
+
   it("marks permanent provider errors as failed without retry", async () => {
     const permanent = Object.assign(new Error("rejected"), {
       retryable: false,
