@@ -303,6 +303,19 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
       Boolean(body.flashSale);
   const updated = await prisma
     .$transaction(async (tx) => {
+      // optimistic guard (also takes the row lock): an activation or pricing edit committed since
+      // the read must not be overwritten with fields validated against the old state
+      const guard = await tx.promotion.updateMany({
+        where: { id, pricingVersion: current.pricingVersion, activatedAt: current.activatedAt },
+        data: { updatedById: actorId },
+      });
+      if (guard.count !== 1) {
+        throw new AppError(
+          "Promotion was changed by another request; reload and retry",
+          409,
+          "PROMOTION_CONFLICT",
+        );
+      }
       if (body.coupon) {
         await tx.couponPolicy.update({
           where: { promotionId: id },

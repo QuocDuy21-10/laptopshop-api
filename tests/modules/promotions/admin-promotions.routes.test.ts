@@ -387,6 +387,20 @@ describe("admin promotion routes", () => {
     expect(prismaMock.promotion.update).not.toHaveBeenCalled();
   });
 
+  it("refuses a draft PATCH when the promotion was activated or repriced since it was read", async () => {
+    prismaMock.promotion.updateMany.mockResolvedValue({ count: 0 });
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ coupon: { minOrderValue: 1000 } });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("PROMOTION_CONFLICT");
+    expect(prismaMock.promotion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 10, pricingVersion: 1, activatedAt: null } }),
+    );
+    expect(prismaMock.couponPolicy.update).not.toHaveBeenCalled();
+  });
+
   it("maps a duplicate coupon code on update to 409", async () => {
     prismaMock.couponPolicy.update.mockRejectedValue(prismaError("P2002"));
     const response = await request(buildApp())
