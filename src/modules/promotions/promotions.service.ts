@@ -527,7 +527,16 @@ export const clonePromotion = async (id: number, actorId: number) => {
         ...(current.couponPolicy
           ? {
               couponPolicy: {
-                create: { ...current.couponPolicy, promotionId: undefined, code: code! },
+                // spelled out so the clone starts with no usage (usedCount stays at its default 0)
+                create: {
+                  code: code!,
+                  scope: current.couponPolicy.scope,
+                  minOrderValue: current.couponPolicy.minOrderValue,
+                  maxDiscount: current.couponPolicy.maxDiscount,
+                  maxUses: current.couponPolicy.maxUses,
+                  maxUsesPerUser: current.couponPolicy.maxUsesPerUser,
+                  isPublic: current.couponPolicy.isPublic,
+                },
               },
             }
           : current.flashSalePolicy

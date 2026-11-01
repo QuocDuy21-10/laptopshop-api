@@ -228,6 +228,27 @@ describe("admin promotion routes", () => {
     expect(response.body).not.toHaveProperty("items");
   });
 
+  it("clones a used coupon as a fresh draft without its usage count", async () => {
+    prismaMock.promotion.findUnique.mockResolvedValue({
+      ...promotion,
+      state: "ACTIVE",
+      couponPolicy: { ...promotion.couponPolicy, usedCount: 7 },
+    });
+    const response = await request(buildApp())
+      .post(`${endpoint}/10/clone`)
+      .set("Cookie", cookieFor(ADMIN));
+    expect(response.status).toBeLessThan(300);
+    const created = prismaMock.promotion.create.mock.calls[0][0].data.couponPolicy.create;
+    expect(created).not.toHaveProperty("usedCount");
+    expect(created.code).toMatch(/^CLONE-10-/);
+    expect(created).toMatchObject({
+      scope: "ORDER",
+      maxUses: 100,
+      maxUsesPerUser: 1,
+      isPublic: false,
+    });
+  });
+
   it("lists redemptions under data", async () => {
     prismaMock.promotionRedemption.count.mockResolvedValue(0);
     prismaMock.promotionRedemption.findMany.mockResolvedValue([]);
