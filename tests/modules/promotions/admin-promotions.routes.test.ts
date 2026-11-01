@@ -52,6 +52,12 @@ beforeEach(() => {
     state: "ACTIVE",
     activatedAt: new Date(),
   });
+  prismaMock.promotion.updateMany.mockResolvedValue({ count: 1 });
+  prismaMock.promotion.findUniqueOrThrow.mockResolvedValue({
+    ...promotion,
+    state: "ACTIVE",
+    activatedAt: new Date(),
+  });
 });
 
 describe("admin promotion routes", () => {
@@ -254,6 +260,20 @@ describe("admin promotion routes", () => {
     expect(locked.body.error.code).toBe("PROMOTION_FIELD_LOCKED");
   });
 
+  it("applies a transition once when a concurrent request already changed the state", async () => {
+    prismaMock.promotion.updateMany.mockResolvedValue({ count: 0 });
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10/state`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ action: "ACTIVATE" });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("PROMOTION_INVALID_TRANSITION");
+    expect(prismaMock.promotion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 10, state: "DRAFT" } }),
+    );
+    expect(prismaMock.outboxEvent.create).not.toHaveBeenCalled();
+  });
+
   it("keeps pricing reevaluation events distinct for promotions that share a product", async () => {
     const target = {
       ...promotion,
@@ -268,7 +288,7 @@ describe("admin promotion routes", () => {
     );
     for (const id of [10, 11]) {
       prismaMock.promotion.findUnique.mockResolvedValue({ ...target, id });
-      prismaMock.promotion.update.mockResolvedValue({
+      prismaMock.promotion.findUniqueOrThrow.mockResolvedValue({
         ...target,
         id,
         state: "ACTIVE",

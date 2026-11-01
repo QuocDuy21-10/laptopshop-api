@@ -453,14 +453,20 @@ export const transitionPromotion = async (
         ? "PAUSED"
         : "ENDED";
   const updated = await prisma.$transaction(async (tx) => {
-    const promotion = await tx.promotion.update({
-      where: { id },
+    // the state guard sits in the UPDATE so concurrent transitions apply (and emit events) once
+    const changed = await tx.promotion.updateMany({
+      where: { id, state },
       data: {
         state: nextState,
         updatedById: actorId,
         ...(action === "ACTIVATE" ? { activatedAt: now } : {}),
         pricingVersion: { increment: 1 },
       },
+    });
+    if (changed.count !== 1)
+      throw new AppError("Promotion state changed", 409, "PROMOTION_INVALID_TRANSITION");
+    const promotion = await tx.promotion.findUniqueOrThrow({
+      where: { id },
       include: promotionInclude,
     });
     const productIds = [
