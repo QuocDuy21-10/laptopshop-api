@@ -1,4 +1,4 @@
-import { type Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { pageArgs, pageMeta } from "lib/http";
 import { env } from "config/env";
@@ -24,6 +24,9 @@ import {
   type PublicReviewRow,
   type ReviewSummaryDto,
   type ReviewImageDto,
+  reviewHighlightSelect,
+  toReviewHighlightDto,
+  type ReviewHighlightDto,
 } from "modules/reviews/reviews.mapper";
 import type { ListProductReviewsQuery } from "modules/reviews/reviews.schema";
 import type {
@@ -539,4 +542,59 @@ export const moderateReview = async (
     if (count === 0) throw new AppError("Review state has changed", 409, "REVIEW_STATE_CHANGED");
   });
   return getAdminReview(reviewId);
+};
+
+export type ReviewHighlightsDto = {
+  summary: { averageRating: number | null; totalReviews: number };
+  items: ReviewHighlightDto[];
+};
+
+const HIGHLIGHT_MIN_RATING = 4;
+const HIGHLIGHT_MIN_CONTENT_LENGTH = 40;
+
+export const getReviewHighlights = async (limit: number): Promise<ReviewHighlightsDto> => {
+  const [aggregate, picked] = await Promise.all([
+    prisma.review.aggregate({
+      where: { status: "PUBLISHED", deletedAt: null, product: { isActive: true } },
+      _avg: { rating: true },
+      _count: { _all: true },
+    }),
+    prisma.$queryRaw<{ id: number; helpfulCount: bigint | number }[]>(Prisma.sql`
+      WITH eligible AS (
+        SELECT r.id, r.productId, r.createdAt,
+               (SELECT COUNT(*) FROM review_helpful h WHERE h.reviewId = r.id) AS helpfulCount
+        FROM reviews r JOIN products p ON p.id = r.productId
+        WHERE r.status = 'PUBLISHED' AND r.deletedAt IS NULL AND p.isActive = 1
+          AND r.rating >= ${HIGHLIGHT_MIN_RATING}
+          AND CHAR_LENGTH(TRIM(r.content)) >= ${HIGHLIGHT_MIN_CONTENT_LENGTH}
+      ), ranked AS (
+        SELECT id, helpfulCount, createdAt,
+               ROW_NUMBER() OVER (
+                 PARTITION BY productId ORDER BY helpfulCount DESC, createdAt DESC, id DESC
+               ) AS rn
+        FROM eligible
+      )
+      SELECT id, helpfulCount FROM ranked WHERE rn = 1
+      ORDER BY helpfulCount DESC, createdAt DESC, id DESC
+      LIMIT ${limit}
+    `),
+  ]);
+  const summary = {
+    averageRating:
+      aggregate._avg.rating === null ? null : Math.round(aggregate._avg.rating * 10) / 10,
+    totalReviews: aggregate._count._all,
+  };
+  if (picked.length === 0) return { summary, items: [] };
+  const rows = await prisma.review.findMany({
+    where: { id: { in: picked.map((row) => row.id) } },
+    select: reviewHighlightSelect,
+  });
+  const byId = new Map(rows.map((row) => [row.id, row]));
+  return {
+    summary,
+    items: picked.flatMap((pick) => {
+      const row = byId.get(pick.id);
+      return row ? [toReviewHighlightDto(row, Number(pick.helpfulCount))] : [];
+    }),
+  };
 };

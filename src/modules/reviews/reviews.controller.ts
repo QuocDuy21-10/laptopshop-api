@@ -1,7 +1,24 @@
 import type { Request, RequestHandler, Response } from "express";
-import { AppError } from "lib/errors";
+
 import { type IdParams } from "lib/http";
-import { listPublishedReviews, getPublishedReviewSummary } from "modules/reviews/reviews.service";
+import { AppError } from "lib/errors";
+import { idempotencyKeyHeader } from "lib/idempotency";
+import type {
+  AdminListReviewsQuery,
+  CreateReviewBody,
+  ListProductReviewsQuery,
+  ModerateReviewBody,
+  ReviewHighlightsQuery,
+  UpdateReviewBody,
+  HelpfulReviewIdsQuery,
+} from "modules/reviews/reviews.schema";
+import type { PutReviewReplyBody } from "modules/reviews/reviews.schema";
+import type { ReviewImageOrderBody } from "modules/reviews/reviews.schema";
+import {
+  listPublishedReviews,
+  getPublishedReviewSummary,
+  getReviewHighlights,
+} from "modules/reviews/reviews.service";
 import {
   createReview,
   deleteMyReview,
@@ -12,35 +29,24 @@ import {
   moderateReview,
   updateMyReview,
 } from "modules/reviews/reviews.service";
-import type {
-  AdminListReviewsQuery,
-  CreateReviewBody,
-  ListProductReviewsQuery,
-  ModerateReviewBody,
-  UpdateReviewBody,
-  HelpfulReviewIdsQuery,
-} from "modules/reviews/reviews.schema";
-import {
-  listMyHelpfulReviewIds,
-  markReviewHelpful,
-  unmarkReviewHelpful,
-} from "modules/reviews/review-helpful.service";
-import type { ReviewImageDeps } from "modules/reviews/review-images.service";
 import type { ReviewImageRuntime } from "modules/reviews/review-image-runtime";
-import { idempotencyKeyHeader } from "lib/idempotency";
-import { parseReviewImageSyncManifest } from "modules/reviews/review-image-sync.schema";
-import {
-  getReviewImageSyncStatus,
-  syncReviewImages,
-} from "modules/reviews/review-image-sync.service";
-import { deleteOfficialReply, putOfficialReply } from "modules/reviews/review-replies.service";
-import type { PutReviewReplyBody } from "modules/reviews/reviews.schema";
+import type { ReviewImageDeps } from "modules/reviews/review-images.service";
 import {
   addReviewImages,
   deleteReviewImage,
   reorderReviewImages,
 } from "modules/reviews/review-images.service";
-import type { ReviewImageOrderBody } from "modules/reviews/reviews.schema";
+import {
+  listMyHelpfulReviewIds,
+  markReviewHelpful,
+  unmarkReviewHelpful,
+} from "modules/reviews/review-helpful.service";
+import { deleteOfficialReply, putOfficialReply } from "modules/reviews/review-replies.service";
+import { parseReviewImageSyncManifest } from "modules/reviews/review-image-sync.schema";
+import {
+  getReviewImageSyncStatus,
+  syncReviewImages,
+} from "modules/reviews/review-image-sync.service";
 
 export const createReviewImageHandlers = (deps: ReviewImageDeps) => ({
   add: async (req: Request, res: Response) => {
@@ -93,6 +99,10 @@ export const createReviewHandlers = (runtime?: ReviewImageRuntime) => ({
   getProductReviewSummary: (async (_req, res) => {
     const { id } = res.locals.params as { id: number };
     res.json({ data: await getPublishedReviewSummary(id) });
+  }) satisfies RequestHandler,
+  getReviewHighlights: (async (_req, res) => {
+    const { limit } = res.locals.query as ReviewHighlightsQuery;
+    res.json({ data: await getReviewHighlights(limit) });
   }) satisfies RequestHandler,
   getReviewEligibility: (async (req, res) => {
     const { id } = res.locals.params as IdParams;

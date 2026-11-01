@@ -34,6 +34,7 @@ const V1_PATHS = [
   "/api/v1/products/{id}/reviews",
   "/api/v1/products/{id}/reviews/summary",
   "/api/v1/products/{id}/reviews/eligibility",
+  "/api/v1/reviews/highlights",
   "/api/v1/reviews/{id}",
   "/api/v1/reviews/helpful",
   "/api/v1/reviews/{id}/helpful",
