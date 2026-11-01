@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+
 import { AppError } from "lib/errors";
 import {
   claimCouponUsage,
