@@ -52,6 +52,12 @@ beforeEach(() => {
     state: "ACTIVE",
     activatedAt: new Date(),
   });
+  prismaMock.promotion.updateMany.mockResolvedValue({ count: 1 });
+  prismaMock.promotion.findUniqueOrThrow.mockResolvedValue({
+    ...promotion,
+    state: "ACTIVE",
+    activatedAt: new Date(),
+  });
 });
 
 describe("admin promotion routes", () => {
@@ -218,6 +224,40 @@ describe("admin promotion routes", () => {
       .set("Cookie", cookieFor(ADMIN));
     expect(response.status).toBe(200);
     expect(response.body.meta).toMatchObject({ page: 2, pageSize: 10, total: 1 });
+    expect(response.body.data).toEqual([expect.objectContaining({ id: 10, name: "Welcome" })]);
+    expect(response.body).not.toHaveProperty("items");
+  });
+
+  it("clones a used coupon as a fresh draft without its usage count", async () => {
+    prismaMock.promotion.findUnique.mockResolvedValue({
+      ...promotion,
+      state: "ACTIVE",
+      couponPolicy: { ...promotion.couponPolicy, usedCount: 7 },
+    });
+    const response = await request(buildApp())
+      .post(`${endpoint}/10/clone`)
+      .set("Cookie", cookieFor(ADMIN));
+    expect(response.status).toBeLessThan(300);
+    const created = prismaMock.promotion.create.mock.calls[0][0].data.couponPolicy.create;
+    expect(created).not.toHaveProperty("usedCount");
+    expect(created.code).toMatch(/^CLONE-10-/);
+    expect(created).toMatchObject({
+      scope: "ORDER",
+      maxUses: 100,
+      maxUsesPerUser: 1,
+      isPublic: false,
+    });
+  });
+
+  it("lists redemptions under data", async () => {
+    prismaMock.promotionRedemption.count.mockResolvedValue(0);
+    prismaMock.promotionRedemption.findMany.mockResolvedValue([]);
+    const response = await request(buildApp())
+      .get(`${endpoint}/10/redemptions`)
+      .set("Cookie", cookieFor(ADMIN));
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({ data: [], meta: { total: 0 } });
+    expect(response.body).not.toHaveProperty("items");
   });
 
   it("activates a draft and exposes a locked-field conflict", async () => {
@@ -241,6 +281,20 @@ describe("admin promotion routes", () => {
     expect(locked.body.error.code).toBe("PROMOTION_FIELD_LOCKED");
   });
 
+  it("applies a transition once when a concurrent request already changed the state", async () => {
+    prismaMock.promotion.updateMany.mockResolvedValue({ count: 0 });
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10/state`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ action: "ACTIVATE" });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("PROMOTION_INVALID_TRANSITION");
+    expect(prismaMock.promotion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 10, state: "DRAFT" } }),
+    );
+    expect(prismaMock.outboxEvent.create).not.toHaveBeenCalled();
+  });
+
   it("keeps pricing reevaluation events distinct for promotions that share a product", async () => {
     const target = {
       ...promotion,
@@ -255,7 +309,7 @@ describe("admin promotion routes", () => {
     );
     for (const id of [10, 11]) {
       prismaMock.promotion.findUnique.mockResolvedValue({ ...target, id });
-      prismaMock.promotion.update.mockResolvedValue({
+      prismaMock.promotion.findUniqueOrThrow.mockResolvedValue({
         ...target,
         id,
         state: "ACTIVE",
@@ -352,6 +406,20 @@ describe("admin promotion routes", () => {
     expect(response.body.error.code).toBe("VALIDATION_ERROR");
     expect(prismaMock.couponPolicy.update).not.toHaveBeenCalled();
     expect(prismaMock.promotion.update).not.toHaveBeenCalled();
+  });
+
+  it("refuses a draft PATCH when the promotion was activated or repriced since it was read", async () => {
+    prismaMock.promotion.updateMany.mockResolvedValue({ count: 0 });
+    const response = await request(buildApp())
+      .patch(`${endpoint}/10`)
+      .set("Cookie", cookieFor(ADMIN))
+      .send({ coupon: { minOrderValue: 1000 } });
+    expect(response.status).toBe(409);
+    expect(response.body.error.code).toBe("PROMOTION_CONFLICT");
+    expect(prismaMock.promotion.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 10, pricingVersion: 1, activatedAt: null } }),
+    );
+    expect(prismaMock.couponPolicy.update).not.toHaveBeenCalled();
   });
 
   it("maps a duplicate coupon code on update to 409", async () => {

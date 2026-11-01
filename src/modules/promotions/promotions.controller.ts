@@ -1,14 +1,16 @@
-import { RequestHandler } from "express";
-import { IdParams } from "lib/http";
+import { type RequestHandler } from "express";
+
+import { type IdParams } from "lib/http";
 import {
-  AdminPromotionQuery,
-  CreatePromotionBody,
-  PromotionIdParams,
-  PromotionRedemptionQuery,
-  TransitionPromotionBody,
-  UpdatePromotionBody,
-  FlashSaleAllocationQuery,
+  type AdminPromotionQuery,
+  type CreatePromotionBody,
+  type PromotionIdParams,
+  type PromotionRedemptionQuery,
+  type TransitionPromotionBody,
+  type UpdatePromotionBody,
+  type FlashSaleAllocationQuery,
 } from "modules/promotions/promotions.schema";
+import type { FlashSaleAvailabilityQuery } from "modules/promotions/promotions.schema";
 import {
   clonePromotion,
   createPromotion,
@@ -22,7 +24,6 @@ import {
 } from "modules/promotions/promotions.service";
 import { listAvailablePromotions, quoteOrder } from "modules/promotions/promotions.service";
 import { getFlashSaleAvailability } from "modules/promotions/flash-sale-availability";
-import type { FlashSaleAvailabilityQuery } from "modules/promotions/promotions.schema";
 
 export const quoteOrderHandler: RequestHandler = async (req, res) => {
   res.json({ data: await quoteOrder(req.auth!.id, req.body?.couponCode) });
@@ -51,7 +52,7 @@ export const createPromotionHandler: RequestHandler = async (req, res) => {
 
 export const listPromotionsHandler: RequestHandler = async (_req, res) => {
   const result = await listPromotions(res.locals.query as AdminPromotionQuery);
-  res.json(result);
+  res.json({ data: result.items, meta: result.meta });
 };
 
 export const getPromotionHandler: RequestHandler = async (_req, res) => {
@@ -89,7 +90,7 @@ export const listPromotionRedemptionsHandler: RequestHandler = async (_req, res)
     (res.locals.params as PromotionIdParams).id,
     res.locals.query as PromotionRedemptionQuery,
   );
-  res.json(result);
+  res.json({ data: result.items, meta: result.meta });
 };
 
 export const getPromotionSummaryHandler: RequestHandler = async (_req, res) => {

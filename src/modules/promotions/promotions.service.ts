@@ -303,6 +303,19 @@ export const updatePromotion = async (id: number, actorId: number, body: UpdateP
       Boolean(body.flashSale);
   const updated = await prisma
     .$transaction(async (tx) => {
+      // optimistic guard (also takes the row lock): an activation or pricing edit committed since
+      // the read must not be overwritten with fields validated against the old state
+      const guard = await tx.promotion.updateMany({
+        where: { id, pricingVersion: current.pricingVersion, activatedAt: current.activatedAt },
+        data: { updatedById: actorId },
+      });
+      if (guard.count !== 1) {
+        throw new AppError(
+          "Promotion was changed by another request; reload and retry",
+          409,
+          "PROMOTION_CONFLICT",
+        );
+      }
       if (body.coupon) {
         await tx.couponPolicy.update({
           where: { promotionId: id },
@@ -453,14 +466,20 @@ export const transitionPromotion = async (
         ? "PAUSED"
         : "ENDED";
   const updated = await prisma.$transaction(async (tx) => {
-    const promotion = await tx.promotion.update({
-      where: { id },
+    // the state guard sits in the UPDATE so concurrent transitions apply (and emit events) once
+    const changed = await tx.promotion.updateMany({
+      where: { id, state },
       data: {
         state: nextState,
         updatedById: actorId,
         ...(action === "ACTIVATE" ? { activatedAt: now } : {}),
         pricingVersion: { increment: 1 },
       },
+    });
+    if (changed.count !== 1)
+      throw new AppError("Promotion state changed", 409, "PROMOTION_INVALID_TRANSITION");
+    const promotion = await tx.promotion.findUniqueOrThrow({
+      where: { id },
       include: promotionInclude,
     });
     const productIds = [
@@ -508,7 +527,16 @@ export const clonePromotion = async (id: number, actorId: number) => {
         ...(current.couponPolicy
           ? {
               couponPolicy: {
-                create: { ...current.couponPolicy, promotionId: undefined, code: code! },
+                // spelled out so the clone starts with no usage (usedCount stays at its default 0)
+                create: {
+                  code: code!,
+                  scope: current.couponPolicy.scope,
+                  minOrderValue: current.couponPolicy.minOrderValue,
+                  maxDiscount: current.couponPolicy.maxDiscount,
+                  maxUses: current.couponPolicy.maxUses,
+                  maxUsesPerUser: current.couponPolicy.maxUsesPerUser,
+                  isPublic: current.couponPolicy.isPublic,
+                },
               },
             }
           : current.flashSalePolicy

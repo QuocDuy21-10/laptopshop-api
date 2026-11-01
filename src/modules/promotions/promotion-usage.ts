@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+
 import { AppError, notFound } from "lib/errors";
 
 type Tx = Prisma.TransactionClient;
@@ -13,8 +14,13 @@ export const claimCouponUsage = async (
     throw new AppError("Promotion usage limit reached", 409, "PROMOTION_USAGE_LIMIT");
   }
 
+  // the cap lives in the UPDATE itself: concurrent checkouts only fail when no slot is left,
+  // instead of losing to whoever changed usedCount since it was read
   const global = await tx.couponPolicy.updateMany({
-    where: { promotionId: input.promotionId, usedCount: policy.usedCount },
+    where: {
+      promotionId: input.promotionId,
+      ...(policy.maxUses !== null ? { usedCount: { lt: policy.maxUses } } : {}),
+    },
     data: { usedCount: { increment: 1 } },
   });
   if (global.count !== 1)
@@ -30,19 +36,18 @@ export const claimCouponUsage = async (
       });
       return;
     } catch (error) {
+      // a concurrent first use created the row: fall through to the capped increment
       if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002")
         throw error;
-      throw new AppError("Promotion user limit reached", 409, "PROMOTION_USER_LIMIT");
     }
-  }
-  if (usage.usedCount >= policy.maxUsesPerUser) {
+  } else if (usage.usedCount >= policy.maxUsesPerUser) {
     throw new AppError("Promotion user limit reached", 409, "PROMOTION_USER_LIMIT");
   }
   const userUpdated = await tx.promotionUserUsage.updateMany({
     where: {
       promotionId: input.promotionId,
       userId: input.userId,
-      usedCount: usage.usedCount,
+      usedCount: { lt: policy.maxUsesPerUser },
     },
     data: { usedCount: { increment: 1 } },
   });
