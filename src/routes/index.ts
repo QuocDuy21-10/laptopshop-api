@@ -25,7 +25,7 @@ import { adminProductRoutes, productRoutes } from "modules/products/products.rou
 import { wishlistRoutes } from "modules/wishlist/wishlist.routes";
 import { dashboardRoutes } from "modules/dashboard/dashboard.routes";
 import { adminInventoryRoutes } from "modules/inventory/inventory.routes";
-import { newsletterRoutes } from "modules/newsletter/newsletter.routes";
+import { adminNewsletterRoutes, newsletterRoutes } from "modules/newsletter/newsletter.routes";
 import { adminPromotionRoutes, promotionRoutes } from "modules/promotions/promotions.routes";
 import type { ReviewImageRuntime } from "modules/reviews/review-image-runtime";
 import { createReviewImageRoutes } from "modules/reviews/review-images.routes";
@@ -106,6 +106,7 @@ export const createApiV1Router = (
       createAfterSalesAttachmentRoutes(afterSalesAttachments, afterSalesImagesLimiter),
     );
   admin.use("/promotions", adminPromotionRoutes);
+  admin.use("/newsletter", adminNewsletterRoutes);
   admin.use("/home-banners", adminHomeBannerRoutes);
   admin.use("/", adminNotificationRoutes);
   router.use("/admin", admin);

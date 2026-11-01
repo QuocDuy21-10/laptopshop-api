@@ -1,7 +1,16 @@
+import type { NewsletterSubscriber, Prisma } from "@prisma/client";
+
+import { assertExportSize, toCsv, type CsvColumn } from "lib/csv";
+import { pageArgs, pageMeta } from "lib/http";
 import { env } from "config/env";
 import { AppError, isUniqueViolation } from "lib/errors";
 import { logger } from "lib/logger";
 import { prisma } from "config/client";
+import { toSubscriberDto } from "modules/newsletter/newsletter.mapper";
+import type {
+  AdminExportSubscribersQuery,
+  AdminListSubscribersQuery,
+} from "modules/newsletter/newsletter.schema";
 import {
   createConfirmToken,
   createUnsubscribeToken,
@@ -119,4 +128,44 @@ export const unsubscribe = async (token: string): Promise<{ status: "UNSUBSCRIBE
     });
   }
   return { status: "UNSUBSCRIBED" };
+};
+
+const subscriberWhere = (query: {
+  status?: NewsletterSubscriber["status"];
+  q?: string;
+}): Prisma.NewsletterSubscriberWhereInput => ({
+  ...(query.status ? { status: query.status } : {}),
+  ...(query.q ? { email: { contains: query.q } } : {}),
+});
+
+export const listSubscribers = async (query: AdminListSubscribersQuery) => {
+  const where = subscriberWhere(query);
+  const [total, rows] = await Promise.all([
+    prisma.newsletterSubscriber.count({ where }),
+    prisma.newsletterSubscriber.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      ...pageArgs(query),
+    }),
+  ]);
+  return { items: rows.map(toSubscriberDto), meta: pageMeta(query, total) };
+};
+
+const iso = (date: Date | null) => (date ? date.toISOString() : null);
+
+const SUBSCRIBER_COLUMNS: CsvColumn<NewsletterSubscriber>[] = [
+  { header: "Email", value: (s) => s.email },
+  { header: "Trạng thái", value: (s) => s.status },
+  { header: "Ngày đăng ký", value: (s) => iso(s.createdAt) },
+  { header: "Ngày xác nhận", value: (s) => iso(s.confirmedAt) },
+  { header: "Ngày hủy", value: (s) => iso(s.unsubscribedAt) },
+];
+
+export const exportSubscribers = async (query: AdminExportSubscribersQuery) => {
+  const where = subscriberWhere(query);
+  assertExportSize(await prisma.newsletterSubscriber.count({ where }));
+  return toCsv(
+    SUBSCRIBER_COLUMNS,
+    await prisma.newsletterSubscriber.findMany({ where, orderBy: { id: "asc" } }),
+  );
 };
