@@ -104,3 +104,33 @@ export const deleteHomeBanner = async (id: number) => {
   await prisma.homeBanner.delete({ where: { id } });
   await removeBannerImageFile(existing.imagePath);
 };
+
+// the file already sits on disk (upload middleware runs first); the controller deletes it if this throws
+export const setHomeBannerImage = async (
+  id: number,
+  filename: string,
+  imageAlt: string | undefined,
+) => {
+  const existing = await findHomeBannerOrThrow(id);
+  const alt = imageAlt ?? existing.imageAlt;
+  if (alt === null)
+    throw new AppError("Validation failed", 400, "VALIDATION_ERROR", [
+      { path: "imageAlt", message: "imageAlt is required when the banner has an image" },
+    ]);
+  const row = await prisma.homeBanner.update({
+    where: { id },
+    data: { imagePath: filename, imageAlt: alt },
+  });
+  await removeBannerImageFile(existing.imagePath);
+  return toAdminHomeBannerDto(row, new Date());
+};
+
+export const clearHomeBannerImage = async (id: number) => {
+  const existing = await findHomeBannerOrThrow(id);
+  const row = await prisma.homeBanner.update({
+    where: { id },
+    data: { imagePath: null, imageAlt: null },
+  });
+  await removeBannerImageFile(existing.imagePath);
+  return toAdminHomeBannerDto(row, new Date());
+};
