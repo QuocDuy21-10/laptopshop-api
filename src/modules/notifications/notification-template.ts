@@ -88,3 +88,25 @@ export const renderAfterSalesEmail = (input: {
   text: `${input.message}. Xem yêu cầu: ${input.requestUrl}`,
   html: `<p>${escapeHtml(input.message)}</p><p><a href="${escapeHtml(input.requestUrl)}">Xem yêu cầu hậu mãi</a></p>`,
 });
+
+export const renderNewsletterConfirmationEmail = (input: {
+  confirmUrl: string;
+  unsubscribeUrl: string;
+}) => ({
+  subject: "Xác nhận đăng ký nhận ưu đãi LaptopShop",
+  text:
+    "Cảm ơn bạn đã đăng ký nhận ưu đãi từ LaptopShop. Mở liên kết sau để xác nhận: " +
+    input.confirmUrl +
+    " (liên kết hết hạn sau 24 giờ). Nếu không phải bạn đăng ký, hãy bỏ qua email này. " +
+    "Hủy nhận tin: " +
+    input.unsubscribeUrl,
+  html:
+    "<p>Cảm ơn bạn đã đăng ký nhận ưu đãi từ LaptopShop.</p>" +
+    '<p><a href="' +
+    escapeHtml(input.confirmUrl) +
+    '">Xác nhận đăng ký</a></p>' +
+    "<p>Liên kết hết hạn sau 24 giờ. Nếu không phải bạn đăng ký, hãy bỏ qua email này.</p>" +
+    '<p><a href="' +
+    escapeHtml(input.unsubscribeUrl) +
+    '">Hủy nhận tin</a></p>',
+});

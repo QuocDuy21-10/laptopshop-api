@@ -1,9 +1,9 @@
 import { env } from "config/env";
 import { AppError } from "lib/errors";
-import { createEmailOtp, verifyEmailOtp } from "modules/email-verification/email-otp.crypto";
-import { createOutboxEvent } from "modules/outbox/outbox.repository";
-import type { EmailProvider } from "modules/notifications/providers/email.provider";
 import { prisma } from "config/client";
+import { createOutboxEvent } from "modules/outbox/outbox.repository";
+import { createEmailOtp, verifyEmailOtp } from "modules/email-verification/email-otp.crypto";
+import type { EmailProvider, EmailSendInput } from "modules/notifications/providers/email.provider";
 import { createSmtpEmailProvider } from "modules/notifications/providers/smtp-email.provider";
 
 let emailProvider: EmailProvider | null =
@@ -26,6 +26,12 @@ export const isEmailDeliveryAvailable = () => Boolean(env.EMAIL_ENABLED && email
 
 const unavailable = () =>
   new AppError("Email delivery is unavailable", 503, "EMAIL_DELIVERY_UNAVAILABLE");
+
+// shared by modules that email people directly (newsletter); OTP mail keeps using the outbox
+export const sendEmail = async (input: EmailSendInput) => {
+  if (!env.EMAIL_ENABLED || !emailProvider) throw unavailable();
+  return emailProvider.send(input);
+};
 
 export const requestEmailVerification = async (userId: number) => {
   if (!env.EMAIL_ENABLED || !emailProvider) throw unavailable();
