@@ -94,6 +94,12 @@ import {
   warrantyVerificationBody,
   adminServiceRequestQuery,
 } from "modules/after-sales/after-sales.schema";
+import {
+  adminListHomeBannersQuery,
+  createHomeBannerBody,
+  homeBannerImageBody,
+  patchHomeBannerBody,
+} from "modules/home-banners/home-banners.schema";
 import { notificationsQuery } from "modules/notifications/notifications.schema";
 import {
   createReceiptBody,
@@ -871,6 +877,36 @@ const ReviewSummary = registry.register(
     distribution: z.record(z.enum(["1", "2", "3", "4", "5"]), z.number().int()),
   }),
 );
+const PublicHomeBanner = registry.register(
+  "PublicHomeBanner",
+  z.object({
+    id: z.number(),
+    eyebrow: z.string().nullable(),
+    title: z.string(),
+    highlight: z.string().nullable(),
+    description: z.string().nullable(),
+    ctaText: z.string().nullable(),
+    linkUrl: z.string().nullable(),
+    secondaryCtaText: z.string().nullable(),
+    secondaryLinkUrl: z.string().nullable(),
+    badges: z.array(z.string()),
+    imageUrl: z.string().nullable(),
+    imageAlt: z.string().nullable(),
+  }),
+);
+const AdminHomeBanner = registry.register(
+  "AdminHomeBanner",
+  PublicHomeBanner.extend({
+    placement: z.enum(["HERO", "SIDE"]),
+    position: z.number().int(),
+    isActive: z.boolean(),
+    startsAt: z.string().datetime().nullable(),
+    endsAt: z.string().datetime().nullable(),
+    status: z.enum(["ACTIVE", "SCHEDULED", "EXPIRED", "INACTIVE"]),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  }),
+);
 const ReviewHighlights = registry.register(
   "ReviewHighlights",
   z.object({
@@ -1413,6 +1449,87 @@ op({
       }),
     ),
   ],
+});
+op({
+  method: "get",
+  path: `${v1}/home-banners`,
+  summary: "List active homepage banners",
+  tag: "home-banners",
+  ok: [
+    200,
+    "OK",
+    data(z.object({ hero: z.array(PublicHomeBanner), side: z.array(PublicHomeBanner) })),
+  ],
+});
+op({
+  method: "get",
+  path: `${v1}/admin/home-banners`,
+  summary: "List all homepage banners",
+  tag: "admin",
+  auth: "admin",
+  request: { query: adminListHomeBannersQuery },
+  ok: [200, "OK", data(z.array(AdminHomeBanner))],
+  errors: { 400: "Invalid filter" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/home-banners`,
+  summary: "Create a homepage banner",
+  tag: "admin",
+  auth: "admin",
+  request: { body: json(createHomeBannerBody) },
+  ok: [201, "Created", data(AdminHomeBanner)],
+  errors: { 400: "Invalid banner" },
+});
+op({
+  method: "get",
+  path: `${v1}/admin/home-banners/{id}`,
+  summary: "Get a homepage banner",
+  tag: "admin",
+  auth: "admin",
+  request: id,
+  ok: [200, "OK", data(AdminHomeBanner)],
+  errors: { 404: "Banner not found" },
+});
+op({
+  method: "patch",
+  path: `${v1}/admin/home-banners/{id}`,
+  summary: "Update a homepage banner",
+  tag: "admin",
+  auth: "admin",
+  request: { ...id, body: json(patchHomeBannerBody) },
+  ok: [200, "Updated", data(AdminHomeBanner)],
+  errors: { 400: "Invalid banner", 404: "Banner not found" },
+});
+op({
+  method: "delete",
+  path: `${v1}/admin/home-banners/{id}`,
+  summary: "Delete a homepage banner",
+  tag: "admin",
+  auth: "admin",
+  request: id,
+  ok: [204, "Deleted", z.null()],
+  errors: { 404: "Banner not found" },
+});
+op({
+  method: "post",
+  path: `${v1}/admin/home-banners/{id}/image`,
+  summary: "Upload or replace a banner image",
+  tag: "admin",
+  auth: "admin",
+  request: { ...id, body: multipart(homeBannerImageBody.extend({ image: binary })) },
+  ok: [200, "Updated", data(AdminHomeBanner)],
+  errors: { 400: "Missing alt text, no file or invalid image", 404: "Banner not found" },
+});
+op({
+  method: "delete",
+  path: `${v1}/admin/home-banners/{id}/image`,
+  summary: "Remove a banner image",
+  tag: "admin",
+  auth: "admin",
+  request: id,
+  ok: [200, "Updated", data(AdminHomeBanner)],
+  errors: { 404: "Banner not found" },
 });
 op({
   method: "post",

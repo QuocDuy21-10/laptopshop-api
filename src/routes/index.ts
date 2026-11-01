@@ -1,21 +1,14 @@
 import express, { type RequestHandler } from "express";
+
 import { env } from "config/env";
-import { originCheck } from "middlewares/origin-check";
 import { authenticate } from "middlewares/authenticate";
+import { originCheck } from "middlewares/origin-check";
 import { requireRole } from "middlewares/require-role";
 import { authRoutes } from "modules/auth/auth.routes";
-import { adminProductRoutes, productRoutes } from "modules/products/products.routes";
-import { adminRoleRoutes, adminUserRoutes, usersRoutes } from "modules/users/users.routes";
 import { cartRoutes } from "modules/cart/cart.routes";
-import { adminOrderRoutes, orderRoutes } from "modules/orders/orders.routes";
-import { adminInventoryRoutes } from "modules/inventory/inventory.routes";
-import { dashboardRoutes } from "modules/dashboard/dashboard.routes";
+import { adminRoleRoutes, adminUserRoutes, usersRoutes } from "modules/users/users.routes";
 import { notFoundHandler } from "middlewares/error.middleware";
-import {
-  adminPaymentReviewRoutes,
-  adminPaymentRoutes,
-  paymentRoutes,
-} from "modules/payments/payments.routes";
+import { adminOrderRoutes, orderRoutes } from "modules/orders/orders.routes";
 import { createAdvisorRoutes, type AdvisorRouteDeps } from "modules/advisor/advisor.routes";
 import {
   createProductReviewRoutes,
@@ -23,20 +16,29 @@ import {
   createAdminReviewRoutes,
   createReviewHelpfulRoutes,
 } from "modules/reviews/reviews.routes";
-import { createReviewImageRoutes } from "modules/reviews/review-images.routes";
-import type { ReviewImageDeps } from "modules/reviews/review-images.service";
-import type { ReviewImageRuntime } from "modules/reviews/review-image-runtime";
-import { adminPromotionRoutes, promotionRoutes } from "modules/promotions/promotions.routes";
+import {
+  adminPaymentReviewRoutes,
+  adminPaymentRoutes,
+  paymentRoutes,
+} from "modules/payments/payments.routes";
+import { adminProductRoutes, productRoutes } from "modules/products/products.routes";
 import { wishlistRoutes } from "modules/wishlist/wishlist.routes";
-import { notificationRoutes } from "modules/notifications/notifications.routes";
-import { notificationPreferencesRoutes } from "modules/notifications/notification-preferences.routes";
-import { webPushRoutes } from "modules/notifications/web-push.routes";
+import { dashboardRoutes } from "modules/dashboard/dashboard.routes";
+import { adminInventoryRoutes } from "modules/inventory/inventory.routes";
+import { adminPromotionRoutes, promotionRoutes } from "modules/promotions/promotions.routes";
+import type { ReviewImageRuntime } from "modules/reviews/review-image-runtime";
+import { createReviewImageRoutes } from "modules/reviews/review-images.routes";
 import { storeInfoRoutes } from "modules/store-info/store-info.routes";
-import { emailVerificationRoutes } from "modules/email-verification/email-verification.routes";
-import { adminNotificationRoutes } from "modules/notifications/admin-notifications.routes";
+import { webPushRoutes } from "modules/notifications/web-push.routes";
+import type { ReviewImageDeps } from "modules/reviews/review-images.service";
 import { adminAfterSalesRoutes, afterSalesRoutes } from "modules/after-sales/after-sales.routes";
-import { createAfterSalesAttachmentRoutes } from "modules/after-sales/after-sales-attachments.routes";
+import { adminHomeBannerRoutes, homeBannerRoutes } from "modules/home-banners/home-banners.routes";
+import { notificationRoutes } from "modules/notifications/notifications.routes";
 import type { AttachmentDeps } from "modules/after-sales/after-sales.attachments";
+import { adminNotificationRoutes } from "modules/notifications/admin-notifications.routes";
+import { createAfterSalesAttachmentRoutes } from "modules/after-sales/after-sales-attachments.routes";
+import { emailVerificationRoutes } from "modules/email-verification/email-verification.routes";
+import { notificationPreferencesRoutes } from "modules/notifications/notification-preferences.routes";
 
 export const createApiV1Router = (
   advisor: AdvisorRouteDeps,
@@ -56,6 +58,7 @@ export const createApiV1Router = (
 
   router.use("/auth", authRoutes);
   router.use("/store-info", storeInfoRoutes);
+  router.use("/home-banners", homeBannerRoutes);
   router.use("/products", createProductReviewRoutes(reviewRuntime, reviewMutationLimiter));
   router.use("/products", productRoutes);
   if (reviewImages)
@@ -101,6 +104,7 @@ export const createApiV1Router = (
       createAfterSalesAttachmentRoutes(afterSalesAttachments, afterSalesImagesLimiter),
     );
   admin.use("/promotions", adminPromotionRoutes);
+  admin.use("/home-banners", adminHomeBannerRoutes);
   admin.use("/", adminNotificationRoutes);
   router.use("/admin", admin);
 
