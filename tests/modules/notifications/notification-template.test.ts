@@ -47,6 +47,7 @@ describe("notification email templates", () => {
       expect(body).toContain("Khuyến mãi tự động");
       expect(body).toContain("23:59 22/10/2026 (GMT+7)");
       expect(body).not.toContain("2026-10-22T16:59");
+      expect(body).toContain("giá cuối cùng được xác nhận khi thanh toán");
     }
   });
 

@@ -48,6 +48,9 @@ const PRICE_SOURCE_LABELS: Record<string, string> = {
 
 const priceSourceLabel = (source: string) => PRICE_SOURCE_LABELS[source] ?? source;
 
+// the alert is a snapshot: stock, quota or the promotion can change before the customer checks out
+const PRICE_DISCLAIMER = "Giá có thể thay đổi; giá cuối cùng được xác nhận khi thanh toán.";
+
 // e.g. "23:59 22/10/2026 (GMT+7)" in the store's time zone instead of a raw UTC ISO string
 export const formatStoreDateTime = (value: Date, timeZone: string) => {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -91,7 +94,9 @@ export const renderPriceAlertEmail = (input: {
       source +
       ". Hạn giá: " +
       expiry +
-      ". Xem: " +
+      ". " +
+      PRICE_DISCLAIMER +
+      " Xem: " +
       input.productUrl +
       ". Quản lý thông báo: " +
       input.settingsUrl,
@@ -106,6 +111,8 @@ export const renderPriceAlertEmail = (input: {
       escapeHtml(source) +
       "</p><p>Hạn giá: " +
       escapeHtml(expiry) +
+      "</p><p>" +
+      PRICE_DISCLAIMER +
       '</p><p><a href="' +
       escapeHtml(input.productUrl) +
       '">Xem sản phẩm</a></p><p><a href="' +
