@@ -162,7 +162,7 @@ describe("createAdvisorService", () => {
     }).recommend({ ...input, note: "private note" }, { kind: "guest", key: "private-key" });
     expect(result.mode).toBe("rule_based");
     expect(logger.warn).toHaveBeenCalledWith(
-      { category: "provider_rate_limited" },
+      { category: "provider_rate_limited", reason: "quota" },
       expect.any(String),
     );
     expect(JSON.stringify(logger.warn.mock.calls)).not.toContain("private note");

@@ -50,6 +50,7 @@ YÊU CẦU:
 - Nhắc tới CPU, GPU, RAM, ổ cứng, pin, màn hình, trọng lượng, bảo hành hoặc giá thì phải có evidenceKey tương ứng.
 - Mọi con số phải chép nguyên văn từ text của evidence trong evidenceKeys (ví dụ "24.000.000 đồng", không viết "24M" hay "24 triệu"), không đổi đơn vị (giữ "1024 GB", không viết "1TB").
 - Không nhắc ngân sách hoặc con số trong note.
+- Không nhắc ID sản phẩm; mỗi reason chỉ nói về chính candidate đó.
 - Không thêm field ngoài schema.
 - reason tối đa 300 ký tự.
 - tradeoffs tối đa 2 phần tử, mỗi phần tử tối đa 180 ký tự.
