@@ -1,4 +1,4 @@
-import { Prisma, NotificationType } from "@prisma/client";
+import { type Prisma, type NotificationType } from "@prisma/client";
 
 export type NotificationCategory = "PRICE_ALERT" | "AFTER_SALES";
 
@@ -17,6 +17,13 @@ export type NotificationPublishInput = {
   promotionId?: number | null;
   pricingVersion?: number | null;
   validUntil?: Date | null;
+};
+
+// notifications.message is VARCHAR(500); after-sales messages may be up to 5000 characters
+const MESSAGE_LIMIT = 500;
+const fitMessage = (message: string) => {
+  const chars = [...message];
+  return chars.length > MESSAGE_LIMIT ? `${chars.slice(0, MESSAGE_LIMIT - 1).join("")}…` : message;
 };
 
 export type NotificationPublishTx = Pick<
@@ -56,7 +63,7 @@ export const publishNotification = async (
       userId: input.userId,
       type: input.type,
       title: input.title,
-      message: input.message,
+      message: fitMessage(input.message),
       dedupeKey: input.dedupeKey,
       ...(input.serviceRequestId !== undefined ? { serviceRequestId: input.serviceRequestId } : {}),
       ...(input.productId !== undefined ? { productId: input.productId } : {}),

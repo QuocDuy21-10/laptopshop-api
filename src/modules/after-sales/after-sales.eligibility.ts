@@ -17,7 +17,10 @@ export const effectiveCoverage = (
   now = new Date(),
 ): "IN_WARRANTY" | "OUT_OF_WARRANTY" | "NO_WARRANTY" | "REQUIRES_VERIFICATION" => {
   if (latestVerification) {
-    if (latestVerification.decision === "IN_WARRANTY") return "IN_WARRANTY";
+    if (latestVerification.decision === "IN_WARRANTY")
+      return latestVerification.warrantyEndAt && now > latestVerification.warrantyEndAt
+        ? "OUT_OF_WARRANTY"
+        : "IN_WARRANTY";
     if (latestVerification.decision === "OUT_OF_WARRANTY") return "OUT_OF_WARRANTY";
     if (latestVerification.decision === "NO_WARRANTY") return "NO_WARRANTY";
     return "REQUIRES_VERIFICATION";

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { prisma } from "config/client";
+
 import { AppError } from "lib/errors";
+import { prisma } from "config/client";
 import type { ObjectStorage } from "lib/storage/object-storage";
 import { processUploadedImage, type ProcessedImage } from "lib/images/process-uploaded-image";
 
@@ -87,7 +88,7 @@ export const addServiceAttachments = async (
       request: { select: { userId: true, status: true } },
       attachments: {
         where: { deletedAt: null, status: { in: ["PENDING", "READY"] } },
-        select: { id: true },
+        select: { id: true, uploadKey: true },
       },
     },
   });
@@ -101,7 +102,9 @@ export const addServiceAttachments = async (
       409,
       "INVALID_SERVICE_TRANSITION",
     );
-  if (preflight.attachments.length + files.length > MAX_ACTIVE_ATTACHMENTS)
+  // a replay of this Upload-Key must reach the idempotency check below, so its own rows do not count
+  const otherActive = preflight.attachments.filter((row) => row.uploadKey !== uploadKey).length;
+  if (otherActive + files.length > MAX_ACTIVE_ATTACHMENTS)
     throw new AppError("Attachment limit reached", 409, "ATTACHMENT_LIMIT_REACHED");
   const processed: ProcessedImage[] = await Promise.all(files.map(processUploadedImage));
   const uploadHash = fingerprintFor(processed);

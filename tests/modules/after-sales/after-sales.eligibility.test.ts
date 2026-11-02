@@ -46,4 +46,24 @@ describe("after-sales eligibility", () => {
       ),
     ).toBe("IN_WARRANTY");
   });
+
+  it("treats an IN_WARRANTY verification as expired once its end date has passed", () => {
+    const unknown = {
+      months: null,
+      startAt: null,
+      endAt: null,
+      policySource: "UNAVAILABLE" as const,
+    };
+    const verification = {
+      decision: "IN_WARRANTY" as const,
+      warrantyStartAt: new Date("2025-01-01T00:00:00.000Z"),
+      warrantyEndAt: new Date("2026-01-01T00:00:00.000Z"),
+    };
+    expect(effectiveCoverage(unknown, verification, new Date("2026-01-01T00:00:00.000Z"))).toBe(
+      "IN_WARRANTY",
+    );
+    expect(effectiveCoverage(unknown, verification, new Date("2026-01-02T00:00:00.000Z"))).toBe(
+      "OUT_OF_WARRANTY",
+    );
+  });
 });

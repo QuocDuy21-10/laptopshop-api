@@ -1,5 +1,5 @@
-import { prisma } from "config/client";
 import { AppError } from "lib/errors";
+import { prisma } from "config/client";
 import {
   toAdminServiceRequestDto,
   toCustomerServiceRequestDto,
@@ -152,9 +152,21 @@ export const decideQuote = async (
         serviceRequestItemId: itemId,
         item: { serviceRequestId: requestId, request: { userId } },
       },
-      select: { id: true, status: true, validUntil: true, serviceRequestItemId: true },
+      select: {
+        id: true,
+        status: true,
+        validUntil: true,
+        serviceRequestItemId: true,
+        item: { select: { status: true } },
+      },
     });
     if (!quote) throw new AppError("Quote not found", 404, "QUOTE_NOT_FOUND");
+    if (quote.status === "SENT" && quote.item.status !== "AWAITING_QUOTE_DECISION")
+      throw new AppError(
+        "Quote cannot be decided in the current state",
+        409,
+        "INVALID_SERVICE_TRANSITION",
+      );
     const current = effectiveQuoteStatus(quote);
     if (current === "EXPIRED") {
       await tx.serviceQuote.updateMany({
