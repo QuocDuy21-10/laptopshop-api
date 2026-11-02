@@ -25,7 +25,7 @@ describe("parseEnv", () => {
     expect(e.ADVISOR_AI_ENABLED).toBe(false);
     expect(e.GROQ_STRUCTURED_OUTPUT_MODE).toBe("json_object");
     expect(e.ADVISOR_AI_TIMEOUT_MS).toBe(10_000);
-    expect(e.ADVISOR_AI_MAX_OUTPUT_TOKENS).toBe(1_500);
+    expect(e.ADVISOR_AI_MAX_OUTPUT_TOKENS).toBe(3_000);
     expect(e.ADVISOR_GUEST_DAILY_LIMIT).toBe(5);
     expect(e.ADVISOR_USER_DAILY_LIMIT).toBe(10);
     expect(e.ADVISOR_GLOBAL_DAILY_LIMIT).toBe(30);
@@ -299,7 +299,7 @@ describe("parseEnv", () => {
     ["ADVISOR_AI_TIMEOUT_MS", "999"],
     ["ADVISOR_AI_TIMEOUT_MS", "30001"],
     ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "99"],
-    ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "2001"],
+    ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "4001"],
     ["ADVISOR_GLOBAL_DAILY_LIMIT", "0"],
     ["ADVISOR_AI_CONCURRENCY_LIMIT", "0"],
     ["ADVISOR_AI_CONCURRENCY_LIMIT", "21"],

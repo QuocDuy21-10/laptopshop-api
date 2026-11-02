@@ -154,7 +154,7 @@ const schema = z
       .enum(["strict", "best_effort", "json_object"])
       .default("json_object"),
     ADVISOR_AI_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(30_000).default(10_000),
-    ADVISOR_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(100).max(2_000).default(1_500),
+    ADVISOR_AI_MAX_OUTPUT_TOKENS: z.coerce.number().int().min(100).max(4_000).default(3_000),
     ADVISOR_GUEST_DAILY_LIMIT: z.coerce.number().int().positive().default(5),
     ADVISOR_USER_DAILY_LIMIT: z.coerce.number().int().positive().default(10),
     ADVISOR_GLOBAL_DAILY_LIMIT: z.coerce.number().int().positive().default(30),

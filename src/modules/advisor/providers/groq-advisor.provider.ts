@@ -48,7 +48,7 @@ YÊU CẦU:
 - Trả đúng một phần tử cho mỗi candidate và giữ nguyên thứ tự.
 - evidenceKeys chỉ được lấy từ evidence của chính candidate, tối đa 10 key.
 - Nhắc tới CPU, GPU, RAM, ổ cứng, pin, màn hình, trọng lượng, bảo hành hoặc giá thì phải có evidenceKey tương ứng.
-- Mọi con số phải chép nguyên văn từ text của evidence trong evidenceKeys (ví dụ "24.000.000 đồng", không viết "24M" hay "24 triệu").
+- Mọi con số phải chép nguyên văn từ text của evidence trong evidenceKeys (ví dụ "24.000.000 đồng", không viết "24M" hay "24 triệu"), không đổi đơn vị (giữ "1024 GB", không viết "1TB").
 - Không nhắc ngân sách hoặc con số trong note.
 - Không thêm field ngoài schema.
 - reason tối đa 300 ký tự.
