@@ -1,4 +1,11 @@
 import { productImage } from "modules/products/products.mapper";
+import type { ServiceRequestType } from "modules/after-sales/after-sales.types";
+import { allowedAdminTransitionsFor } from "modules/after-sales/after-sales.status";
+import type {
+  AdminServiceRequestRow,
+  CustomerServiceRequestRow,
+  EligibleDeviceRow,
+} from "modules/after-sales/after-sales.repository";
 import {
   allowedRequestTypesForCoverage,
   effectiveCoverage,
@@ -7,12 +14,6 @@ import {
   toAdminWarrantyVerificationDto,
   toCustomerWarrantyVerificationDto,
 } from "modules/after-sales/after-sales.warranty-verifications";
-import type {
-  AdminServiceRequestRow,
-  CustomerServiceRequestRow,
-  EligibleDeviceRow,
-} from "modules/after-sales/after-sales.repository";
-import type { ServiceRequestType } from "modules/after-sales/after-sales.types";
 
 export type EligibleDeviceDto = {
   orderDetailId: number;
@@ -46,7 +47,10 @@ const customerActionsFor = (
   if (["SUBMITTED", "REVIEWING", "APPROVED", "AWAITING_ITEM"].includes(item.status))
     actions.push("CANCEL");
   if (["RETURNED", "RESOLVED"].includes(item.status)) actions.push("CONFIRM", "DISPUTE");
-  if (quotes.some((quote) => effectiveQuoteStatus(quote, now) === "SENT"))
+  if (
+    item.status === "AWAITING_QUOTE_DECISION" &&
+    quotes.some((quote) => effectiveQuoteStatus(quote, now) === "SENT")
+  )
     actions.push("DECIDE_QUOTE");
   return actions;
 };
@@ -188,6 +192,12 @@ export const toAdminServiceRequestDto = (row: AdminServiceRequestRow) => {
     items: row.items.map((item, index) => ({
       ...customerDto.items[index],
       warrantyVerification: toAdminWarrantyVerificationDto(item.warrantyVerifications?.[0] ?? null),
+      // quotes are ordered newest first, matching what transitionItem checks
+      allowedTransitions: allowedAdminTransitionsFor(row.type, item.status, {
+        closeMode: "ADMINISTRATIVE",
+        confirmationDueAt: item.confirmationDueAt,
+        quoteAccepted: item.quotes[0]?.status === "ACCEPTED",
+      }),
     })),
     events: row.events.map((event) => ({
       id: event.id,

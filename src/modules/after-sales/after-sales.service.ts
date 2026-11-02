@@ -1,13 +1,18 @@
 import { createHash, randomUUID } from "node:crypto";
-import { prisma } from "config/client";
-import { AppError, isUniqueViolation } from "lib/errors";
+
 import type { PageQuery } from "lib/http";
+import { AppError, isUniqueViolation } from "lib/errors";
+import { prisma } from "config/client";
 import {
   toAdminServiceRequestDto,
   toCustomerServiceRequestDto,
   toEligibleDeviceDto,
 } from "modules/after-sales/after-sales.mapper";
-import { effectiveCoverage } from "modules/after-sales/after-sales.eligibility";
+import type {
+  AdminServiceRequestQuery,
+  CreateServiceRequestBody,
+  DeviceEligibilityQuery,
+} from "modules/after-sales/after-sales.schema";
 import {
   customerServiceRequestInclude,
   adminServiceRequestInclude,
@@ -19,11 +24,7 @@ import {
   listCustomerServiceRequests,
 } from "modules/after-sales/after-sales.repository";
 import { listEligibleDeviceRows } from "modules/after-sales/after-sales.repository";
-import type {
-  AdminServiceRequestQuery,
-  CreateServiceRequestBody,
-  DeviceEligibilityQuery,
-} from "modules/after-sales/after-sales.schema";
+import { effectiveCoverage } from "modules/after-sales/after-sales.eligibility";
 
 const requestHashFor = (input: CreateServiceRequestBody) =>
   createHash("sha256").update(JSON.stringify(input)).digest("hex");
@@ -198,13 +199,20 @@ export const createServiceRequest = async (
     });
     return { request: toCustomerServiceRequestDto(created), created: true };
   } catch (error) {
-    if (!isUniqueViolation(error)) throw error;
+    // a concurrent request with the same key may have committed first; its items then also trip
+    // the device limit, so look for the winner on any failure, not only on the unique violation
     const winner = await prisma.serviceRequest.findUnique({
       where: { userId_idempotencyKey: { userId, idempotencyKey } },
       include: customerServiceRequestInclude,
     });
     if (winner && winner.requestHash === requestHash)
       return { request: toCustomerServiceRequestDto(winner), created: false };
+    if (winner && isUniqueViolation(error))
+      throw new AppError(
+        "Idempotency key was reused with a different request",
+        409,
+        "IDEMPOTENCY_KEY_REUSED",
+      );
     throw error;
   }
 };

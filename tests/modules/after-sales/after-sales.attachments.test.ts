@@ -58,4 +58,31 @@ describe("after-sales attachments", () => {
       ),
     ).rejects.toMatchObject({ code: "ATTACHMENT_LIMIT_REACHED" });
   });
+
+  it("lets a replayed Upload-Key reach the idempotency check when the item is at the limit", async () => {
+    prismaMock.serviceRequestItem.findFirst.mockResolvedValue({
+      id: 7,
+      serviceRequestId: 9,
+      status: "SUBMITTED",
+      request: { userId: 11, status: "SUBMITTED" },
+      attachments: Array.from({ length: 15 }, (_, id) => ({
+        id,
+        uploadKey: id === 14 ? "upload-1" : `other-${id}`,
+      })),
+    });
+    prismaMock.$queryRaw.mockResolvedValue([{ id: 7 }]);
+    prismaMock.serviceRequestAttachment.findMany.mockResolvedValue([
+      { id: 14, uploadHash: "different", deletedAt: null, status: "READY" },
+    ]);
+    await expect(
+      addServiceAttachments(
+        { storage: {} as never },
+        { id: 11, role: "USER" },
+        9,
+        7,
+        [await pngFile()],
+        "upload-1",
+      ),
+    ).rejects.toMatchObject({ code: "ATTACHMENT_IDEMPOTENCY_CONFLICT" });
+  });
 });

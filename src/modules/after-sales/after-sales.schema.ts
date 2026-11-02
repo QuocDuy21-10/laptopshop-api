@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { idParams, pageQuery } from "lib/http";
+
+import { idParams, MAX_DB_INT, pageQuery } from "lib/http";
 import { SERVICE_REQUEST_TYPES } from "modules/after-sales/after-sales.types";
 
 export const deviceEligibilityQuery = pageQuery.extend({
@@ -155,12 +156,17 @@ export const sendQuoteBody = z.object({
     .array(
       z.object({
         description: z.string().trim().min(1).max(255),
-        quantity: z.number().int().positive(),
-        unitPrice: z.number().int().nonnegative(),
+        quantity: z.number().int().positive().max(MAX_DB_INT),
+        unitPrice: z.number().int().nonnegative().max(MAX_DB_INT),
       }),
     )
     .min(1)
-    .max(50),
+    .max(50)
+    // line totals and the quote total are stored in INT columns
+    .refine(
+      (lines) => lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0) <= MAX_DB_INT,
+      { message: "Quote total is too large" },
+    ),
 });
 export type SendQuoteBody = z.infer<typeof sendQuoteBody>;
 export const quoteDecisionBody = z.object({ decision: z.enum(["ACCEPT", "DECLINE"]) });

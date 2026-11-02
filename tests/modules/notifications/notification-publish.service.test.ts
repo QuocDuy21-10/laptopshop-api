@@ -105,4 +105,20 @@ describe("notification publisher", () => {
     });
     expect(tx.deliveryRows.map((row) => row.channel)).toEqual(["WEB_PUSH", "WEB_PUSH"]);
   });
+
+  it("keeps long messages within the 500-character notification column", async () => {
+    const tx = txFor(null);
+    await publishNotification(tx as never, {
+      category: "AFTER_SALES",
+      userId: 11,
+      serviceRequestId: 90,
+      type: "AFTER_SALES_MESSAGE",
+      title: "Tin nhắn",
+      message: "ồ".repeat(1200),
+      dedupeKey: "after-sales-message-1",
+    });
+    const message = tx.notification.upsert.mock.calls[0][0].create.message as string;
+    expect([...message]).toHaveLength(500);
+    expect(message.endsWith("…")).toBe(true);
+  });
 });

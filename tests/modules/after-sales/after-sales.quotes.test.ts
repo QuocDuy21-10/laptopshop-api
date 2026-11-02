@@ -1,7 +1,10 @@
 jest.mock("config/client", () => ({ prisma: require("../../helpers/prisma").prismaMock }));
 
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
+import { MAX_DB_INT } from "lib/http";
+import { sendQuoteBody } from "modules/after-sales/after-sales.schema";
 import {
+  decideQuote,
   calculateQuote,
   effectiveQuoteStatus,
   sendQuote,
@@ -42,5 +45,36 @@ describe("after-sales quotes", () => {
         lines: [{ description: "Công", quantity: 1, unitPrice: 100_000 }],
       }),
     ).rejects.toMatchObject({ code: "SERVICE_REQUEST_TYPE_MISMATCH" });
+  });
+
+  it("rejects quote amounts that overflow the INT columns", () => {
+    const body = (lines: Array<{ quantity: number; unitPrice: number }>) =>
+      sendQuoteBody.safeParse({
+        expectedVersion: 1,
+        lines: lines.map((line) => ({ description: "Công", ...line })),
+      }).success;
+    expect(body([{ quantity: 1, unitPrice: MAX_DB_INT }])).toBe(true);
+    expect(body([{ quantity: 1, unitPrice: MAX_DB_INT + 1 }])).toBe(false);
+    expect(body([{ quantity: 2, unitPrice: 2_000_000_000 }])).toBe(false);
+    expect(
+      body([
+        { quantity: 1, unitPrice: 1_500_000_000 },
+        { quantity: 1, unitPrice: 1_500_000_000 },
+      ]),
+    ).toBe(false);
+  });
+
+  it("refuses a quote decision once the item has left AWAITING_QUOTE_DECISION", async () => {
+    prismaMock.serviceQuote.findFirst.mockResolvedValue({
+      id: 5,
+      status: "SENT",
+      validUntil: new Date(Date.now() + 86_400_000),
+      serviceRequestItemId: 7,
+      item: { status: "CLOSED" },
+    });
+    await expect(decideQuote(11, 9, 7, 5, "ACCEPT")).rejects.toMatchObject({
+      code: "INVALID_SERVICE_TRANSITION",
+    });
+    expect(prismaMock.serviceQuote.updateMany).not.toHaveBeenCalled();
   });
 });
