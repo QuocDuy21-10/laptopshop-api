@@ -1,4 +1,3 @@
-import { HARDWARE_TIER_SCORE, hardwareTier } from "modules/advisor/advisor.hardware-profile";
 import type {
   AdvisorEvidence,
   AdvisorFeature,
@@ -8,8 +7,9 @@ import type {
   PricedAdvisorCandidate,
   RankedAdvisorCandidate,
 } from "modules/advisor/advisor.schema";
+import { HARDWARE_TIER_SCORE, hardwareTier } from "modules/advisor/advisor.hardware-profile";
 
-export const SCORING_VERSION = "advisor-v1";
+export const SCORING_VERSION = "advisor-v2";
 
 const FEATURES: AdvisorFeature[] = [
   "cpu",

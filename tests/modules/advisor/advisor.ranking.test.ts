@@ -1,10 +1,10 @@
-import { featureScoresFor, rankCandidates, weightsFor } from "modules/advisor/advisor.ranking";
-import { hardwareTier } from "modules/advisor/advisor.hardware-profile";
 import type {
   AdvisorCandidate,
   AdvisorInput,
   PricedAdvisorCandidate,
 } from "modules/advisor/advisor.schema";
+import { featureScoresFor, rankCandidates, weightsFor } from "modules/advisor/advisor.ranking";
+import { hardwareTier } from "modules/advisor/advisor.hardware-profile";
 
 const candidate = (over: Partial<AdvisorCandidate> = {}): AdvisorCandidate => ({
   id: 1,
@@ -69,6 +69,24 @@ describe("hardwareTier", () => {
     ["gpu", "Intel Iris Xe Graphics", "entry"],
     ["gpu", "Intel Iris Plus Graphics", "entry"],
     ["gpu", "Apple GPU 7 nhân", "entry"],
+    ["cpu", "Intel Core Ultra 7 155H", "high_end"],
+    ["cpu", "Intel Core Ultra 5 125U", "mainstream"],
+    ["cpu", "Intel Core i9-14900HX", "high_end"],
+    ["cpu", "Intel Core i7-13700H", "high_end"],
+    ["cpu", "Intel Core i5-12500H", "performance"],
+    ["cpu", "Intel Core i3-1215U", "entry"],
+    ["cpu", "AMD Ryzen AI 9 HX 370", "high_end"],
+    ["cpu", "AMD Ryzen 7 7840HS", "high_end"],
+    ["cpu", "AMD Ryzen 5 7530U", "mainstream"],
+    ["cpu", "Apple M3", "performance"],
+    ["cpu", "Apple M4 Pro", "high_end"],
+    ["gpu", "NVIDIA GeForce RTX 4060 8GB", "high_end"],
+    ["gpu", "NVIDIA GeForce RTX 5070", "high_end"],
+    ["gpu", "NVIDIA GeForce RTX 3060 6GB", "high_end"],
+    ["gpu", "AMD Radeon 780M", "mainstream"],
+    ["gpu", "AMD Radeon RX 7600S", "performance"],
+    ["gpu", "Intel Arc Graphics", "mainstream"],
+    ["gpu", "Apple GPU 10 nhân", "performance"],
   ] as const)("maps %s %s to %s", (kind, value, expected) => {
     expect(hardwareTier(kind as "cpu" | "gpu", value)).toBe(expected);
   });

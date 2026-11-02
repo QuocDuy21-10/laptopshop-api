@@ -4,7 +4,7 @@ export const providerRecommendationSchema = z
   .object({
     productId: z.number().int().positive(),
     reason: z.string().trim().min(1).max(300),
-    evidenceKeys: z.array(z.string().min(1)).min(1).max(8),
+    evidenceKeys: z.array(z.string().min(1)).min(1).max(10),
     tradeoffs: z.array(z.string().trim().min(1).max(180)).max(2),
   })
   .strict();
@@ -30,7 +30,7 @@ export const providerExplanationJsonSchema = {
           evidenceKeys: {
             type: "array",
             minItems: 1,
-            maxItems: 8,
+            maxItems: 10,
             items: { type: "string", minLength: 1 },
           },
           tradeoffs: {
