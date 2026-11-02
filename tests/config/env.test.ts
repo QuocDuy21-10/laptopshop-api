@@ -25,7 +25,7 @@ describe("parseEnv", () => {
     expect(e.ADVISOR_AI_ENABLED).toBe(false);
     expect(e.GROQ_STRUCTURED_OUTPUT_MODE).toBe("json_object");
     expect(e.ADVISOR_AI_TIMEOUT_MS).toBe(10_000);
-    expect(e.ADVISOR_AI_MAX_OUTPUT_TOKENS).toBe(500);
+    expect(e.ADVISOR_AI_MAX_OUTPUT_TOKENS).toBe(3_000);
     expect(e.ADVISOR_GUEST_DAILY_LIMIT).toBe(5);
     expect(e.ADVISOR_USER_DAILY_LIMIT).toBe(10);
     expect(e.ADVISOR_GLOBAL_DAILY_LIMIT).toBe(30);
@@ -232,6 +232,17 @@ describe("parseEnv", () => {
     expect(e.ADVISOR_AI_TIMEOUT_MS).toBe(12_000);
   });
 
+  it("rejects a prompt-guard classifier as the advisor chat model", () => {
+    expect(() =>
+      parseEnv({
+        ...base,
+        ADVISOR_AI_ENABLED: "true",
+        GROQ_API_KEY: "groq-test-key",
+        GROQ_MODEL: "meta-llama/llama-prompt-guard-2-22m",
+      }),
+    ).toThrow(/prompt-guard/);
+  });
+
   it("requires review image bucket and region when image storage is enabled", () => {
     expect(() => parseEnv({ ...base, REVIEW_IMAGES_ENABLED: "true" })).toThrow(
       /REVIEW_IMAGE_S3_REGION|REVIEW_IMAGE_S3_BUCKET/,
@@ -288,7 +299,7 @@ describe("parseEnv", () => {
     ["ADVISOR_AI_TIMEOUT_MS", "999"],
     ["ADVISOR_AI_TIMEOUT_MS", "30001"],
     ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "99"],
-    ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "2001"],
+    ["ADVISOR_AI_MAX_OUTPUT_TOKENS", "4001"],
     ["ADVISOR_GLOBAL_DAILY_LIMIT", "0"],
     ["ADVISOR_AI_CONCURRENCY_LIMIT", "0"],
     ["ADVISOR_AI_CONCURRENCY_LIMIT", "21"],

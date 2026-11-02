@@ -1,9 +1,3 @@
-import { buildRuleBasedResult } from "modules/advisor/advisor.explanation";
-import { inspectAdvisorProviderInput } from "modules/advisor/advisor.input-guard";
-import type { AdvisorAdmission } from "modules/advisor/advisor.admission";
-import { priceAdvisorCandidates } from "modules/advisor/advisor.pricing";
-import type { AdvisorRepository } from "modules/advisor/advisor.repository";
-import { rankCandidates, selectTopAdvisorCandidates } from "modules/advisor/advisor.ranking";
 import type {
   AdvisorCandidate,
   AdvisorInput,
@@ -13,6 +7,12 @@ import type {
   PricedAdvisorCandidate,
   RankedAdvisorCandidate,
 } from "modules/advisor/advisor.schema";
+import { priceAdvisorCandidates } from "modules/advisor/advisor.pricing";
+import { rankCandidates, selectTopAdvisorCandidates } from "modules/advisor/advisor.ranking";
+import type { AdvisorAdmission } from "modules/advisor/advisor.admission";
+import type { AdvisorRepository } from "modules/advisor/advisor.repository";
+import { buildRuleBasedResult } from "modules/advisor/advisor.explanation";
+import { inspectAdvisorProviderInput } from "modules/advisor/advisor.input-guard";
 import {
   AdvisorProviderError,
   type AdvisorProvider,
@@ -135,8 +135,13 @@ export const createAdvisorService = (deps: AdvisorServiceDeps): AdvisorService =
       if (!providerMatchesRanking(ranked, explanation)) return fallback();
       return finish(withProviderExplanation(ranked, input, explanation), explanation.usage);
     } catch (error) {
-      const category = error instanceof AdvisorProviderError ? error.category : "provider_5xx";
-      deps.logger?.warn({ category }, "advisor provider fallback");
+      // provider error messages are fixed strings (e.g. which validator rule failed), never user input
+      if (error instanceof AdvisorProviderError)
+        deps.logger?.warn(
+          { category: error.category, reason: error.message },
+          "advisor provider fallback",
+        );
+      else deps.logger?.warn({ category: "provider_5xx" }, "advisor provider fallback");
       return fallback();
     } finally {
       try {

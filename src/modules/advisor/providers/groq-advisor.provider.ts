@@ -1,3 +1,4 @@
+import { hardwareTier } from "modules/advisor/advisor.hardware-profile";
 import {
   AdvisorProviderError,
   type AdvisorProvider,
@@ -9,7 +10,6 @@ import {
   providerExplanationJsonSchema,
   providerExplanationSchema,
 } from "modules/advisor/providers/advisor-output.schema";
-import { hardwareTier } from "modules/advisor/advisor.hardware-profile";
 
 export type GroqStructuredOutputMode = "strict" | "best_effort" | "json_object";
 export type GroqAdvisorConfig = {
@@ -46,7 +46,11 @@ OUTPUT JSON BẮT BUỘC:
 
 YÊU CẦU:
 - Trả đúng một phần tử cho mỗi candidate và giữ nguyên thứ tự.
-- evidenceKeys chỉ được lấy từ evidence của chính candidate.
+- evidenceKeys chỉ được lấy từ evidence của chính candidate, tối đa 10 key.
+- Nhắc tới CPU, GPU, RAM, ổ cứng, pin, màn hình, trọng lượng, bảo hành hoặc giá thì phải có evidenceKey tương ứng.
+- Mọi con số phải chép nguyên văn từ text của evidence trong evidenceKeys (ví dụ "24.000.000 đồng", không viết "24M" hay "24 triệu"), không đổi đơn vị (giữ "1024 GB", không viết "1TB").
+- Không nhắc ngân sách hoặc con số trong note.
+- Không nhắc ID sản phẩm; mỗi reason chỉ nói về chính candidate đó.
 - Không thêm field ngoài schema.
 - reason tối đa 300 ký tự.
 - tradeoffs tối đa 2 phần tử, mỗi phần tử tối đa 180 ký tự.
@@ -212,10 +216,8 @@ export class GroqAdvisorProvider implements AdvisorProvider {
       const referencedFacts = item.evidenceKeys
         .map((key) => evidence.find((fact) => fact.key === key))
         .filter(Boolean);
-      const allowedNumbers = new Set([
-        ...referencedFacts.flatMap((fact) => numbersIn(fact.text)),
-        ...numbersIn(JSON.stringify(input.preferences)),
-      ]);
+      // numbers from preferences (note, budget, minRamGb) are user claims, not product facts
+      const allowedNumbers = new Set(referencedFacts.flatMap((fact) => numbersIn(fact.text)));
       const prose = [item.reason, ...item.tradeoffs].flatMap(numbersIn);
       if (prose.some((token) => !allowedNumbers.has(token)))
         throw invalid("Groq introduced an unsupported number");
@@ -237,6 +239,13 @@ export class GroqAdvisorProvider implements AdvisorProvider {
           evidencePrefixes: ["cpu-"],
         },
         { feature: "gpu", pattern: /gpu|card đồ họa|đồ họa|graphics/i, evidencePrefixes: ["gpu-"] },
+        { feature: "ram", pattern: /\bram\b|bộ nhớ/i, evidencePrefixes: ["ram-"] },
+        {
+          feature: "storage",
+          pattern: /ổ cứng|ssd|hdd|lưu trữ|storage/i,
+          evidencePrefixes: ["storage-"],
+        },
+        { feature: "warranty", pattern: /bảo hành|warranty/i, evidencePrefixes: ["warranty-"] },
         { feature: "battery", pattern: /pin|thời lượng/i, evidencePrefixes: ["battery-"] },
         { feature: "refresh", pattern: /tần số|refresh|hz/i, evidencePrefixes: ["refresh-"] },
         {
