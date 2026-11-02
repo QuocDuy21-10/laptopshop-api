@@ -1,8 +1,18 @@
 import { z } from "zod";
-import { pageQuery } from "lib/http";
+
+import { MAX_DB_INT, pageQuery } from "lib/http";
+
+// IDs and prices are MySQL INT columns: larger values must fail validation, not reach Prisma (HTTP 500)
+const dbIdSchema = z.coerce.number().int().positive().max(MAX_DB_INT);
+
+// accept JSON numbers or digit-only strings; z.coerce would turn `true` into 1 and "" into 0
+const priceSchema = z.preprocess(
+  (value) => (typeof value === "string" && /^\d+$/.test(value.trim()) ? Number(value) : value),
+  z.number().int().positive().max(MAX_DB_INT),
+);
 
 export const wishlistProductParams = z.object({
-  productId: z.coerce.number().int().positive(),
+  productId: dbIdSchema,
 });
 export type WishlistProductParams = z.infer<typeof wishlistProductParams>;
 
@@ -13,7 +23,7 @@ export const wishlistStatusQuery = z
   .object({
     productIds: z.preprocess(
       (value) => (typeof value === "string" ? value.split(",") : value),
-      z.array(z.coerce.number().int().positive()).min(1).max(50),
+      z.array(dbIdSchema).min(1).max(50),
     ),
   })
   .strict()
@@ -33,7 +43,7 @@ export const configurePriceAlertBody = z.union([
   z
     .object({
       mode: z.literal("TARGET_PRICE"),
-      targetPrice: z.coerce.number().int().positive(),
+      targetPrice: priceSchema,
       includeFlashSale: z.boolean().optional(),
     })
     .strict(),
