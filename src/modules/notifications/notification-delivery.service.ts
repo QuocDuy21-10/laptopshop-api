@@ -132,6 +132,7 @@ const providerInput = (d: DeliveryRecord) => {
         newPrice: n.newPrice ?? 0,
         source: n.priceSource ?? "UNKNOWN",
         validUntil: n.validUntil,
+        timeZone: env.STORE_TIME_ZONE,
         productUrl: new URL(
           n.productId ? `/products/${n.productId}` : "/account/notifications",
           env.STOREFRONT_ORIGIN,

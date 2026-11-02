@@ -10,7 +10,7 @@ import request from "supertest";
 import { env } from "config/env";
 import { resolveAutomaticPromotions } from "modules/promotions/promotion-resolver";
 import { resolveAlertPriceSnapshots } from "modules/pricing/alert-price-resolver";
-import { prismaMock, resetPrisma } from "../../helpers/prisma";
+import { prismaError, prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { USER, cookieFor } from "../../helpers/auth";
 
@@ -347,6 +347,97 @@ describe("Wishlist mutations", () => {
       alertVersion: { increment: 1 },
     });
   });
+});
+
+const listPriceSnapshot = () =>
+  new Map([
+    [
+      row.id,
+      {
+        productId: product.id,
+        listPrice: product.price,
+        stablePrice: product.price,
+        effectivePrice: product.price,
+        source: "LIST_PRICE",
+        promotionId: null,
+        pricingVersion: null,
+        validUntil: null,
+        purchasable: true,
+      },
+    ],
+  ]);
+
+describe("Wishlist input bounds and races", () => {
+  it.each(["2147483648", "99999999999"])(
+    "rejects productId %s above the INT column range with 400 on every item route",
+    async (id) => {
+      const app = buildApp();
+      const responses = await Promise.all([
+        request(app).put(`/api/v1/wishlist/items/${id}`).set("Cookie", auth()),
+        request(app)
+          .patch(`/api/v1/wishlist/items/${id}`)
+          .set("Cookie", auth())
+          .send({ mode: null }),
+        request(app).delete(`/api/v1/wishlist/items/${id}`).set("Cookie", auth()),
+        request(app).get(`/api/v1/wishlist/status?productIds=1,${id}`).set("Cookie", auth()),
+      ]);
+      expect(responses.map((res) => res.status)).toEqual([400, 400, 400, 400]);
+      expect(prismaMock.$transaction).not.toHaveBeenCalled();
+      expect(prismaMock.wishlistItem.findMany).not.toHaveBeenCalled();
+    },
+  );
+
+  it("accepts the largest INT product id", async () => {
+    prismaMock.wishlistItem.deleteMany.mockResolvedValue({ count: 0 });
+    const res = await request(buildApp())
+      .delete("/api/v1/wishlist/items/2147483647")
+      .set("Cookie", auth());
+    expect(res.status).toBe(204);
+  });
+
+  it.each([true, "", null, 2_147_483_648, "12abc"])(
+    "rejects targetPrice %p before reading the item",
+    async (targetPrice) => {
+      const res = await request(buildApp())
+        .patch(`/api/v1/wishlist/items/${product.id}`)
+        .set("Cookie", auth())
+        .send({ mode: "TARGET_PRICE", targetPrice });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe("VALIDATION_ERROR");
+      expect(prismaMock.wishlistItem.findFirst).not.toHaveBeenCalled();
+    },
+  );
+
+  it("still accepts a digit-only string target price", async () => {
+    (resolveAlertPriceSnapshots as jest.Mock).mockResolvedValue(listPriceSnapshot());
+    prismaMock.wishlistItem.findFirst.mockResolvedValue(row);
+    prismaMock.wishlistItem.update.mockResolvedValue({
+      ...row,
+      alertMode: "TARGET_PRICE",
+      targetPrice: 800,
+    });
+    const res = await request(buildApp())
+      .patch(`/api/v1/wishlist/items/${product.id}`)
+      .set("Cookie", auth())
+      .send({ mode: "TARGET_PRICE", targetPrice: "800" });
+    expect(res.status).toBe(200);
+    expect(prismaMock.wishlistItem.update.mock.calls[0][0].data.targetPrice).toBe(800);
+  });
+
+  it.each([{ mode: "PERCENT_DROP" }, { mode: null }])(
+    "returns WISHLIST_ITEM_NOT_FOUND when the item is deleted before %p is written",
+    async (body) => {
+      (resolveAlertPriceSnapshots as jest.Mock).mockResolvedValue(listPriceSnapshot());
+      prismaMock.wishlistItem.findFirst.mockResolvedValue(row);
+      prismaMock.wishlistItem.update.mockRejectedValue(prismaError("P2025"));
+      const res = await request(buildApp())
+        .patch(`/api/v1/wishlist/items/${product.id}`)
+        .set("Cookie", auth())
+        .send(body);
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe("WISHLIST_ITEM_NOT_FOUND");
+    },
+  );
 });
 
 describe("Wishlist delete", () => {

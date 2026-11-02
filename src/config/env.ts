@@ -78,6 +78,21 @@ const schema = z
     STORE_HOTLINE: z.preprocess(emptyToUndefined, z.string().max(50).optional()),
     STORE_SUPPORT_EMAIL: z.preprocess(emptyToUndefined, z.string().email().max(255).optional()),
     STORE_SUPPORT_HOURS: z.preprocess(emptyToUndefined, z.string().max(100).optional()),
+    // IANA time zone used to show dates in customer-facing emails (e.g. price validity)
+    STORE_TIME_ZONE: z.preprocess(
+      emptyToUndefined,
+      z
+        .string()
+        .default("Asia/Ho_Chi_Minh")
+        .refine((zone) => {
+          try {
+            new Intl.DateTimeFormat("en-US", { timeZone: zone });
+            return true;
+          } catch {
+            return false;
+          }
+        }, "STORE_TIME_ZONE must be a valid IANA time zone"),
+    ),
     STORE_VAT_INVOICE: z
       .enum(["true", "false"])
       .default("false")

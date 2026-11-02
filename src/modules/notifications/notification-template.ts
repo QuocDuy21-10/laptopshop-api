@@ -40,16 +40,45 @@ export const renderPasswordResetEmail = (input: { code: string; expiresMinutes: 
     " phút.</p><p>Nếu bạn không yêu cầu, hãy bỏ qua email này.</p>",
 });
 
+const PRICE_SOURCE_LABELS: Record<string, string> = {
+  LIST_PRICE: "Giá niêm yết",
+  AUTOMATIC: "Khuyến mãi tự động",
+  FLASH_SALE: "Flash Sale",
+};
+
+const priceSourceLabel = (source: string) => PRICE_SOURCE_LABELS[source] ?? source;
+
+// e.g. "23:59 22/10/2026 (GMT+7)" in the store's time zone instead of a raw UTC ISO string
+export const formatStoreDateTime = (value: Date, timeZone: string) => {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hourCycle: "h23",
+    timeZoneName: "shortOffset",
+  }).formatToParts(value);
+  const part = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((item) => item.type === type)?.value ?? "";
+  return `${part("hour")}:${part("minute")} ${part("day")}/${part("month")}/${part("year")} (${part("timeZoneName")})`;
+};
+
 export const renderPriceAlertEmail = (input: {
   productName: string;
   oldPrice: number;
   newPrice: number;
   source: string;
   validUntil: Date | null;
+  timeZone: string;
   productUrl: string;
   settingsUrl: string;
 }) => {
-  const expiry = input.validUntil ? input.validUntil.toISOString() : "không giới hạn";
+  const expiry = input.validUntil
+    ? formatStoreDateTime(input.validUntil, input.timeZone)
+    : "không giới hạn";
+  const source = priceSourceLabel(input.source);
   return {
     subject: "Sản phẩm yêu thích vừa giảm giá",
     text:
@@ -59,7 +88,7 @@ export const renderPriceAlertEmail = (input: {
       " xuống " +
       money(input.newPrice) +
       ". Nguồn giá: " +
-      input.source +
+      source +
       ". Hạn giá: " +
       expiry +
       ". Xem: " +
@@ -69,8 +98,14 @@ export const renderPriceAlertEmail = (input: {
     html:
       "<p><strong>" +
       escapeHtml(input.productName) +
-      "</strong> đã giảm giá.</p><p>Nguồn giá: " +
-      input.source +
+      "</strong> đã giảm từ <s>" +
+      money(input.oldPrice) +
+      "</s> xuống <strong>" +
+      money(input.newPrice) +
+      "</strong>.</p><p>Nguồn giá: " +
+      escapeHtml(source) +
+      "</p><p>Hạn giá: " +
+      escapeHtml(expiry) +
       '</p><p><a href="' +
       escapeHtml(input.productUrl) +
       '">Xem sản phẩm</a></p><p><a href="' +

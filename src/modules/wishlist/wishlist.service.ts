@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { pageArgs, pageMeta, type PageQuery } from "lib/http";
 import { env } from "config/env";
-import { AppError, isUniqueViolation, notFound } from "lib/errors";
+import { AppError, isNotFound, isUniqueViolation, notFound } from "lib/errors";
 import { prisma } from "config/client";
 import {
   toWishlistItemDto,
@@ -24,6 +24,12 @@ const productUnavailable = (productId: number) =>
 
 const wishlistItemNotFound = () =>
   new AppError("Wishlist item not found", 404, "WISHLIST_ITEM_NOT_FOUND");
+
+// the item is read before the write transaction; a concurrent DELETE turns update() into P2025
+const rethrowMissingItem = (error: unknown): never => {
+  if (isNotFound(error)) throw wishlistItemNotFound();
+  throw error;
+};
 
 const mapItem = async (row: WishlistItemRow, now = new Date()): Promise<WishlistItemDto> => {
   const requests: AlertPriceRequest[] = [
@@ -139,17 +145,19 @@ export const configureWishlistAlert = async (
 
   if (input.mode === null) {
     const updated = await prisma.$transaction(async (tx) => {
-      const item = await tx.wishlistItem.update({
-        where: { id: existing.id },
-        data: {
-          alertMode: null,
-          targetPrice: null,
-          referencePrice: null,
-          includeFlashSale: false,
-          alertVersion: { increment: 1 },
-        },
-        include: wishlistItemInclude,
-      });
+      const item = await tx.wishlistItem
+        .update({
+          where: { id: existing.id },
+          data: {
+            alertMode: null,
+            targetPrice: null,
+            referencePrice: null,
+            includeFlashSale: false,
+            alertVersion: { increment: 1 },
+          },
+          include: wishlistItemInclude,
+        })
+        .catch(rethrowMissingItem);
       await requestPricingReevaluation(tx, {
         productIds: [productId],
         eventVersion: String(item.alertVersion),
@@ -195,17 +203,19 @@ export const configureWishlistAlert = async (
   }
 
   const updated = await prisma.$transaction(async (tx) => {
-    const item = await tx.wishlistItem.update({
-      where: { id: existing.id },
-      data: {
-        alertMode: input.mode,
-        targetPrice: input.mode === "TARGET_PRICE" ? targetPrice : null,
-        referencePrice: snapshot.stablePrice,
-        includeFlashSale,
-        alertVersion: { increment: 1 },
-      },
-      include: wishlistItemInclude,
-    });
+    const item = await tx.wishlistItem
+      .update({
+        where: { id: existing.id },
+        data: {
+          alertMode: input.mode,
+          targetPrice: input.mode === "TARGET_PRICE" ? targetPrice : null,
+          referencePrice: snapshot.stablePrice,
+          includeFlashSale,
+          alertVersion: { increment: 1 },
+        },
+        include: wishlistItemInclude,
+      })
+      .catch(rethrowMissingItem);
     await requestPricingReevaluation(tx, {
       productIds: [productId],
       eventVersion: String(item.alertVersion),
