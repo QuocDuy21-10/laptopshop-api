@@ -1,3 +1,9 @@
+import { createRng } from "scripts/demo-seed/random";
+import { buildOrders } from "scripts/demo-seed/orders";
+import { buildCatalog } from "scripts/demo-seed/catalog";
+import { buildCustomers } from "scripts/demo-seed/customers";
+import { buildPromotions } from "scripts/demo-seed/promotions";
+import { createStockLedger } from "scripts/demo-seed/stock-ledger";
 import type { BaseProduct } from "scripts/demo-seed/types";
 
 export const NOW = new Date("2026-11-02T03:00:00.000Z");
@@ -106,3 +112,35 @@ export const BASE_PRODUCTS: BaseProduct[] = [
     isActive: true,
   },
 ];
+
+export const buildOrderFixture = (seed = 4) => {
+  const rng = createRng(seed);
+  const catalog = buildCatalog(rng, NOW, BASE_PRODUCTS, ADMIN_ID);
+  const customers = buildCustomers(rng, NOW, {
+    firstUserId: 3,
+    userRoleId: 2,
+    passwordHash: "hash",
+    products: catalog.products,
+  });
+  const promotions = buildPromotions(rng, NOW, catalog.products, ADMIN_ID);
+  const ledger = createStockLedger(
+    catalog.products.map((p) => ({
+      productId: p.id,
+      quantity: p.openingQuantity,
+      at: catalog.openingAt,
+    })),
+  );
+  const orders = buildOrders(rng, {
+    now: NOW,
+    products: catalog.products,
+    users: customers.users,
+    adminId: ADMIN_ID,
+    promotions,
+    receipts: catalog.receipts,
+    ledger,
+  });
+  return { rng, catalog, customers, promotions, ledger, orders };
+};
+
+export const time = (value: Date | string | null | undefined) =>
+  value ? new Date(value).getTime() : Number.NaN;
