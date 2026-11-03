@@ -98,6 +98,11 @@ const schema = z
       .default("false")
       .transform((v) => v === "true"),
     ADMIN_PASSWORD: z.preprocess(emptyToUndefined, z.string().optional()),
+    DEMO_SEED_ALLOW_REMOTE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    DEMO_USER_PASSWORD: z.preprocess(emptyToUndefined, z.string().min(8).default("Demo@123456")),
     SENTRY_DSN: z.preprocess(emptyToUndefined, z.string().url().optional()),
     ENABLE_DOCS: z
       .enum(["true", "false"])
