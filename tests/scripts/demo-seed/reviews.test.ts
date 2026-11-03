@@ -1,5 +1,5 @@
-import { buildReviews } from "scripts/demo-seed/reviews";
 import { ADMIN_ID, NOW, buildOrderFixture, time } from "./fixtures";
+import { buildReviews } from "scripts/demo-seed/reviews";
 
 const { rng, customers, orders } = buildOrderFixture(5);
 const result = buildReviews(rng, {

@@ -1,6 +1,6 @@
-import { SERVICE_REQUEST_STATUSES } from "modules/after-sales/after-sales.types";
-import { SCENARIOS, buildAfterSales, isValidPath } from "scripts/demo-seed/after-sales";
 import { ADMIN_ID, NOW, buildOrderFixture, time } from "./fixtures";
+import { SCENARIOS, buildAfterSales, isValidPath } from "scripts/demo-seed/after-sales";
+import { SERVICE_REQUEST_STATUSES } from "modules/after-sales/after-sales.types";
 
 const { rng, catalog, orders } = buildOrderFixture(6);
 const result = buildAfterSales(rng, {

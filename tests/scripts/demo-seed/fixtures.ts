@@ -1,10 +1,10 @@
-import { createRng } from "scripts/demo-seed/random";
+import type { BaseProduct } from "scripts/demo-seed/types";
 import { buildOrders } from "scripts/demo-seed/orders";
+import { createRng } from "scripts/demo-seed/random";
 import { buildCatalog } from "scripts/demo-seed/catalog";
 import { buildCustomers } from "scripts/demo-seed/customers";
 import { buildPromotions } from "scripts/demo-seed/promotions";
 import { createStockLedger } from "scripts/demo-seed/stock-ledger";
-import type { BaseProduct } from "scripts/demo-seed/types";
 
 export const NOW = new Date("2026-11-02T03:00:00.000Z");
 export const ADMIN_ID = 2;

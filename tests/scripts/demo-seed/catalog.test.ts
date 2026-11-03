@@ -1,10 +1,10 @@
 import { existsSync } from "fs";
 import path from "path";
 
+import { ADMIN_ID, BASE_PRODUCTS, NOW } from "./fixtures";
 import { factoryOptions, targetOptions } from "config/constant";
 import { createRng } from "scripts/demo-seed/random";
 import { buildCatalog } from "scripts/demo-seed/catalog";
-import { ADMIN_ID, BASE_PRODUCTS, NOW } from "./fixtures";
 
 const catalog = buildCatalog(createRng(1), NOW, BASE_PRODUCTS, ADMIN_ID);
 

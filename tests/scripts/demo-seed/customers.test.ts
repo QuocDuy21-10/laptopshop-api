@@ -1,7 +1,7 @@
+import { ADMIN_ID, BASE_PRODUCTS, NOW } from "./fixtures";
 import { createRng } from "scripts/demo-seed/random";
 import { buildCatalog } from "scripts/demo-seed/catalog";
 import { buildCustomers } from "scripts/demo-seed/customers";
-import { ADMIN_ID, BASE_PRODUCTS, NOW } from "./fixtures";
 
 const rng = createRng(2);
 const catalog = buildCatalog(rng, NOW, BASE_PRODUCTS, ADMIN_ID);

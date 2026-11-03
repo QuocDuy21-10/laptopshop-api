@@ -1,5 +1,5 @@
-import { buildDemoDataset } from "scripts/demo-seed/build";
 import { ADMIN_ID, BASE_PRODUCTS, NOW } from "./fixtures";
+import { buildDemoDataset } from "scripts/demo-seed/build";
 
 const input = {
   seed: 20261102,

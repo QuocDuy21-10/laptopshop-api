@@ -1,5 +1,5 @@
-import { ORDER_STATUSES, canTransition } from "modules/orders/order-status";
 import { NOW, buildOrderFixture, time } from "./fixtures";
+import { ORDER_STATUSES, canTransition } from "modules/orders/order-status";
 
 const { catalog, promotions, ledger, orders } = buildOrderFixture();
 const orderById = new Map(orders.orders.map((o) => [o.id, o]));

@@ -1,3 +1,4 @@
+import { ADMIN_ID, BASE_PRODUCTS, NOW } from "./fixtures";
 import { DAY, HOUR, createRng, shift } from "scripts/demo-seed/random";
 import { buildCatalog } from "scripts/demo-seed/catalog";
 import {
@@ -7,7 +8,6 @@ import {
   flashSaleAt,
   resolveFlashSale,
 } from "scripts/demo-seed/promotions";
-import { ADMIN_ID, BASE_PRODUCTS, NOW } from "./fixtures";
 
 const rng = createRng(3);
 const catalog = buildCatalog(rng, NOW, BASE_PRODUCTS, ADMIN_ID);
