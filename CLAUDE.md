@@ -5,6 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - `pnpm install`, then `pnpm exec prisma generate` and `pnpm exec prisma migrate dev` (MySQL). Copy `.env.example` to `.env`; `DATABASE_URL` and `JWT_SECRET` are required, and a Redis instance must be reachable at `REDIS_URL` (`docker compose up -d mysql redis`). `pnpm run seed` seeds roles, admins and products into empty tables.
+- `pnpm run seed:demo` (local only) wipes the database, reruns the base seed and loads a deterministic demo dataset (~50 products, 30 customers `userNN@demo.local` with `DEMO_USER_PASSWORD`, ~260 orders over six months, reviews, promotions, after-sales). Refuses `NODE_ENV=production` and non-local DB hosts unless `DEMO_SEED_ALLOW_REMOTE=true`.
 - `pnpm run dev`: nodemon running `ts-node -r tsconfig-paths/register src/server.ts`; `pnpm run start:debug` adds `--inspect=9229`
 - `pnpm run build` (tsc + tsc-alias), `pnpm start` runs `dist/server.js`
 - `pnpm run lint`, `pnpm run typecheck`, `pnpm run format`
