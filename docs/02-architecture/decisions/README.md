@@ -17,12 +17,12 @@ Viết ADR khi một quyết định khó đảo ngược hoặc ảnh hưởng 
 | [0003](0003-redis-bullmq.md) | Redis và BullMQ cho rate limit và việc nền | Accepted | Tái dựng |
 | 0004 | Transactional Outbox cho thông báo | Dự kiến, giai đoạn tài liệu nghiệp vụ | |
 | 0005 | Idempotency trong checkout và thanh toán | Dự kiến, giai đoạn tài liệu nghiệp vụ | |
-| 0006 | Sổ kho (stock movement ledger) | Dự kiến, giai đoạn tài liệu database | |
+| [0006](0006-stock-ledger.md) | Sổ kho (stock movement ledger) | Accepted | Tái dựng |
 | 0007 | Pricing pipeline và quy tắc Flash Sale | Dự kiến, giai đoạn tài liệu nghiệp vụ | |
 | 0008 | Object storage tương thích S3 cho ảnh | Dự kiến, giai đoạn tài liệu vận hành | |
 | 0009 | Fallback theo luật cho AI Advisor | Dự kiến, giai đoạn tài liệu nghiệp vụ | |
 
-Các ADR từ 0004 chưa được viết vì cần đọc kỹ module liên quan trước.
+Các ADR 0004, 0005, 0007, 0008, 0009 chưa được viết vì cần đọc kỹ module liên quan trước.
 
 ## Trạng thái và nguồn gốc
 
@@ -59,3 +59,4 @@ Mỗi ADR cũng bắt đầu bằng dòng `> Đối chiếu code: main @ <sha> (
 - [ADR-0001](0001-express-5.md)
 - [ADR-0002](0002-prisma-mysql.md)
 - [ADR-0003](0003-redis-bullmq.md)
+- [ADR-0006](0006-stock-ledger.md)

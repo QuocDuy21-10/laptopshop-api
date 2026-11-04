@@ -2,7 +2,7 @@
 
 Bộ tài liệu này giúp một người chưa biết LaptopShop hiểu dự án giải quyết bài toán gì, hệ thống gồm những thành phần nào và request đi qua chúng ra sao.
 
-> Đối chiếu code: main @ 794f0a1 (2026-11-01)
+> Đối chiếu code: main @ 0f1eab2 (2026-11-04)
 
 ## Bắt đầu từ đâu
 
@@ -37,13 +37,22 @@ Thứ tự đọc đề xuất:
 | [ADR-0001](02-architecture/decisions/0001-express-5.md) | Vì sao Express 5? |
 | [ADR-0002](02-architecture/decisions/0002-prisma-mysql.md) | Vì sao Prisma + MySQL? |
 | [ADR-0003](02-architecture/decisions/0003-redis-bullmq.md) | Vì sao Redis + BullMQ? |
+| [ADR-0006](02-architecture/decisions/0006-stock-ledger.md) | Vì sao có sổ kho? |
+| [02-architecture/database-architecture.md](02-architecture/database-architecture.md) | MySQL nằm ở đâu trong kiến trúc, dữ liệu nằm ở đâu? |
+| [03-database/README.md](03-database/README.md) | Dữ liệu gồm những bảng nào, đọc data dictionary thế nào? |
+| [03-database/contexts/](03-database/contexts/identity-accounts.md) | ERD và mô tả từng cột của 52 model, chia 8 nhóm |
+| [03-database/enums.md](03-database/enums.md) | 30 enum và các trạng thái lưu bằng `VARCHAR` |
+| [03-database/relationships.md](03-database/relationships.md) | Khoá ngoại, `onDelete`, phụ thuộc giữa các nhóm |
+| [03-database/constraints-and-indexes.md](03-database/constraints-and-indexes.md) | Unique, index, ràng buộc chỉ có trong migration |
+| [03-database/transactions-and-locking.md](03-database/transactions-and-locking.md) | Dữ liệu nào được bảo vệ khỏi ghi đồng thời, bằng cơ chế gì? |
+| [03-database/migrations.md](03-database/migrations.md) | Cách chạy migration và 48 migration theo chủ đề |
 
 ## Lộ trình tài liệu
 
 | Giai đoạn | Nội dung | Trạng thái |
 | --- | --- | --- |
 | 1. Foundation | `01-overview/`, `02-architecture/` | Có (tài liệu này) |
-| 2. Database | ERD, data dictionary, constraints, transactions, migrations | Chưa có |
+| 2. Database | ERD, data dictionary, constraints, transactions, migrations | Có |
 | 3. Business | Use case, workflow, sequence, state machine cho các nghiệp vụ chính | Chưa có |
 | 4. Developer & Ops | API conventions, từng module, bảo mật, kiểm thử, vận hành | Chưa có |
 | 5. Automation | Kiểm tra link, Mermaid và nhắc cập nhật docs trong CI | Chưa có |
@@ -54,7 +63,7 @@ Thứ tự đọc đề xuất:
 2. **Cuối file:** mục `## Nguồn` với link tương đối tới file source và tên symbol. Không link tới số dòng.
 3. **Phân biệt nguồn gốc:** điều đọc trực tiếp từ code viết bình thường. Lý do suy ngược từ code nằm trong khối `> **Suy luận:** …`. ADR có thêm trường `Nguồn gốc: Đã xác nhận | Tái dựng`.
 4. **Sơ đồ:** dùng Mermaid `flowchart` với `subgraph` theo phong cách C4 (không dùng cú pháp `C4Context`, vì còn experimental) và `sequenceDiagram` cho luồng tương tác. Mỗi sơ đồ tối đa khoảng 15 node. Đường đồng bộ vẽ nét liền, đường bất đồng bộ (queue, outbox, webhook) vẽ nét đứt.
-5. **Một nguồn chính:** API contract nằm ở OpenAPI ([src/docs/openapi.ts](../src/docs/openapi.ts), `/api-docs` khi `ENABLE_DOCS=true`), tài liệu không chép lại. Chi tiết field nằm ở tài liệu database (giai đoạn 2).
+5. **Một nguồn chính:** API contract nằm ở OpenAPI ([src/docs/openapi.ts](../src/docs/openapi.ts), `/api-docs` khi `ENABLE_DOCS=true`), tài liệu không chép lại. Chi tiết field nằm ở [03-database/](03-database/README.md).
 6. **Bảo mật:** chỉ ghi tên biến môi trường và ý nghĩa, không ghi giá trị thật. Không đưa secret, tài khoản hay dữ liệu khách hàng vào tài liệu.
 7. **Template ADR:** xem [decisions/README.md](02-architecture/decisions/README.md).
 
@@ -67,6 +76,8 @@ Thứ tự đọc đề xuất:
 | Thêm hoặc bớt worker, queue | [background-jobs.md](02-architecture/background-jobs.md) và [container-diagram.md](02-architecture/container-diagram.md) |
 | Tích hợp ngoài hoặc biến môi trường | [integration-architecture.md](02-architecture/integration-architecture.md) |
 | Module mới | [business-domain.md](01-overview/business-domain.md) |
+| `prisma/schema.prisma` (model, cột, enum, quan hệ, index) | Mục tương ứng trong [03-database/contexts/](03-database/contexts/identity-accounts.md), [enums.md](03-database/enums.md), [relationships.md](03-database/relationships.md), [constraints-and-indexes.md](03-database/constraints-and-indexes.md) |
+| Migration mới | [migrations.md](03-database/migrations.md) |
 
 Sau khi cập nhật, đổi commit ở dòng `Đối chiếu code` của file đó.
 
