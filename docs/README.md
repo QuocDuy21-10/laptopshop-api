@@ -2,7 +2,7 @@
 
 Bộ tài liệu này giúp một người chưa biết LaptopShop hiểu dự án giải quyết bài toán gì, hệ thống gồm những thành phần nào và request đi qua chúng ra sao.
 
-> Đối chiếu code: main @ 0f1eab2 (2026-11-04)
+> Đối chiếu code: main @ d3d4cb7 (2026-11-04)
 
 ## Bắt đầu từ đâu
 
@@ -37,7 +37,10 @@ Thứ tự đọc đề xuất:
 | [ADR-0001](02-architecture/decisions/0001-express-5.md) | Vì sao Express 5? |
 | [ADR-0002](02-architecture/decisions/0002-prisma-mysql.md) | Vì sao Prisma + MySQL? |
 | [ADR-0003](02-architecture/decisions/0003-redis-bullmq.md) | Vì sao Redis + BullMQ? |
+| [ADR-0004](02-architecture/decisions/0004-transactional-outbox.md) | Vì sao dùng transactional outbox? |
+| [ADR-0005](02-architecture/decisions/0005-idempotency.md) | Idempotency được làm thế nào ở các thao tác ghi quan trọng? |
 | [ADR-0006](02-architecture/decisions/0006-stock-ledger.md) | Vì sao có sổ kho? |
+| [ADR-0007](02-architecture/decisions/0007-pricing-pipeline.md) | Giá được tính theo thứ tự nào, flash sale giữ suất ra sao? |
 | [02-architecture/database-architecture.md](02-architecture/database-architecture.md) | MySQL nằm ở đâu trong kiến trúc, dữ liệu nằm ở đâu? |
 | [03-database/README.md](03-database/README.md) | Dữ liệu gồm những bảng nào, đọc data dictionary thế nào? |
 | [03-database/contexts/](03-database/contexts/identity-accounts.md) | ERD và mô tả từng cột của 52 model, chia 8 nhóm |
@@ -46,6 +49,11 @@ Thứ tự đọc đề xuất:
 | [03-database/constraints-and-indexes.md](03-database/constraints-and-indexes.md) | Unique, index, ràng buộc chỉ có trong migration |
 | [03-database/transactions-and-locking.md](03-database/transactions-and-locking.md) | Dữ liệu nào được bảo vệ khỏi ghi đồng thời, bằng cơ chế gì? |
 | [03-database/migrations.md](03-database/migrations.md) | Cách chạy migration và 48 migration theo chủ đề |
+| [04-business/README.md](04-business/README.md) | Có những nghiệp vụ nào, mã quy tắc đọc thế nào? |
+| [04-business/inventory.md](04-business/inventory.md) | Tồn kho đổi theo quy tắc nào, phiếu nhập hoạt động ra sao? |
+| [04-business/checkout-and-payment.md](04-business/checkout-and-payment.md) | Giỏ hàng thành đơn và thanh toán QR được xác nhận thế nào? |
+| [04-business/promotions-and-flash-sale.md](04-business/promotions-and-flash-sale.md) | Khuyến mãi, mã giảm giá, flash sale được cấu hình và tính thế nào? |
+| [04-business/after-sales.md](04-business/after-sales.md) | Bảo hành và hỗ trợ kỹ thuật vận hành ra sao? |
 
 ## Lộ trình tài liệu
 
@@ -53,7 +61,7 @@ Thứ tự đọc đề xuất:
 | --- | --- | --- |
 | 1. Foundation | `01-overview/`, `02-architecture/` | Có (tài liệu này) |
 | 2. Database | ERD, data dictionary, constraints, transactions, migrations | Có |
-| 3. Business | Use case, workflow, sequence, state machine cho các nghiệp vụ chính | Chưa có |
+| 3. Business | Use case, workflow, sequence, state machine cho các nghiệp vụ chính | Có (P0) |
 | 4. Developer & Ops | API conventions, từng module, bảo mật, kiểm thử, vận hành | Chưa có |
 | 5. Automation | Kiểm tra link, Mermaid và nhắc cập nhật docs trong CI | Chưa có |
 
@@ -78,6 +86,7 @@ Thứ tự đọc đề xuất:
 | Module mới | [business-domain.md](01-overview/business-domain.md) |
 | `prisma/schema.prisma` (model, cột, enum, quan hệ, index) | Mục tương ứng trong [03-database/contexts/](03-database/contexts/identity-accounts.md), [enums.md](03-database/enums.md), [relationships.md](03-database/relationships.md), [constraints-and-indexes.md](03-database/constraints-and-indexes.md) |
 | Migration mới | [migrations.md](03-database/migrations.md) |
+| Quy tắc nghiệp vụ trong code (checkout, thanh toán, kho, khuyến mãi, hậu mãi) | Bảng quy tắc và bảng truy vết tương ứng ở [04-business/](04-business/README.md), rồi chạy lại các kiểm tra tài liệu |
 
 Sau khi cập nhật, đổi commit ở dòng `Đối chiếu code` của file đó.
 
