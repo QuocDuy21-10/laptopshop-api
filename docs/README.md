@@ -6,7 +6,7 @@ Bộ tài liệu này giúp một người chưa biết LaptopShop hiểu dự �
 
 ## Bắt đầu từ đâu
 
-[README ở root](../README.md) là trang giới thiệu và hướng dẫn chạy nhanh. Thư mục `docs/` đi sâu hơn; một số nội dung được nhắc lại ở cả hai nơi.
+[README ở root](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/README.md) là trang giới thiệu và hướng dẫn chạy nhanh. Thư mục `docs/` đi sâu hơn; một số nội dung được nhắc lại ở cả hai nơi.
 
 Thứ tự đọc đề xuất:
 
@@ -71,7 +71,7 @@ Thứ tự đọc đề xuất:
 2. **Cuối file:** mục `## Nguồn` với link tương đối tới file source và tên symbol. Không link tới số dòng.
 3. **Phân biệt nguồn gốc:** điều đọc trực tiếp từ code viết bình thường. Lý do suy ngược từ code nằm trong khối `> **Suy luận:** …`. ADR có thêm trường `Nguồn gốc: Đã xác nhận | Tái dựng`.
 4. **Sơ đồ:** dùng Mermaid `flowchart` với `subgraph` theo phong cách C4 (không dùng cú pháp `C4Context`, vì còn experimental) và `sequenceDiagram` cho luồng tương tác. Mỗi sơ đồ tối đa khoảng 15 node. Đường đồng bộ vẽ nét liền, đường bất đồng bộ (queue, outbox, webhook) vẽ nét đứt.
-5. **Một nguồn chính:** API contract nằm ở OpenAPI ([src/docs/openapi.ts](../src/docs/openapi.ts), `/api-docs` khi `ENABLE_DOCS=true`), tài liệu không chép lại. Chi tiết field nằm ở [03-database/](03-database/README.md).
+5. **Một nguồn chính:** API contract nằm ở OpenAPI ([src/docs/openapi.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/docs/openapi.ts), `/api-docs` khi `ENABLE_DOCS=true`), tài liệu không chép lại. Chi tiết field nằm ở [03-database/](03-database/README.md).
 6. **Bảo mật:** chỉ ghi tên biến môi trường và ý nghĩa, không ghi giá trị thật. Không đưa secret, tài khoản hay dữ liệu khách hàng vào tài liệu.
 7. **Template ADR:** xem [decisions/README.md](02-architecture/decisions/README.md).
 
@@ -92,6 +92,6 @@ Sau khi cập nhật, đổi commit ở dòng `Đối chiếu code` của file �
 
 ## Nguồn
 
-- [README.md](../README.md)
-- [src/docs/openapi.ts](../src/docs/openapi.ts)
-- [prisma/schema.prisma](../prisma/schema.prisma)
+- [README.md](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/README.md)
+- [src/docs/openapi.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/docs/openapi.ts)
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma)

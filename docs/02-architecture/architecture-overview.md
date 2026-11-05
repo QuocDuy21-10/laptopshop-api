@@ -67,7 +67,7 @@ Sơ đồ này đơn giản hoá: API không gọi trực tiếp worker. API ghi
 
 ## Nguồn
 
-- [src/app.ts](../../src/app.ts): `createApp`
-- [src/server.ts](../../src/server.ts)
-- [src/config/env.ts](../../src/config/env.ts): `env`
-- [docker-compose.yml](../../docker-compose.yml)
+- [src/app.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/app.ts): `createApp`
+- [src/server.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/server.ts)
+- [src/config/env.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/env.ts): `env`
+- [docker-compose.yml](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/docker-compose.yml)

@@ -286,14 +286,14 @@ erDiagram
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../../prisma/schema.prisma): `Product`, `Review`, `ReviewImage`, `ReviewImageSyncOperation`, `ReviewHelpful`, `ReviewReply`, `HomeBanner`
-- [src/modules/products/products.service.ts](../../../src/modules/products/products.service.ts): `deleteProduct`
-- [src/modules/products/products.normalization.ts](../../../src/modules/products/products.normalization.ts): `inferCpuBrand`
-- [src/modules/products/products.review-stats.repository.ts](../../../src/modules/products/products.review-stats.repository.ts)
-- [src/modules/inventory/inventory.service.ts](../../../src/modules/inventory/inventory.service.ts): `moveStock`
-- [src/modules/reviews/reviews.service.ts](../../../src/modules/reviews/reviews.service.ts): `createReview`
-- [src/modules/reviews/review-images.service.ts](../../../src/modules/reviews/review-images.service.ts)
-- [src/modules/reviews/review-image-sync.service.ts](../../../src/modules/reviews/review-image-sync.service.ts)
-- [src/modules/reviews/review-image-sync.state.ts](../../../src/modules/reviews/review-image-sync.state.ts)
-- [src/modules/reviews/review-helpful.service.ts](../../../src/modules/reviews/review-helpful.service.ts)
-- [src/modules/home-banners/home-banners.service.ts](../../../src/modules/home-banners/home-banners.service.ts)
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `Product`, `Review`, `ReviewImage`, `ReviewImageSyncOperation`, `ReviewHelpful`, `ReviewReply`, `HomeBanner`
+- [src/modules/products/products.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/products/products.service.ts): `deleteProduct`
+- [src/modules/products/products.normalization.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/products/products.normalization.ts): `inferCpuBrand`
+- [src/modules/products/products.review-stats.repository.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/products/products.review-stats.repository.ts)
+- [src/modules/inventory/inventory.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.service.ts): `moveStock`
+- [src/modules/reviews/reviews.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/reviews/reviews.service.ts): `createReview`
+- [src/modules/reviews/review-images.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/reviews/review-images.service.ts)
+- [src/modules/reviews/review-image-sync.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/reviews/review-image-sync.service.ts)
+- [src/modules/reviews/review-image-sync.state.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/reviews/review-image-sync.state.ts)
+- [src/modules/reviews/review-helpful.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/reviews/review-helpful.service.ts)
+- [src/modules/home-banners/home-banners.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/home-banners/home-banners.service.ts)

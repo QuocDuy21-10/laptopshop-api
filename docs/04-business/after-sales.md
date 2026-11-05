@@ -254,22 +254,22 @@ Báo giá (`ServiceQuote.status`): `SENT` đi tới `ACCEPTED`, `DECLINED`, `EXP
 
 ## Nguồn
 
-- [after-sales.service.ts](../../src/modules/after-sales/after-sales.service.ts): `createServiceRequest`, `assignServiceRequest`
-- [after-sales.schema.ts](../../src/modules/after-sales/after-sales.schema.ts): `createServiceRequestBody`, `transitionItemBody`, `warrantyVerificationBody`, `sendQuoteBody`
-- [after-sales.types.ts](../../src/modules/after-sales/after-sales.types.ts): `SERVICE_REQUEST_ITEM_STATUSES`, `TERMINAL_ITEM_STATUSES`
-- [after-sales.status.ts](../../src/modules/after-sales/after-sales.status.ts): `commonTransitions`, `canTransition`, `assertTransition`
-- [after-sales.aggregate.ts](../../src/modules/after-sales/after-sales.aggregate.ts): `deriveRequestStatus`
-- [after-sales.eligibility.ts](../../src/modules/after-sales/after-sales.eligibility.ts): `effectiveCoverage`, `allowedRequestTypesForCoverage`
-- [after-sales.repository.ts](../../src/modules/after-sales/after-sales.repository.ts): `listEligibleDeviceRows`, `lockOrderDetails`
-- [after-sales.mapper.ts](../../src/modules/after-sales/after-sales.mapper.ts): `toEligibleDeviceDto`
-- [after-sales.actions.ts](../../src/modules/after-sales/after-sales.actions.ts): `transitionItem`, `cancelMyItem`, `confirmMyItem`, `disputeMyItem`
-- [after-sales.quotes.ts](../../src/modules/after-sales/after-sales.quotes.ts): `sendQuote`, `decideQuote`, `effectiveQuoteStatus`
-- [after-sales.warranty-verifications.ts](../../src/modules/after-sales/after-sales.warranty-verifications.ts): `createWarrantyVerification`
-- [after-sales.attachments.ts](../../src/modules/after-sales/after-sales.attachments.ts): `addServiceAttachments`, `listServiceAttachments`, `redactServiceAttachment`
-- [after-sales-attachments.routes.ts](../../src/modules/after-sales/after-sales-attachments.routes.ts): `createAfterSalesAttachmentRoutes`
-- [after-sales-attachment-cleanup.ts](../../src/modules/after-sales/after-sales-attachment-cleanup.ts): `cleanupServiceAttachment`, `reconcileAfterSalesAttachments`
-- [after-sales-maintenance.ts](../../src/modules/after-sales/after-sales-maintenance.ts): `scheduleConfirmationMilestones`, `processAfterSalesMilestone`, `expireDueQuotes`
-- [after-sales.events.ts](../../src/modules/after-sales/after-sales.events.ts): `addPublicMessage`, `addInternalNote`
-- [after-sales.notifications.ts](../../src/modules/after-sales/after-sales.notifications.ts): `recipientsFor`, `createAfterSalesNotification`
-- [after-sales-worker.ts](../../src/workers/after-sales-worker.ts): `processAfterSalesJob`
-- [reconcile-after-sales-attachments.ts](../../src/scripts/reconcile-after-sales-attachments.ts): script đối soát ảnh
+- [after-sales.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.service.ts): `createServiceRequest`, `assignServiceRequest`
+- [after-sales.schema.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.schema.ts): `createServiceRequestBody`, `transitionItemBody`, `warrantyVerificationBody`, `sendQuoteBody`
+- [after-sales.types.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.types.ts): `SERVICE_REQUEST_ITEM_STATUSES`, `TERMINAL_ITEM_STATUSES`
+- [after-sales.status.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.status.ts): `commonTransitions`, `canTransition`, `assertTransition`
+- [after-sales.aggregate.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.aggregate.ts): `deriveRequestStatus`
+- [after-sales.eligibility.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.eligibility.ts): `effectiveCoverage`, `allowedRequestTypesForCoverage`
+- [after-sales.repository.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.repository.ts): `listEligibleDeviceRows`, `lockOrderDetails`
+- [after-sales.mapper.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.mapper.ts): `toEligibleDeviceDto`
+- [after-sales.actions.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.actions.ts): `transitionItem`, `cancelMyItem`, `confirmMyItem`, `disputeMyItem`
+- [after-sales.quotes.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.quotes.ts): `sendQuote`, `decideQuote`, `effectiveQuoteStatus`
+- [after-sales.warranty-verifications.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.warranty-verifications.ts): `createWarrantyVerification`
+- [after-sales.attachments.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.attachments.ts): `addServiceAttachments`, `listServiceAttachments`, `redactServiceAttachment`
+- [after-sales-attachments.routes.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales-attachments.routes.ts): `createAfterSalesAttachmentRoutes`
+- [after-sales-attachment-cleanup.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales-attachment-cleanup.ts): `cleanupServiceAttachment`, `reconcileAfterSalesAttachments`
+- [after-sales-maintenance.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales-maintenance.ts): `scheduleConfirmationMilestones`, `processAfterSalesMilestone`, `expireDueQuotes`
+- [after-sales.events.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.events.ts): `addPublicMessage`, `addInternalNote`
+- [after-sales.notifications.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.notifications.ts): `recipientsFor`, `createAfterSalesNotification`
+- [after-sales-worker.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/workers/after-sales-worker.ts): `processAfterSalesJob`
+- [reconcile-after-sales-attachments.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/scripts/reconcile-after-sales-attachments.ts): script đối soát ảnh

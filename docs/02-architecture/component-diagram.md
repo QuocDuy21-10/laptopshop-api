@@ -57,10 +57,10 @@ Kết quả parse của `validate` được lưu ở `res.locals.params` và `re
 
 ## Nguồn
 
-- [src/modules/products/](../../src/modules/products/): ví dụ module
-- [src/middlewares/validate.ts](../../src/middlewares/validate.ts): `validate`
-- [src/middlewares/error.middleware.ts](../../src/middlewares/error.middleware.ts): `errorHandler`, `notFoundHandler`
-- [src/lib/errors.ts](../../src/lib/errors.ts): `AppError`
-- [src/lib/http.ts](../../src/lib/http.ts)
-- [src/routes/index.ts](../../src/routes/index.ts): `createApiV1Router`
-- [tsconfig.json](../../tsconfig.json): `paths`
+- [src/modules/products/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/src/modules/products): ví dụ module
+- [src/middlewares/validate.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/validate.ts): `validate`
+- [src/middlewares/error.middleware.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/error.middleware.ts): `errorHandler`, `notFoundHandler`
+- [src/lib/errors.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/errors.ts): `AppError`
+- [src/lib/http.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/http.ts)
+- [src/routes/index.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/routes/index.ts): `createApiV1Router`
+- [tsconfig.json](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/tsconfig.json): `paths`

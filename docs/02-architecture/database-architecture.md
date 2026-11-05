@@ -45,13 +45,13 @@ Unit test không dùng database thật: Prisma được mock (`tests/helpers/pri
 
 ## Nguồn
 
-- [src/config/client.ts](../../src/config/client.ts): `prisma`, `withSocketTimeout`
-- [src/config/env.ts](../../src/config/env.ts): `DATABASE_URL`, `STORE_TIME_ZONE`
-- [src/routes/health.ts](../../src/routes/health.ts): `registerHealthRoutes`
-- [src/server.ts](../../src/server.ts): `readyChecks`
-- [docker/entrypoint.sh](../../docker/entrypoint.sh)
-- [docker-compose.yml](../../docker-compose.yml)
-- [src/seed.ts](../../src/seed.ts)
-- [src/lib/shop-time.ts](../../src/lib/shop-time.ts)
-- [src/middlewares/multer.ts](../../src/middlewares/multer.ts)
-- [tests/helpers/prisma.ts](../../tests/helpers/prisma.ts)
+- [src/config/client.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/client.ts): `prisma`, `withSocketTimeout`
+- [src/config/env.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/env.ts): `DATABASE_URL`, `STORE_TIME_ZONE`
+- [src/routes/health.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/routes/health.ts): `registerHealthRoutes`
+- [src/server.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/server.ts): `readyChecks`
+- [docker/entrypoint.sh](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/docker/entrypoint.sh)
+- [docker-compose.yml](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/docker-compose.yml)
+- [src/seed.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/seed.ts)
+- [src/lib/shop-time.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/shop-time.ts)
+- [src/middlewares/multer.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/multer.ts)
+- [tests/helpers/prisma.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/tests/helpers/prisma.ts)

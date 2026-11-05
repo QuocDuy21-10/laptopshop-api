@@ -140,6 +140,6 @@ Hệ quả: trên database thật, xoá một `Payment` sẽ xoá luôn `Payment
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../prisma/schema.prisma): các `@relation`
-- [prisma/migrations/](../../prisma/migrations/): `ON DELETE` của từng khoá ngoại
-- [prisma/migrations/20261024150000_checkout_qr_review_remediation/migration.sql](../../prisma/migrations/20261024150000_checkout_qr_review_remediation/migration.sql)
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): các `@relation`
+- [prisma/migrations/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/prisma/migrations): `ON DELETE` của từng khoá ngoại
+- [prisma/migrations/20261024150000_checkout_qr_review_remediation/migration.sql](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/migrations/20261024150000_checkout_qr_review_remediation/migration.sql)

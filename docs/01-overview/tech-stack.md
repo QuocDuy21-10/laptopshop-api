@@ -35,7 +35,7 @@ Redis được dùng cho cả hai việc: lưu trạng thái rate limit trong ti
 
 ## Nguồn
 
-- [package.json](../../package.json)
-- [docker-compose.yml](../../docker-compose.yml)
-- [Dockerfile](../../Dockerfile)
-- [src/config/env.ts](../../src/config/env.ts): `env`
+- [package.json](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/package.json)
+- [docker-compose.yml](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/docker-compose.yml)
+- [Dockerfile](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/Dockerfile)
+- [src/config/env.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/env.ts): `env`

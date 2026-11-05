@@ -78,8 +78,8 @@ Redis trong tiến trình API chỉ lưu trạng thái rate limit (các tiền t
 
 ## Nguồn
 
-- [docker-compose.yml](../../docker-compose.yml)
-- [src/server.ts](../../src/server.ts): `createRedisLimitStore`, `readyChecks`
-- [src/workers/](../../src/workers/)
-- [src/queues/queue.factory.ts](../../src/queues/queue.factory.ts): `createQueue`, `createWorker`
-- [src/modules/payments/reconciliation.service.ts](../../src/modules/payments/reconciliation.service.ts): `startPaymentWorker`
+- [docker-compose.yml](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/docker-compose.yml)
+- [src/server.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/server.ts): `createRedisLimitStore`, `readyChecks`
+- [src/workers/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/src/workers)
+- [src/queues/queue.factory.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/queues/queue.factory.ts): `createQueue`, `createWorker`
+- [src/modules/payments/reconciliation.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/reconciliation.service.ts): `startPaymentWorker`

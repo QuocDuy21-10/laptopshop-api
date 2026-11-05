@@ -95,15 +95,15 @@ Các script nằm trong `src/scripts/` và chạy thủ công khi cần kiểm t
 
 ## Nguồn
 
-- [docker-compose.yml](../../docker-compose.yml)
-- [src/workers/](../../src/workers/)
-- [src/queues/queue.factory.ts](../../src/queues/queue.factory.ts): `createQueue`, `createWorker`, `defaultJobOptions`
-- [src/queues/notification.queue.ts](../../src/queues/notification.queue.ts)
-- [src/queues/pricing.queue.ts](../../src/queues/pricing.queue.ts)
-- [src/queues/after-sales.queue.ts](../../src/queues/after-sales.queue.ts)
-- [src/modules/outbox/](../../src/modules/outbox/): `claimOutboxBatch`, `dispatchOutboxBatch`, `markOutboxPublished`, `markOutboxFailed`
-- [src/modules/workers/worker-heartbeat.service.ts](../../src/modules/workers/worker-heartbeat.service.ts): `recordWorkerHeartbeat`
-- [src/modules/payments/reconciliation.service.ts](../../src/modules/payments/reconciliation.service.ts): `startPaymentWorker`
-- [src/scripts/](../../src/scripts/)
-- [package.json](../../package.json): `scripts`
-- [prisma/schema.prisma](../../prisma/schema.prisma): `OutboxEvent`, `WorkerHeartbeat`
+- [docker-compose.yml](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/docker-compose.yml)
+- [src/workers/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/src/workers)
+- [src/queues/queue.factory.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/queues/queue.factory.ts): `createQueue`, `createWorker`, `defaultJobOptions`
+- [src/queues/notification.queue.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/queues/notification.queue.ts)
+- [src/queues/pricing.queue.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/queues/pricing.queue.ts)
+- [src/queues/after-sales.queue.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/queues/after-sales.queue.ts)
+- [src/modules/outbox/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/src/modules/outbox): `claimOutboxBatch`, `dispatchOutboxBatch`, `markOutboxPublished`, `markOutboxFailed`
+- [src/modules/workers/worker-heartbeat.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/workers/worker-heartbeat.service.ts): `recordWorkerHeartbeat`
+- [src/modules/payments/reconciliation.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/reconciliation.service.ts): `startPaymentWorker`
+- [src/scripts/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/src/scripts)
+- [package.json](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/package.json): `scripts`
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `OutboxEvent`, `WorkerHeartbeat`

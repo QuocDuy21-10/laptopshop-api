@@ -229,6 +229,6 @@ Một số bất biến quan trọng không có ràng buộc ở mức database 
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../prisma/schema.prisma): `@@id`, `@@unique`, `@unique`, `@@index`
-- [prisma/migrations/20261021040546_add_product_reviews/migration.sql](../../prisma/migrations/20261021040546_add_product_reviews/migration.sql)
-- [src/modules/inventory/inventory.service.ts](../../src/modules/inventory/inventory.service.ts): `moveStock`
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `@@id`, `@@unique`, `@unique`, `@@index`
+- [prisma/migrations/20261021040546_add_product_reviews/migration.sql](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/migrations/20261021040546_add_product_reviews/migration.sql)
+- [src/modules/inventory/inventory.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.service.ts): `moveStock`

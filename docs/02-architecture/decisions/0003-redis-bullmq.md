@@ -48,13 +48,13 @@ Mất:
 
 ## Nguồn
 
-- [src/config/redis.ts](../../../src/config/redis.ts): `createRedisClient`
-- [src/middlewares/rate-limit.ts](../../../src/middlewares/rate-limit.ts): `createRedisLimitStore`, `createLimiters`
-- [src/queues/queue.factory.ts](../../../src/queues/queue.factory.ts): `createQueue`, `createWorker`, `defaultJobOptions`
-- [src/queues/notification.queue.ts](../../../src/queues/notification.queue.ts)
-- [src/queues/pricing.queue.ts](../../../src/queues/pricing.queue.ts)
-- [src/queues/after-sales.queue.ts](../../../src/queues/after-sales.queue.ts)
-- [src/workers/outbox-dispatcher.ts](../../../src/workers/outbox-dispatcher.ts)
-- [src/modules/outbox/outbox.repository.ts](../../../src/modules/outbox/outbox.repository.ts): `markOutboxFailed`
-- [docker-compose.yml](../../../docker-compose.yml)
-- [package.json](../../../package.json): `bullmq`, `redis`, `rate-limit-redis`
+- [src/config/redis.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/redis.ts): `createRedisClient`
+- [src/middlewares/rate-limit.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/rate-limit.ts): `createRedisLimitStore`, `createLimiters`
+- [src/queues/queue.factory.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/queues/queue.factory.ts): `createQueue`, `createWorker`, `defaultJobOptions`
+- [src/queues/notification.queue.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/queues/notification.queue.ts)
+- [src/queues/pricing.queue.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/queues/pricing.queue.ts)
+- [src/queues/after-sales.queue.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/queues/after-sales.queue.ts)
+- [src/workers/outbox-dispatcher.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/workers/outbox-dispatcher.ts)
+- [src/modules/outbox/outbox.repository.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/outbox/outbox.repository.ts): `markOutboxFailed`
+- [docker-compose.yml](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/docker-compose.yml)
+- [package.json](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/package.json): `bullmq`, `redis`, `rate-limit-redis`

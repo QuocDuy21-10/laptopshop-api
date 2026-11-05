@@ -125,12 +125,12 @@ erDiagram
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../../prisma/schema.prisma): `User`, `Role`, `RefreshToken`, `EmailVerificationChallenge`
-- [src/modules/auth/auth.service.ts](../../../src/modules/auth/auth.service.ts): `registerUser`, `loginUser`
-- [src/modules/auth/token.service.ts](../../../src/modules/auth/token.service.ts): `issueRefreshToken`, `rotateRefreshToken`, `revokeFamily`
-- [src/modules/auth/password-reset.service.ts](../../../src/modules/auth/password-reset.service.ts)
-- [src/modules/email-verification/email-verification.service.ts](../../../src/modules/email-verification/email-verification.service.ts)
-- [src/modules/email-verification/email-otp.crypto.ts](../../../src/modules/email-verification/email-otp.crypto.ts): `createEmailOtp`, `verifyEmailOtp`
-- [src/modules/users/users.mapper.ts](../../../src/modules/users/users.mapper.ts): `userSelect`
-- [src/lib/password.ts](../../../src/lib/password.ts): `hashPassword`
-- [src/config/constant.ts](../../../src/config/constant.ts): `ACCOUNT_TYPE`
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `User`, `Role`, `RefreshToken`, `EmailVerificationChallenge`
+- [src/modules/auth/auth.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/auth/auth.service.ts): `registerUser`, `loginUser`
+- [src/modules/auth/token.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/auth/token.service.ts): `issueRefreshToken`, `rotateRefreshToken`, `revokeFamily`
+- [src/modules/auth/password-reset.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/auth/password-reset.service.ts)
+- [src/modules/email-verification/email-verification.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/email-verification/email-verification.service.ts)
+- [src/modules/email-verification/email-otp.crypto.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/email-verification/email-otp.crypto.ts): `createEmailOtp`, `verifyEmailOtp`
+- [src/modules/users/users.mapper.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/users/users.mapper.ts): `userSelect`
+- [src/lib/password.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/password.ts): `hashPassword`
+- [src/config/constant.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/constant.ts): `ACCOUNT_TYPE`

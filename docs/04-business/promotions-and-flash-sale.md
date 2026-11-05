@@ -215,20 +215,20 @@ Hai vòng đời phụ, không có hằng chuyển trạng thái: `FlashSaleAllo
 
 ## Nguồn
 
-- [promotions.schema.ts](../../src/modules/promotions/promotions.schema.ts): `createPromotionBody`, `PROMOTION_STATES`
-- [promotions.service.ts](../../src/modules/promotions/promotions.service.ts): `createPromotion`, `updatePromotion`, `transitionPromotion`, `clonePromotion`, `resolveCoupon`, `assertCouponApplies`, `quoteOrder`, `listAvailablePromotions`, `listFlashSaleAllocations`
-- [promotions.mapper.ts](../../src/modules/promotions/promotions.mapper.ts): `effectivePromotionState`
-- [promotions.routes.ts](../../src/modules/promotions/promotions.routes.ts): `promotionRoutes`, `adminPromotionRoutes`
-- [promotion-pricing.ts](../../src/modules/promotions/promotion-pricing.ts): `calculatePromotionPricing`
-- [promotion-selection.ts](../../src/modules/promotions/promotion-selection.ts): `comparePromotionCandidates`, `selectProductPromotion`
-- [promotion-discount.ts](../../src/modules/promotions/promotion-discount.ts): `automaticDiscountPerUnit`
-- [promotion-usage.ts](../../src/modules/promotions/promotion-usage.ts): `claimCouponUsage`, `reverseCouponRedemption`
-- [flash-sale-quota.ts](../../src/modules/promotions/flash-sale-quota.ts): `claimFlashSaleQuotas`, `releaseFlashSaleAllocations`
-- [flash-sale-availability.ts](../../src/modules/promotions/flash-sale-availability.ts): `getFlashSaleAvailability`
-- [flash-sale-verifier.ts](../../src/modules/promotions/flash-sale-verifier.ts): `verifyFlashSaleCounters`
-- [promotion-fingerprint.ts](../../src/modules/promotions/promotion-fingerprint.ts): `createPricingFingerprint`, `createCheckoutRequestHash`
-- [catalog-price-timeline.ts](../../src/modules/pricing/catalog-price-timeline.ts): `buildCatalogPriceTimeline`
-- [catalog-price-projection.repository.ts](../../src/modules/pricing/catalog-price-projection.repository.ts): `refreshCatalogPriceWindows`
-- [catalog-price-projection.audit.ts](../../src/modules/pricing/catalog-price-projection.audit.ts): `auditCatalogPriceProjection`
-- [rebuild-catalog-price-windows.ts](../../src/scripts/rebuild-catalog-price-windows.ts): `rebuildCatalogPriceWindows`
-- [verify-flash-sale.ts](../../src/scripts/verify-flash-sale.ts): script kiểm tra bộ đếm
+- [promotions.schema.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotions.schema.ts): `createPromotionBody`, `PROMOTION_STATES`
+- [promotions.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotions.service.ts): `createPromotion`, `updatePromotion`, `transitionPromotion`, `clonePromotion`, `resolveCoupon`, `assertCouponApplies`, `quoteOrder`, `listAvailablePromotions`, `listFlashSaleAllocations`
+- [promotions.mapper.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotions.mapper.ts): `effectivePromotionState`
+- [promotions.routes.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotions.routes.ts): `promotionRoutes`, `adminPromotionRoutes`
+- [promotion-pricing.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-pricing.ts): `calculatePromotionPricing`
+- [promotion-selection.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-selection.ts): `comparePromotionCandidates`, `selectProductPromotion`
+- [promotion-discount.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-discount.ts): `automaticDiscountPerUnit`
+- [promotion-usage.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-usage.ts): `claimCouponUsage`, `reverseCouponRedemption`
+- [flash-sale-quota.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/flash-sale-quota.ts): `claimFlashSaleQuotas`, `releaseFlashSaleAllocations`
+- [flash-sale-availability.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/flash-sale-availability.ts): `getFlashSaleAvailability`
+- [flash-sale-verifier.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/flash-sale-verifier.ts): `verifyFlashSaleCounters`
+- [promotion-fingerprint.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-fingerprint.ts): `createPricingFingerprint`, `createCheckoutRequestHash`
+- [catalog-price-timeline.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/pricing/catalog-price-timeline.ts): `buildCatalogPriceTimeline`
+- [catalog-price-projection.repository.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/pricing/catalog-price-projection.repository.ts): `refreshCatalogPriceWindows`
+- [catalog-price-projection.audit.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/pricing/catalog-price-projection.audit.ts): `auditCatalogPriceProjection`
+- [rebuild-catalog-price-windows.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/scripts/rebuild-catalog-price-windows.ts): `rebuildCatalogPriceWindows`
+- [verify-flash-sale.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/scripts/verify-flash-sale.ts): script kiểm tra bộ đếm

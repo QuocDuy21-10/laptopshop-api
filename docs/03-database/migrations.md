@@ -135,8 +135,8 @@ Gom theo chủ đề; trong mỗi nhóm giữ đúng thứ tự thời gian.
 
 ## Nguồn
 
-- [prisma/migrations/](../../prisma/migrations/)
-- [prisma/migrations/migration_lock.toml](../../prisma/migrations/migration_lock.toml)
-- [docker/entrypoint.sh](../../docker/entrypoint.sh)
-- [package.json](../../package.json): `prisma:deploy`
-- [README.md](../../README.md)
+- [prisma/migrations/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/prisma/migrations)
+- [prisma/migrations/migration_lock.toml](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/migrations/migration_lock.toml)
+- [docker/entrypoint.sh](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/docker/entrypoint.sh)
+- [package.json](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/package.json): `prisma:deploy`
+- [README.md](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/README.md)

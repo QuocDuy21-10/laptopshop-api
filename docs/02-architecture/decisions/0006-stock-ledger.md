@@ -53,9 +53,9 @@ Mất:
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../../prisma/schema.prisma): `StockMovement`, `StockReceipt`, `StockReceiptItem`
-- [src/modules/inventory/inventory.service.ts](../../../src/modules/inventory/inventory.service.ts): `moveStock`, `adjustStock`
-- [src/modules/inventory/inventory.reconciliation.ts](../../../src/modules/inventory/inventory.reconciliation.ts): `findLedgerMismatches`
-- [src/scripts/verify-stock-ledger.ts](../../../src/scripts/verify-stock-ledger.ts)
-- [prisma/migrations/20261019095518_stock_movements/migration.sql](../../../prisma/migrations/20261019095518_stock_movements/migration.sql)
-- [prisma/migrations/20261020193000_inventory_balance_contract/migration.sql](../../../prisma/migrations/20261020193000_inventory_balance_contract/migration.sql)
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `StockMovement`, `StockReceipt`, `StockReceiptItem`
+- [src/modules/inventory/inventory.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.service.ts): `moveStock`, `adjustStock`
+- [src/modules/inventory/inventory.reconciliation.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.reconciliation.ts): `findLedgerMismatches`
+- [src/scripts/verify-stock-ledger.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/scripts/verify-stock-ledger.ts)
+- [prisma/migrations/20261019095518_stock_movements/migration.sql](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/migrations/20261019095518_stock_movements/migration.sql)
+- [prisma/migrations/20261020193000_inventory_balance_contract/migration.sql](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/migrations/20261020193000_inventory_balance_contract/migration.sql)

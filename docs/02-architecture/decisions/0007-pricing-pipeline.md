@@ -58,14 +58,14 @@ Mất:
 
 ## Nguồn
 
-- [src/modules/promotions/promotion-pricing.ts](../../../src/modules/promotions/promotion-pricing.ts): `calculatePromotionPricing`
-- [src/modules/promotions/promotion-selection.ts](../../../src/modules/promotions/promotion-selection.ts): `comparePromotionCandidates`, `selectProductPromotion`
-- [src/modules/promotions/promotion-fingerprint.ts](../../../src/modules/promotions/promotion-fingerprint.ts): `createPricingFingerprint`
-- [src/modules/promotions/flash-sale-quota.ts](../../../src/modules/promotions/flash-sale-quota.ts): `claimFlashSaleQuotas`, `releaseFlashSaleAllocations`
-- [src/modules/promotions/promotions.service.ts](../../../src/modules/promotions/promotions.service.ts): `quoteOrder`, `transitionPromotion`
-- [src/modules/promotions/automatic-promotion-policy.ts](../../../src/modules/promotions/automatic-promotion-policy.ts): `resolveAutomaticPromotionAt`
-- [src/modules/orders/orders.service.ts](../../../src/modules/orders/orders.service.ts): `placeOrder`
-- [src/modules/pricing/catalog-price-timeline.ts](../../../src/modules/pricing/catalog-price-timeline.ts): `buildCatalogPriceTimeline`
-- [src/modules/pricing/catalog-price-projection.repository.ts](../../../src/modules/pricing/catalog-price-projection.repository.ts): `refreshCatalogPriceWindows`
-- [src/scripts/rebuild-catalog-price-windows.ts](../../../src/scripts/rebuild-catalog-price-windows.ts)
-- [src/scripts/verify-flash-sale.ts](../../../src/scripts/verify-flash-sale.ts)
+- [src/modules/promotions/promotion-pricing.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-pricing.ts): `calculatePromotionPricing`
+- [src/modules/promotions/promotion-selection.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-selection.ts): `comparePromotionCandidates`, `selectProductPromotion`
+- [src/modules/promotions/promotion-fingerprint.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-fingerprint.ts): `createPricingFingerprint`
+- [src/modules/promotions/flash-sale-quota.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/flash-sale-quota.ts): `claimFlashSaleQuotas`, `releaseFlashSaleAllocations`
+- [src/modules/promotions/promotions.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotions.service.ts): `quoteOrder`, `transitionPromotion`
+- [src/modules/promotions/automatic-promotion-policy.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/automatic-promotion-policy.ts): `resolveAutomaticPromotionAt`
+- [src/modules/orders/orders.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.service.ts): `placeOrder`
+- [src/modules/pricing/catalog-price-timeline.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/pricing/catalog-price-timeline.ts): `buildCatalogPriceTimeline`
+- [src/modules/pricing/catalog-price-projection.repository.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/pricing/catalog-price-projection.repository.ts): `refreshCatalogPriceWindows`
+- [src/scripts/rebuild-catalog-price-windows.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/scripts/rebuild-catalog-price-windows.ts)
+- [src/scripts/verify-flash-sale.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/scripts/verify-flash-sale.ts)

@@ -39,8 +39,8 @@ Express là một phần của tiến trình API, không phải thành phần ru
 
 ## Nguồn
 
-- [src/app.ts](../../../src/app.ts): `createApp`, `AppDeps`
-- [src/server.ts](../../../src/server.ts)
-- [src/middlewares/validate.ts](../../../src/middlewares/validate.ts): `validate`
-- [src/middlewares/error.middleware.ts](../../../src/middlewares/error.middleware.ts): `errorHandler`
-- [package.json](../../../package.json): `express`
+- [src/app.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/app.ts): `createApp`, `AppDeps`
+- [src/server.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/server.ts)
+- [src/middlewares/validate.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/validate.ts): `validate`
+- [src/middlewares/error.middleware.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/error.middleware.ts): `errorHandler`
+- [package.json](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/package.json): `express`

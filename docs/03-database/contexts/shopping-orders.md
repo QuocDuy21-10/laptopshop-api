@@ -173,10 +173,10 @@ erDiagram
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../../prisma/schema.prisma): `Cart`, `CartDetail`, `Order`, `OrderDetail`, `OrderStatusHistory`
-- [src/modules/orders/orders.service.ts](../../../src/modules/orders/orders.service.ts): `placeOrder`, `changeStatus`
-- [src/modules/orders/order-status.ts](../../../src/modules/orders/order-status.ts): `ORDER_STATUS`, `PAYMENT_STATUS`, `canTransition`
-- [src/modules/orders/order-warranty.ts](../../../src/modules/orders/order-warranty.ts): `warrantySnapshotForCompletion`
-- [src/modules/orders/order-cancellation.service.ts](../../../src/modules/orders/order-cancellation.service.ts)
-- [src/modules/cart/cart.service.ts](../../../src/modules/cart/cart.service.ts)
-- [src/modules/promotions/promotion-pricing.ts](../../../src/modules/promotions/promotion-pricing.ts): `calculatePromotionPricing`
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `Cart`, `CartDetail`, `Order`, `OrderDetail`, `OrderStatusHistory`
+- [src/modules/orders/orders.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.service.ts): `placeOrder`, `changeStatus`
+- [src/modules/orders/order-status.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-status.ts): `ORDER_STATUS`, `PAYMENT_STATUS`, `canTransition`
+- [src/modules/orders/order-warranty.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-warranty.ts): `warrantySnapshotForCompletion`
+- [src/modules/orders/order-cancellation.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-cancellation.service.ts)
+- [src/modules/cart/cart.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/cart/cart.service.ts)
+- [src/modules/promotions/promotion-pricing.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-pricing.ts): `calculatePromotionPricing`

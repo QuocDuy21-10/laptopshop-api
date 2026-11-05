@@ -5,7 +5,7 @@ import prettier from "eslint-config-prettier";
 import importOrderByLength from "./eslint-rules/import-order-by-length.mjs";
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules", "public", "coverage"] },
+  { ignores: ["dist", "node_modules", "public", "coverage", "website"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   prettier,
