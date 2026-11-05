@@ -22,10 +22,8 @@ jobs:
         working-directory: website
     steps:
       - uses: actions/checkout@v4
-      # website/package.json không khai báo packageManager nên chỉ định version pnpm ở đây
+      # version pnpm lấy từ packageManager trong package.json ở root; không khai báo thêm ở đây
       - uses: pnpm/action-setup@v4
-        with:
-          version: 11
       - uses: actions/setup-node@v4
         with:
           node-version: 22
