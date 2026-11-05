@@ -13,7 +13,9 @@
 ![BullMQ](https://img.shields.io/badge/BullMQ-queues-E0234E)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 [![CI](https://github.com/QuocDuy21-10/laptopshop-api/actions/workflows/ci.yml/badge.svg)](https://github.com/QuocDuy21-10/laptopshop-api/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/Docs-Website-blue?logo=docusaurus&logoColor=white)](https://quocduy21-10.github.io/laptopshop-api/)
 
+[Tài liệu chi tiết](https://quocduy21-10.github.io/laptopshop-api/) •
 [Tính năng](#-tính-năng-nổi-bật) •
 [Kiến trúc](#️-kiến-trúc) •
 [Công nghệ](#️-công-nghệ) •
@@ -30,6 +32,8 @@
 **Laptop Shop API** là backend JSON REST (`/api/v1`) phục vụ cả storefront lẫn trang quản trị của một cửa hàng laptop. Giao diện người dùng nằm ở repo riêng [**laptopshop-web**](https://github.com/QuocDuy21-10/laptopshop-web) (Next.js).
 
 Dự án không dừng ở CRUD cơ bản mà xử lý các bài toán thực tế của một hệ thống bán hàng: **đặt hàng idempotent** chống trừ kho hai lần, **thanh toán chuyển khoản QR có đối soát tự động**, **flash sale và coupon chịu được truy cập đồng thời**, **sổ kho (stock ledger)**, **quy trình bảo hành/sửa chữa** và **thông báo đa kênh qua Outbox Pattern**.
+
+> 📚 **Tài liệu chi tiết:** Xem website tài liệu kỹ thuật đầy đủ của dự án (tổng quan, kiến trúc C4, data dictionary của 52 model database, quy tắc nghiệp vụ và ADR) tại 👉 [**https://quocduy21-10.github.io/laptopshop-api/**](https://quocduy21-10.github.io/laptopshop-api/) (hoặc xem trực tiếp trong thư mục [`docs/`](docs/README.md)).
 
 <div align="center">
 
@@ -345,6 +349,6 @@ docker compose up -d --build
 
 <div align="center">
 
-Made with ❤️ by [QuocDuy21-10](https://github.com/QuocDuy21-10) · Frontend: [laptopshop-web](https://github.com/QuocDuy21-10/laptopshop-web)
+Made with ❤️ by [QuocDuy21-10](https://github.com/QuocDuy21-10) · [Tài liệu chi tiết](https://quocduy21-10.github.io/laptopshop-api/) · Frontend: [laptopshop-web](https://github.com/QuocDuy21-10/laptopshop-web)
 
 </div>

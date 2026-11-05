@@ -2,6 +2,8 @@
 
 Bộ tài liệu này giúp một người chưa biết LaptopShop hiểu dự án giải quyết bài toán gì, hệ thống gồm những thành phần nào và request đi qua chúng ra sao.
 
+> 🌐 Website tài liệu trực tuyến: [https://quocduy21-10.github.io/laptopshop-api/](https://quocduy21-10.github.io/laptopshop-api/)
+>
 > Đối chiếu code: main @ d3d4cb7 (2026-11-04)
 
 ## Bắt đầu từ đâu
