@@ -4,24 +4,28 @@
 
 **Backend REST API cho nền tảng thương mại điện tử bán laptop, từ catalog, giỏ hàng, thanh toán QR đến bảo hành sau bán và tư vấn bằng AI.**
 
-![Node.js](https://img.shields.io/badge/Node.js-22-339933?logo=nodedotjs&logoColor=white)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
-![Express](https://img.shields.io/badge/Express-5-000000?logo=express&logoColor=white)
-![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?logo=prisma&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-8.4-4479A1?logo=mysql&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
-![BullMQ](https://img.shields.io/badge/BullMQ-queues-E0234E)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
-[![CI](https://github.com/QuocDuy21-10/laptopshop-api/actions/workflows/ci.yml/badge.svg)](https://github.com/QuocDuy21-10/laptopshop-api/actions/workflows/ci.yml)
-[![Docs](https://img.shields.io/badge/Docs-Website-blue?logo=docusaurus&logoColor=white)](https://quocduy21-10.github.io/laptopshop-api/)
+<br/>
 
-[Tài liệu chi tiết](https://quocduy21-10.github.io/laptopshop-api/) •
-[Tính năng](#-tính-năng-nổi-bật) •
-[Kiến trúc](#️-kiến-trúc) •
-[Công nghệ](#️-công-nghệ) •
-[Bắt đầu nhanh](#-bắt-đầu-nhanh) •
-[Workers](#️-workers--tác-vụ-nền) •
-[Production](#-triển-khai-production)
+[![Node.js](https://img.shields.io/badge/Node.js-22-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Express](https://img.shields.io/badge/Express-5-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com/)
+[![Prisma](https://img.shields.io/badge/Prisma-6-2D3748?style=for-the-badge&logo=prisma&logoColor=white)](https://www.prisma.io/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.4-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://www.mysql.com/)
+[![Redis](https://img.shields.io/badge/Redis-7-DC382D?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
+[![BullMQ](https://img.shields.io/badge/BullMQ-queues-E0234E?style=for-the-badge&logo=bull&logoColor=white)](https://bullmq.io/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+[![CI](https://img.shields.io/github/actions/workflow/status/QuocDuy21-10/laptopshop-api/ci.yml?branch=main&label=CI&style=for-the-badge&logo=githubactions&logoColor=white)](https://github.com/QuocDuy21-10/laptopshop-api/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/Docs-Website-1877F2?style=for-the-badge&logo=docusaurus&logoColor=white)](https://quocduy21-10.github.io/laptopshop-api/)
+
+<br/>
+
+[📚 Tài liệu chi tiết](https://quocduy21-10.github.io/laptopshop-api/) •
+[✨ Tính năng](#-tính-năng-nổi-bật) •
+[🏗️ Kiến trúc](#️-kiến-trúc) •
+[🛠️ Công nghệ](#️-công-nghệ) •
+[🚀 Bắt đầu nhanh](#-bắt-đầu-nhanh) •
+[⚙️ Workers](#️-workers--tác-vụ-nền) •
+[🚢 Production](#-triển-khai-production)
 
 </div>
 
@@ -33,6 +37,7 @@
 
 Dự án không dừng ở CRUD cơ bản mà xử lý các bài toán thực tế của một hệ thống bán hàng: **đặt hàng idempotent** chống trừ kho hai lần, **thanh toán chuyển khoản QR có đối soát tự động**, **flash sale và coupon chịu được truy cập đồng thời**, **sổ kho (stock ledger)**, **quy trình bảo hành/sửa chữa** và **thông báo đa kênh qua Outbox Pattern**.
 
+> [!TIP]
 > 📚 **Tài liệu chi tiết:** Xem website tài liệu kỹ thuật đầy đủ của dự án (tổng quan, kiến trúc C4, data dictionary của 52 model database, quy tắc nghiệp vụ và ADR) tại 👉 [**https://quocduy21-10.github.io/laptopshop-api/**](https://quocduy21-10.github.io/laptopshop-api/) (hoặc xem trực tiếp trong thư mục [`docs/`](docs/README.md)).
 
 <div align="center">
@@ -198,26 +203,27 @@ src/
 └── scripts/             # audit, verify, reconcile dùng cho vận hành
 ```
 
-**Quy ước response:** thành công trả `{ data, meta? }`, lỗi trả `{ error: { code, message, details? } }`.
+> [!NOTE]
+> **Quy ước response:** thành công trả `{ data, meta? }`, lỗi trả `{ error: { code, message, details? } }`.
 
 ---
 
 ## 🛠️ Công nghệ
 
-| Nhóm                    | Công nghệ                                                  |
-| ----------------------- | ---------------------------------------------------------- |
-| **Runtime & framework** | Node.js 22, Express 5, TypeScript                          |
-| **Database**            | MySQL 8.4, Prisma ORM 6                                    |
-| **Cache & hàng đợi**    | Redis 7, BullMQ, `rate-limit-redis`                        |
-| **Validation & docs**   | Zod 3, `zod-to-openapi`, Swagger UI                        |
-| **Xác thực**            | `jsonwebtoken` (HS256), `bcrypt`                           |
-| **Lưu trữ file**        | AWS SDK S3 (RustFS local, S3/R2 production), Multer, Sharp |
-| **Thông báo**           | Nodemailer (SMTP), `web-push`                              |
-| **AI**                  | Groq LLM (structured output)                               |
-| **Bảo mật**             | Helmet, HPP, CORS, rate limiting                           |
-| **Quan sát**            | Pino logger, Sentry                                        |
-| **Chất lượng**          | Jest, Supertest, ESLint, Prettier, Husky, lint-staged      |
-| **Hạ tầng**             | Docker Compose, GitHub Actions                             |
+| Nhóm | Công nghệ |
+| :--- | :--- |
+| 🌐 **Runtime & framework** | Node.js 22, Express 5, TypeScript |
+| 🗄️ **Database** | MySQL 8.4, Prisma ORM 6 |
+| ⚡ **Cache & hàng đợi** | Redis 7, BullMQ, `rate-limit-redis` |
+| 📋 **Validation & docs** | Zod 3, `zod-to-openapi`, Swagger UI |
+| 🔑 **Xác thực** | `jsonwebtoken` (HS256), `bcrypt` |
+| 🪣 **Lưu trữ file** | AWS SDK S3 (RustFS local, S3/R2 production), Multer, Sharp |
+| 📬 **Thông báo** | Nodemailer (SMTP), `web-push` |
+| 🤖 **AI** | Groq LLM (structured output) |
+| 🛡️ **Bảo mật** | Helmet, HPP, CORS, rate limiting |
+| 📊 **Quan sát** | Pino logger, Sentry |
+| 🧪 **Chất lượng** | Jest, Supertest, ESLint, Prettier, Husky, lint-staged |
+| 🐳 **Hạ tầng** | Docker Compose, GitHub Actions |
 
 ---
 
@@ -244,42 +250,43 @@ pnpm run seed                 # roles, admin, sản phẩm mẫu (chỉ chèn v�
 pnpm run dev                  # http://localhost:8080
 ```
 
-| Dịch vụ                         | Địa chỉ                          |
-| ------------------------------- | -------------------------------- |
-| API                             | `http://localhost:8080/api/v1`   |
+| Dịch vụ | Địa chỉ |
+| :--- | :--- |
+| API | `http://localhost:8080/api/v1` |
 | Swagger UI (`ENABLE_DOCS=true`) | `http://localhost:8080/api-docs` |
-| Health / Ready                  | `/healthz` · `/readyz`           |
-| Mailpit (xem email thử)         | `http://localhost:8025`          |
-| RustFS console                  | `http://localhost:9001`          |
+| Health / Ready | `/healthz` · `/readyz` |
+| Mailpit (xem email thử) | `http://localhost:8025` |
+| RustFS console | `http://localhost:9001` |
 
 ### Lệnh thường dùng
 
-| Lệnh                                                       | Mục đích                          |
-| ---------------------------------------------------------- | --------------------------------- |
-| `pnpm run dev`                                             | Chạy dev với nodemon              |
-| `pnpm run start:debug`                                     | Dev kèm debugger `--inspect=9229` |
-| `pnpm test` / `pnpm run test:cov`                          | Unit test / kèm coverage          |
-| `pnpm run lint` · `pnpm run typecheck` · `pnpm run format` | Kiểm tra chất lượng code          |
-| `pnpm run build` → `pnpm start`                            | Build sang `dist/` rồi chạy       |
+| Lệnh | Mục đích |
+| :--- | :--- |
+| `pnpm run dev` | Chạy dev với nodemon |
+| `pnpm run start:debug` | Dev kèm debugger `--inspect=9229` |
+| `pnpm test` / `pnpm run test:cov` | Unit test / kèm coverage |
+| `pnpm run lint` · `pnpm run typecheck` · `pnpm run format` | Kiểm tra chất lượng code |
+| `pnpm run build` → `pnpm start` | Build sang `dist/` rồi chạy |
 
 ### Biến môi trường
 
 Danh sách đầy đủ nằm trong [`.env.example`](.env.example), mọi biến được validate trong `src/config/env.ts` và app dừng ngay khi khởi động nếu cấu hình sai.
 
-- **Bắt buộc:** `DATABASE_URL`, `JWT_SECRET` (>= 16 ký tự), `REDIS_URL`, cùng `ADMIN_PASSWORD` (>= 12 ký tự) khi `NODE_ENV=production`.
-- **Feature flag** (mặc định tắt, chỉ bật khi đã cấu hình xong phần tương ứng):
+> [!IMPORTANT]
+> - **Bắt buộc:** `DATABASE_URL`, `JWT_SECRET` (>= 16 ký tự), `REDIS_URL`, cùng `ADMIN_PASSWORD` (>= 12 ký tự) khi `NODE_ENV=production`.
+> - **Feature flag** (mặc định tắt, chỉ bật khi đã cấu hình xong phần tương ứng):
 
-| Flag                                                          | Bật tính năng                                          |
-| ------------------------------------------------------------- | ------------------------------------------------------ |
-| `ENABLE_DOCS`                                                 | Swagger UI tại `/api-docs`                             |
-| `EMAIL_ENABLED`                                               | Gửi email qua SMTP                                     |
-| `WEB_PUSH_ENABLED`                                            | Web Push (cần `VAPID_*`)                               |
-| `NOTIFICATION_OUTBOX_ENABLED` · `NOTIFICATION_WORKER_ENABLED` | Outbox dispatcher và worker gửi thông báo              |
-| `BANK_TRANSFER_ENABLED`                                       | Thanh toán QR (`PAYMENT_PROVIDER=fake` hoặc SePay)     |
-| `ADVISOR_AI_ENABLED`                                          | AI Advisor qua Groq (cần `GROQ_API_KEY`, `GROQ_MODEL`) |
-| `REVIEW_IMAGES_ENABLED` · `AFTER_SALES_IMAGES_ENABLED`        | Upload ảnh review, ảnh bảo hành lên S3                 |
-| `AFTER_SALES_WORKER_ENABLED`                                  | Worker xử lý mốc bảo hành và dọn ảnh                   |
-| `FLASH_SALE_PRICE_ALERT_ENABLED`                              | Báo giá giảm cho cả flash sale                         |
+| Flag | Bật tính năng |
+| :--- | :--- |
+| `ENABLE_DOCS` | Swagger UI tại `/api-docs` |
+| `EMAIL_ENABLED` | Gửi email qua SMTP |
+| `WEB_PUSH_ENABLED` | Web Push (cần `VAPID_*`) |
+| `NOTIFICATION_OUTBOX_ENABLED` · `NOTIFICATION_WORKER_ENABLED` | Outbox dispatcher và worker gửi thông báo |
+| `BANK_TRANSFER_ENABLED` | Thanh toán QR (`PAYMENT_PROVIDER=fake` hoặc SePay) |
+| `ADVISOR_AI_ENABLED` | AI Advisor qua Groq (cần `GROQ_API_KEY`, `GROQ_MODEL`) |
+| `REVIEW_IMAGES_ENABLED` · `AFTER_SALES_IMAGES_ENABLED` | Upload ảnh review, ảnh bảo hành lên S3 |
+| `AFTER_SALES_WORKER_ENABLED` | Worker xử lý mốc bảo hành và dọn ảnh |
+| `FLASH_SALE_PRICE_ALERT_ENABLED` | Báo giá giảm cho cả flash sale |
 
 ---
 
@@ -287,35 +294,44 @@ Danh sách đầy đủ nằm trong [`.env.example`](.env.example), mọi biến
 
 Mỗi worker là một tiến trình riêng (service riêng trong `docker-compose.yml`) và ghi heartbeat vào database.
 
-| Worker                            | Nhiệm vụ                                                         |
-| --------------------------------- | ---------------------------------------------------------------- |
-| `payment-worker`                  | Hết hạn thanh toán, đối soát giao dịch với SePay, dọn dữ liệu cũ |
-| `outbox-dispatcher`               | Đọc bảng outbox, đẩy sự kiện vào các BullMQ queue                |
-| `notification-worker`             | Gửi thông báo qua email, Web Push, in-app có retry               |
-| `notification-maintenance-worker` | Áp dụng chính sách lưu trữ thông báo                             |
-| `price-alert-worker`              | Quét và đánh giá price alert, gửi thông báo giảm giá             |
-| `after-sales-worker`              | Xử lý mốc thời gian yêu cầu bảo hành, xoá ảnh đính kèm           |
+| Worker | Nhiệm vụ |
+| :--- | :--- |
+| `payment-worker` | Hết hạn thanh toán, đối soát giao dịch với SePay, dọn dữ liệu cũ |
+| `outbox-dispatcher` | Đọc bảng outbox, đẩy sự kiện vào các BullMQ queue |
+| `notification-worker` | Gửi thông báo qua email, Web Push, in-app có retry |
+| `notification-maintenance-worker` | Áp dụng chính sách lưu trữ thông báo |
+| `price-alert-worker` | Quét và đánh giá price alert, gửi thông báo giảm giá |
+| `after-sales-worker` | Xử lý mốc thời gian yêu cầu bảo hành, xoá ảnh đính kèm |
+
+<br/>
 
 <details>
 <summary><b>🧰 Script vận hành</b> (bấm để mở)</summary>
 
-| Lệnh                                               | Mục đích                                         |
-| -------------------------------------------------- | ------------------------------------------------ |
-| `pnpm run inventory:verify-ledger`                 | Kiểm tra sổ kho khớp tồn kho                     |
-| `pnpm run catalog-pricing:rebuild` / `:audit`      | Dựng lại hoặc kiểm tra price windows của catalog |
-| `pnpm run promotions:verify-flash-sale`            | Kiểm tra dữ liệu flash sale                      |
-| `pnpm run price-alerts:run-once`                   | Chạy một lượt quét price alert                   |
-| `pnpm run review-images:reconcile`                 | Đối soát ảnh review với object storage           |
-| `pnpm run after-sales:reconcile-attachments`       | Đối soát ảnh đính kèm bảo hành                   |
-| `pnpm run products:audit-facets` / `:audit-rating` | Kiểm tra truy vấn facet và rating                |
-| `pnpm run products:benchmark-catalog`              | Benchmark truy vấn catalog                       |
+<br/>
 
-`review-images:reconcile` chỉ xoá object của row `PENDING`/`DELETING` đã đủ điều kiện. Row `READY` bị mất object chỉ được báo cáo để vận hành xử lý, không tự xoá dữ liệu database.
+| Lệnh | Mục đích |
+| :--- | :--- |
+| `pnpm run inventory:verify-ledger` | Kiểm tra sổ kho khớp tồn kho |
+| `pnpm run catalog-pricing:rebuild` / `:audit` | Dựng lại hoặc kiểm tra price windows của catalog |
+| `pnpm run promotions:verify-flash-sale` | Kiểm tra dữ liệu flash sale |
+| `pnpm run price-alerts:run-once` | Chạy một lượt quét price alert |
+| `pnpm run review-images:reconcile` | Đối soát ảnh review với object storage |
+| `pnpm run after-sales:reconcile-attachments` | Đối soát ảnh đính kèm bảo hành |
+| `pnpm run products:audit-facets` / `:audit-rating` | Kiểm tra truy vấn facet và rating |
+| `pnpm run products:benchmark-catalog` | Benchmark truy vấn catalog |
+
+<br/>
+
+> [!NOTE]
+> `review-images:reconcile` chỉ xoá object của row `PENDING`/`DELETING` đã đủ điều kiện. Row `READY` bị mất object chỉ được báo cáo để vận hành xử lý, không tự xoá dữ liệu database.
 
 </details>
 
 <details>
 <summary><b>🪣 Object storage cho ảnh</b> (bấm để mở)</summary>
+
+<br/>
 
 Ở local, ảnh review và ảnh bảo hành dùng RustFS (`http://localhost:9000`, bucket private như `laptopshop-review-images`). API không mount volume upload cho các ảnh này. Production dùng AWS S3, Cloudflare R2 hoặc storage tương thích S3 với cùng adapter, kèm credentials và policy riêng.
 
@@ -339,9 +355,11 @@ cp .env.example .env   # NODE_ENV, secrets, ADMIN_PASSWORD, CORS_ORIGINS, COOKIE
 docker compose up -d --build
 ```
 
-- Container tự chạy `prisma migrate deploy` rồi seed (chỉ chèn vào bảng trống) khi khởi động. Nên backup database trước khi deploy migration `cleanup_legacy` (xoá bảng `Session`, cột `cart.sum` và `cart_detail.price`).
-- Cookie đăng nhập có cờ `Secure` ở production và app đặt `trust proxy = 1`, nên reverse proxy phải chạy HTTPS và gửi header `X-Forwarded-Proto`.
-- Frontend và API phải **cùng site** (ví dụ `shop.com` + `api.shop.com`): thêm origin của frontend vào `CORS_ORIGINS`, đặt `COOKIE_DOMAIN` khi frontend cần đọc cookie.
+> [!WARNING]
+> - Container tự chạy `prisma migrate deploy` rồi seed (chỉ chèn vào bảng trống) khi khởi động. **Nên backup database trước khi deploy migration `cleanup_legacy`** (xoá bảng `Session`, cột `cart.sum` và `cart_detail.price`).
+> - Cookie đăng nhập có cờ `Secure` ở production và app đặt `trust proxy = 1`, nên reverse proxy phải chạy HTTPS và gửi header `X-Forwarded-Proto`.
+> - Frontend và API phải **cùng site** (ví dụ `shop.com` + `api.shop.com`): thêm origin của frontend vào `CORS_ORIGINS`, đặt `COOKIE_DOMAIN` khi frontend cần đọc cookie.
+
 - `GET /healthz` dùng cho liveness, `GET /readyz` kiểm tra MySQL và Redis.
 - `SENTRY_DSN` không bắt buộc, không đặt thì Sentry tắt. `ENABLE_DOCS` mặc định tắt.
 
