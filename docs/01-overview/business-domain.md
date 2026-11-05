@@ -69,6 +69,6 @@ Một số điểm đáng chú ý:
 
 ## Nguồn
 
-- [src/modules/](../../src/modules/): cấu trúc thư mục từng module
-- [src/routes/index.ts](../../src/routes/index.ts): `createApiV1Router`
-- [prisma/schema.prisma](../../prisma/schema.prisma)
+- [src/modules/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/src/modules): cấu trúc thư mục từng module
+- [src/routes/index.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/routes/index.ts): `createApiV1Router`
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma)

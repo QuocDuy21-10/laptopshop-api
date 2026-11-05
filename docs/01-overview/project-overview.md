@@ -41,7 +41,7 @@ Một lần triển khai gồm một tiến trình API và sáu worker, mỗi wo
 
 ## Nguồn
 
-- [README.md](../../README.md)
-- [src/routes/index.ts](../../src/routes/index.ts): `createApiV1Router`
-- [docker-compose.yml](../../docker-compose.yml)
-- [src/modules/](../../src/modules/)
+- [README.md](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/README.md)
+- [src/routes/index.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/routes/index.ts): `createApiV1Router`
+- [docker-compose.yml](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/docker-compose.yml)
+- [src/modules/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/src/modules)

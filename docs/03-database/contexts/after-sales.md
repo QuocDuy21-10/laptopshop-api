@@ -293,13 +293,13 @@ erDiagram
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../../prisma/schema.prisma): `ServiceRequest`, `ServiceRequestItem`, `WarrantyVerification`, `ServiceRequestEvent`, `ServiceRequestAttachment`, `ServiceQuote`, `ServiceQuoteLine`
-- [src/modules/after-sales/after-sales.service.ts](../../../src/modules/after-sales/after-sales.service.ts)
-- [src/modules/after-sales/after-sales.aggregate.ts](../../../src/modules/after-sales/after-sales.aggregate.ts): `deriveRequestStatus`
-- [src/modules/after-sales/after-sales.types.ts](../../../src/modules/after-sales/after-sales.types.ts)
-- [src/modules/after-sales/after-sales.eligibility.ts](../../../src/modules/after-sales/after-sales.eligibility.ts): `effectiveCoverage`
-- [src/modules/after-sales/after-sales.actions.ts](../../../src/modules/after-sales/after-sales.actions.ts)
-- [src/modules/after-sales/after-sales.quotes.ts](../../../src/modules/after-sales/after-sales.quotes.ts)
-- [src/modules/after-sales/after-sales.warranty-verifications.ts](../../../src/modules/after-sales/after-sales.warranty-verifications.ts)
-- [src/modules/after-sales/after-sales.attachments.ts](../../../src/modules/after-sales/after-sales.attachments.ts)
-- [src/modules/after-sales/after-sales-maintenance.ts](../../../src/modules/after-sales/after-sales-maintenance.ts)
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `ServiceRequest`, `ServiceRequestItem`, `WarrantyVerification`, `ServiceRequestEvent`, `ServiceRequestAttachment`, `ServiceQuote`, `ServiceQuoteLine`
+- [src/modules/after-sales/after-sales.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.service.ts)
+- [src/modules/after-sales/after-sales.aggregate.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.aggregate.ts): `deriveRequestStatus`
+- [src/modules/after-sales/after-sales.types.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.types.ts)
+- [src/modules/after-sales/after-sales.eligibility.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.eligibility.ts): `effectiveCoverage`
+- [src/modules/after-sales/after-sales.actions.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.actions.ts)
+- [src/modules/after-sales/after-sales.quotes.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.quotes.ts)
+- [src/modules/after-sales/after-sales.warranty-verifications.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.warranty-verifications.ts)
+- [src/modules/after-sales/after-sales.attachments.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.attachments.ts)
+- [src/modules/after-sales/after-sales-maintenance.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales-maintenance.ts)

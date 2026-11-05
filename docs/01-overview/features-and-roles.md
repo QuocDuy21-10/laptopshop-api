@@ -42,12 +42,12 @@ Ký hiệu: ✅ được dùng, ➖ không áp dụng. "Ghi" nghĩa là các tha
 
 Router admin gồm: `products`, `users`, `roles`, `orders`, `dashboard`, `inventory`, `payment-events`, `payment-review-cases`, `reviews`, `after-sales`, `promotions`, `newsletter`, `home-banners` và các route thông báo.
 
-API contract chi tiết (endpoint, request, response, lỗi) nằm ở OpenAPI: [src/docs/openapi.ts](../../src/docs/openapi.ts), xem trên `/api-docs` khi `ENABLE_DOCS=true`. Tài liệu này không chép lại.
+API contract chi tiết (endpoint, request, response, lỗi) nằm ở OpenAPI: [src/docs/openapi.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/docs/openapi.ts), xem trên `/api-docs` khi `ENABLE_DOCS=true`. Tài liệu này không chép lại.
 
 ## Nguồn
 
-- [src/routes/index.ts](../../src/routes/index.ts): `createApiV1Router`
-- [src/middlewares/authenticate.ts](../../src/middlewares/authenticate.ts): `authenticate`, `optionalAuthenticate`
-- [src/middlewares/require-role.ts](../../src/middlewares/require-role.ts): `requireRole`
-- [src/modules/payments/payments.routes.ts](../../src/modules/payments/payments.routes.ts): `paymentWebhookRoutes`
-- [src/docs/openapi.ts](../../src/docs/openapi.ts)
+- [src/routes/index.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/routes/index.ts): `createApiV1Router`
+- [src/middlewares/authenticate.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/authenticate.ts): `authenticate`, `optionalAuthenticate`
+- [src/middlewares/require-role.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/require-role.ts): `requireRole`
+- [src/modules/payments/payments.routes.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payments.routes.ts): `paymentWebhookRoutes`
+- [src/docs/openapi.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/docs/openapi.ts)

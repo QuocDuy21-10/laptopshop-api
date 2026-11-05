@@ -73,6 +73,6 @@ Mỗi file có cùng 11 mục: Tổng quan và phạm vi, Tác nhân và quyền
 ## Nguồn
 
 - [features-and-roles.md](../01-overview/features-and-roles.md): vai trò
-- [src/docs/openapi.ts](../../src/docs/openapi.ts): API contract
-- [src/modules/orders/order-status.ts](../../src/modules/orders/order-status.ts): `TRANSITIONS`
-- [src/modules/after-sales/after-sales.status.ts](../../src/modules/after-sales/after-sales.status.ts): `commonTransitions`
+- [src/docs/openapi.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/docs/openapi.ts): API contract
+- [src/modules/orders/order-status.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-status.ts): `TRANSITIONS`
+- [src/modules/after-sales/after-sales.status.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.status.ts): `commonTransitions`

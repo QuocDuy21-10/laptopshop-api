@@ -58,25 +58,25 @@ Không có nơi nào đặt mức cô lập transaction riêng (`isolationLevel`
 
 ## Nguồn
 
-- [src/lib/prisma-retry.ts](../../src/lib/prisma-retry.ts): `withPrismaTransactionRetry`
-- [src/modules/inventory/inventory.service.ts](../../src/modules/inventory/inventory.service.ts): `moveStock`, `adjustStock`
-- [src/modules/inventory/inventory-receipts.service.ts](../../src/modules/inventory/inventory-receipts.service.ts): `postReceipt`
-- [src/modules/orders/orders.service.ts](../../src/modules/orders/orders.service.ts): `placeOrder`, `changeStatus`
-- [src/modules/orders/order-locks.ts](../../src/modules/orders/order-locks.ts): `lockProductRows`
-- [src/modules/promotions/promotion-usage.ts](../../src/modules/promotions/promotion-usage.ts): `claimCouponUsage`
-- [src/modules/promotions/flash-sale-quota.ts](../../src/modules/promotions/flash-sale-quota.ts): `claimFlashSaleQuotas`
-- [src/modules/pricing/catalog-price-projection.repository.ts](../../src/modules/pricing/catalog-price-projection.repository.ts): `refreshCatalogPriceWindows`
-- [src/modules/payments/payment-ingestion.service.ts](../../src/modules/payments/payment-ingestion.service.ts): `ingestPaymentTransaction`
-- [src/modules/payments/payment-maintenance.service.ts](../../src/modules/payments/payment-maintenance.service.ts)
-- [src/modules/payments/payment-checkpoint.service.ts](../../src/modules/payments/payment-checkpoint.service.ts)
-- [src/modules/payments/payment-review.service.ts](../../src/modules/payments/payment-review.service.ts)
-- [src/modules/outbox/outbox.repository.ts](../../src/modules/outbox/outbox.repository.ts): `claimOutboxBatch`
-- [src/modules/notifications/notification-delivery.service.ts](../../src/modules/notifications/notification-delivery.service.ts)
-- [src/modules/price-alerts/price-alert.checkpoint.ts](../../src/modules/price-alerts/price-alert.checkpoint.ts)
-- [src/modules/price-alerts/price-alert.lock.ts](../../src/modules/price-alerts/price-alert.lock.ts)
-- [src/modules/wishlist/wishlist.service.ts](../../src/modules/wishlist/wishlist.service.ts): `putWishlistItem`
-- [src/modules/reviews/reviews.service.ts](../../src/modules/reviews/reviews.service.ts)
-- [src/modules/reviews/review-image-sync.service.ts](../../src/modules/reviews/review-image-sync.service.ts)
-- [src/modules/after-sales/after-sales.events.ts](../../src/modules/after-sales/after-sales.events.ts)
-- [src/modules/after-sales/after-sales.attachments.ts](../../src/modules/after-sales/after-sales.attachments.ts)
-- [src/modules/users/users.service.ts](../../src/modules/users/users.service.ts)
+- [src/lib/prisma-retry.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/prisma-retry.ts): `withPrismaTransactionRetry`
+- [src/modules/inventory/inventory.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.service.ts): `moveStock`, `adjustStock`
+- [src/modules/inventory/inventory-receipts.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory-receipts.service.ts): `postReceipt`
+- [src/modules/orders/orders.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.service.ts): `placeOrder`, `changeStatus`
+- [src/modules/orders/order-locks.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-locks.ts): `lockProductRows`
+- [src/modules/promotions/promotion-usage.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-usage.ts): `claimCouponUsage`
+- [src/modules/promotions/flash-sale-quota.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/flash-sale-quota.ts): `claimFlashSaleQuotas`
+- [src/modules/pricing/catalog-price-projection.repository.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/pricing/catalog-price-projection.repository.ts): `refreshCatalogPriceWindows`
+- [src/modules/payments/payment-ingestion.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-ingestion.service.ts): `ingestPaymentTransaction`
+- [src/modules/payments/payment-maintenance.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-maintenance.service.ts)
+- [src/modules/payments/payment-checkpoint.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-checkpoint.service.ts)
+- [src/modules/payments/payment-review.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-review.service.ts)
+- [src/modules/outbox/outbox.repository.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/outbox/outbox.repository.ts): `claimOutboxBatch`
+- [src/modules/notifications/notification-delivery.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/notifications/notification-delivery.service.ts)
+- [src/modules/price-alerts/price-alert.checkpoint.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/price-alerts/price-alert.checkpoint.ts)
+- [src/modules/price-alerts/price-alert.lock.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/price-alerts/price-alert.lock.ts)
+- [src/modules/wishlist/wishlist.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/wishlist/wishlist.service.ts): `putWishlistItem`
+- [src/modules/reviews/reviews.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/reviews/reviews.service.ts)
+- [src/modules/reviews/review-image-sync.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/reviews/review-image-sync.service.ts)
+- [src/modules/after-sales/after-sales.events.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.events.ts)
+- [src/modules/after-sales/after-sales.attachments.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.attachments.ts)
+- [src/modules/users/users.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/users/users.service.ts)

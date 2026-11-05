@@ -206,12 +206,12 @@ erDiagram
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../../prisma/schema.prisma): `Payment`, `PaymentWebhookEvent`, `PaymentProviderCheckpoint`, `PaymentReviewCase`, `PaymentReviewAction`
-- [src/modules/payments/payment-status.ts](../../../src/modules/payments/payment-status.ts): `PAYMENT_STATUS`, `PAYMENT_EVENT_STATUS`, `PAYMENT_REVIEW_REASON`
-- [src/modules/payments/payment-ingestion.service.ts](../../../src/modules/payments/payment-ingestion.service.ts): `ingestPaymentTransaction`
-- [src/modules/payments/payment-maintenance.service.ts](../../../src/modules/payments/payment-maintenance.service.ts)
-- [src/modules/payments/payment-review.service.ts](../../../src/modules/payments/payment-review.service.ts)
-- [src/modules/payments/payment-checkpoint.service.ts](../../../src/modules/payments/payment-checkpoint.service.ts)
-- [src/modules/payments/reconciliation.service.ts](../../../src/modules/payments/reconciliation.service.ts): `purgeEncryptedPaymentPayloads`
-- [src/modules/payments/payment-reference.ts](../../../src/modules/payments/payment-reference.ts): `createTransferCode`
-- [src/modules/orders/orders.service.ts](../../../src/modules/orders/orders.service.ts): `placeOrder`
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `Payment`, `PaymentWebhookEvent`, `PaymentProviderCheckpoint`, `PaymentReviewCase`, `PaymentReviewAction`
+- [src/modules/payments/payment-status.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-status.ts): `PAYMENT_STATUS`, `PAYMENT_EVENT_STATUS`, `PAYMENT_REVIEW_REASON`
+- [src/modules/payments/payment-ingestion.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-ingestion.service.ts): `ingestPaymentTransaction`
+- [src/modules/payments/payment-maintenance.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-maintenance.service.ts)
+- [src/modules/payments/payment-review.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-review.service.ts)
+- [src/modules/payments/payment-checkpoint.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-checkpoint.service.ts)
+- [src/modules/payments/reconciliation.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/reconciliation.service.ts): `purgeEncryptedPaymentPayloads`
+- [src/modules/payments/payment-reference.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-reference.ts): `createTransferCode`
+- [src/modules/orders/orders.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.service.ts): `placeOrder`

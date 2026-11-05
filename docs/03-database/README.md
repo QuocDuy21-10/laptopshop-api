@@ -4,7 +4,7 @@ Tài liệu này trả lời: dữ liệu của LaptopShop gồm những bảng 
 
 > Đối chiếu code: main @ 0f1eab2 (2026-11-04)
 
-Schema có **52 model**, **30 enum** và **93 khoá ngoại**, dùng MySQL 8.4 qua Prisma 6.3.0, với 48 migration. Nguồn sự thật của cấu trúc là [prisma/schema.prisma](../../prisma/schema.prisma) và [prisma/migrations/](../../prisma/migrations/); tài liệu này giải thích ý nghĩa và cách dùng, không thay thế chúng. Bối cảnh kỹ thuật (kết nối, timeout, migration lúc deploy) nằm ở [database-architecture.md](../02-architecture/database-architecture.md) và [ADR-0002](../02-architecture/decisions/0002-prisma-mysql.md).
+Schema có **52 model**, **30 enum** và **93 khoá ngoại**, dùng MySQL 8.4 qua Prisma 6.3.0, với 48 migration. Nguồn sự thật của cấu trúc là [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma) và [prisma/migrations/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/prisma/migrations); tài liệu này giải thích ý nghĩa và cách dùng, không thay thế chúng. Bối cảnh kỹ thuật (kết nối, timeout, migration lúc deploy) nằm ở [database-architecture.md](../02-architecture/database-architecture.md) và [ADR-0002](../02-architecture/decisions/0002-prisma-mysql.md).
 
 ## Bản đồ các nhóm
 
@@ -137,6 +137,6 @@ Các bảng không phải "nguồn sự thật" thuần tuý:
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../prisma/schema.prisma)
-- [prisma/migrations/](../../prisma/migrations/)
-- [src/modules/](../../src/modules/): nơi ghi và đọc dữ liệu của từng model
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma)
+- [prisma/migrations/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/prisma/migrations)
+- [src/modules/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/src/modules): nơi ghi và đọc dữ liệu của từng model

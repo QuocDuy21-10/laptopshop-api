@@ -39,11 +39,11 @@ MySQL là kho dữ liệu duy nhất của nghiệp vụ. Khi nó không khả d
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../../prisma/schema.prisma)
-- [prisma/migrations/](../../../prisma/migrations/)
-- [src/config/client.ts](../../../src/config/client.ts): `prisma`, `withSocketTimeout`
-- [src/lib/prisma-retry.ts](../../../src/lib/prisma-retry.ts): `withPrismaTransactionRetry`
-- [src/modules/orders/orders.service.ts](../../../src/modules/orders/orders.service.ts)
-- [src/routes/health.ts](../../../src/routes/health.ts): `registerHealthRoutes`
-- [docker-compose.yml](../../../docker-compose.yml)
-- [package.json](../../../package.json): `prisma`, `@prisma/client`
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma)
+- [prisma/migrations/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/prisma/migrations)
+- [src/config/client.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/client.ts): `prisma`, `withSocketTimeout`
+- [src/lib/prisma-retry.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/prisma-retry.ts): `withPrismaTransactionRetry`
+- [src/modules/orders/orders.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.service.ts)
+- [src/routes/health.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/routes/health.ts): `registerHealthRoutes`
+- [docker-compose.yml](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/docker-compose.yml)
+- [package.json](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/package.json): `prisma`, `@prisma/client`

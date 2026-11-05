@@ -28,9 +28,9 @@ Tài liệu này trả lời: các thuật ngữ riêng của dự án nghĩa l�
 
 ## Nguồn
 
-- [src/lib/idempotency.ts](../../src/lib/idempotency.ts)
-- [prisma/schema.prisma](../../prisma/schema.prisma): `OutboxEvent`, `StockMovement`, `CatalogPriceWindow`, `FlashSaleProductQuota`, `PaymentReviewCase`
-- [src/modules/outbox/](../../src/modules/outbox/)
-- [src/modules/workers/worker-heartbeat.service.ts](../../src/modules/workers/worker-heartbeat.service.ts)
-- [src/modules/auth/token.service.ts](../../src/modules/auth/token.service.ts)
-- [src/modules/payments/reconciliation.service.ts](../../src/modules/payments/reconciliation.service.ts)
+- [src/lib/idempotency.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/idempotency.ts)
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `OutboxEvent`, `StockMovement`, `CatalogPriceWindow`, `FlashSaleProductQuota`, `PaymentReviewCase`
+- [src/modules/outbox/](https://github.com/QuocDuy21-10/laptopshop-api/tree/main/src/modules/outbox)
+- [src/modules/workers/worker-heartbeat.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/workers/worker-heartbeat.service.ts)
+- [src/modules/auth/token.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/auth/token.service.ts)
+- [src/modules/payments/reconciliation.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/reconciliation.service.ts)

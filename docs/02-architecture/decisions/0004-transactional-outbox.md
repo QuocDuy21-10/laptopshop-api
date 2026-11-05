@@ -52,11 +52,11 @@ Chi tiết bảng: [messaging-ops.md](../../03-database/contexts/messaging-ops.m
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../../prisma/schema.prisma): `OutboxEvent`
-- [src/modules/outbox/outbox.repository.ts](../../../src/modules/outbox/outbox.repository.ts): `createOutboxEvent`, `claimOutboxBatch`, `markOutboxPublished`, `markOutboxFailed`
-- [src/modules/outbox/outbox.dispatcher.ts](../../../src/modules/outbox/outbox.dispatcher.ts): `dispatchOutboxBatch`
-- [src/modules/outbox/outbox.types.ts](../../../src/modules/outbox/outbox.types.ts): `OutboxEventType`
-- [src/workers/outbox-dispatcher.ts](../../../src/workers/outbox-dispatcher.ts): `runOutboxDispatcherOnce`
-- [src/modules/notifications/notification-publish.service.ts](../../../src/modules/notifications/notification-publish.service.ts): `publishNotification`
-- [src/modules/notifications/notification-retention.service.ts](../../../src/modules/notifications/notification-retention.service.ts): `applyNotificationRetention`
-- [src/modules/after-sales/after-sales-maintenance.ts](../../../src/modules/after-sales/after-sales-maintenance.ts): `scheduleConfirmationMilestones`
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `OutboxEvent`
+- [src/modules/outbox/outbox.repository.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/outbox/outbox.repository.ts): `createOutboxEvent`, `claimOutboxBatch`, `markOutboxPublished`, `markOutboxFailed`
+- [src/modules/outbox/outbox.dispatcher.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/outbox/outbox.dispatcher.ts): `dispatchOutboxBatch`
+- [src/modules/outbox/outbox.types.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/outbox/outbox.types.ts): `OutboxEventType`
+- [src/workers/outbox-dispatcher.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/workers/outbox-dispatcher.ts): `runOutboxDispatcherOnce`
+- [src/modules/notifications/notification-publish.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/notifications/notification-publish.service.ts): `publishNotification`
+- [src/modules/notifications/notification-retention.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/notifications/notification-retention.service.ts): `applyNotificationRetention`
+- [src/modules/after-sales/after-sales-maintenance.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales-maintenance.ts): `scheduleConfirmationMilestones`

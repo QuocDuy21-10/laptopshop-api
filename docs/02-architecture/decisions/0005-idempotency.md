@@ -63,13 +63,13 @@ Mất:
 
 ## Nguồn
 
-- [src/lib/idempotency.ts](../../../src/lib/idempotency.ts): `idempotencyKeyHeader`, `sha256Canonical`
-- [src/modules/orders/orders.service.ts](../../../src/modules/orders/orders.service.ts): `placeOrder`
-- [src/modules/promotions/promotion-fingerprint.ts](../../../src/modules/promotions/promotion-fingerprint.ts): `createCheckoutRequestHash`
-- [src/modules/inventory/inventory.service.ts](../../../src/modules/inventory/inventory.service.ts): `adjustStock`
-- [src/modules/after-sales/after-sales.service.ts](../../../src/modules/after-sales/after-sales.service.ts): `createServiceRequest`
-- [src/modules/after-sales/after-sales.attachments.ts](../../../src/modules/after-sales/after-sales.attachments.ts): `addServiceAttachments`
-- [src/modules/reviews/review-image-sync.fingerprint.ts](../../../src/modules/reviews/review-image-sync.fingerprint.ts): `createReviewImageSyncFingerprint`
-- [src/modules/reviews/review-image-sync.service.ts](../../../src/modules/reviews/review-image-sync.service.ts): `reserveOperation`
-- [src/modules/payments/payment-ingestion.service.ts](../../../src/modules/payments/payment-ingestion.service.ts): `ingestPaymentTransaction`
-- [prisma/schema.prisma](../../../prisma/schema.prisma): các ràng buộc unique nêu trong bảng
+- [src/lib/idempotency.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/idempotency.ts): `idempotencyKeyHeader`, `sha256Canonical`
+- [src/modules/orders/orders.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.service.ts): `placeOrder`
+- [src/modules/promotions/promotion-fingerprint.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotion-fingerprint.ts): `createCheckoutRequestHash`
+- [src/modules/inventory/inventory.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.service.ts): `adjustStock`
+- [src/modules/after-sales/after-sales.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.service.ts): `createServiceRequest`
+- [src/modules/after-sales/after-sales.attachments.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.attachments.ts): `addServiceAttachments`
+- [src/modules/reviews/review-image-sync.fingerprint.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/reviews/review-image-sync.fingerprint.ts): `createReviewImageSyncFingerprint`
+- [src/modules/reviews/review-image-sync.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/reviews/review-image-sync.service.ts): `reserveOperation`
+- [src/modules/payments/payment-ingestion.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-ingestion.service.ts): `ingestPaymentTransaction`
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): các ràng buộc unique nêu trong bảng

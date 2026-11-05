@@ -312,28 +312,28 @@ Ca xem xét (`PaymentReviewCase.status`): `OPEN` sang `RESOLVED` khi tiền về
 
 ## Nguồn
 
-- [cart.service.ts](../../src/modules/cart/cart.service.ts): `addItem`, `updateItem`, `removeItem`, `getCart`, `outOfStock`, `productUnavailable`
-- [cart.schema.ts](../../src/modules/cart/cart.schema.ts): `addItemBody`
-- [orders.service.ts](../../src/modules/orders/orders.service.ts): `placeOrder`, `changeStatus`, `cancelMyOrder`
-- [orders.controller.ts](../../src/modules/orders/orders.controller.ts): `placeOrderHandler`
-- [orders.schema.ts](../../src/modules/orders/orders.schema.ts): `placeOrderBody`
-- [order-status.ts](../../src/modules/orders/order-status.ts): `ORDER_STATUS`, `TRANSITIONS`, `canTransition`
-- [order-cancellation.service.ts](../../src/modules/orders/order-cancellation.service.ts): `cancelOrder`
-- [order-locks.ts](../../src/modules/orders/order-locks.ts): `lockProductRows`
-- [order-warranty.ts](../../src/modules/orders/order-warranty.ts): `warrantySnapshotForCompletion`
-- [promotions.service.ts](../../src/modules/promotions/promotions.service.ts): `quoteOrder`
-- [payments.service.ts](../../src/modules/payments/payments.service.ts): `getMyPayment`, `getCheckoutAttempt`, `listPaymentMethods`, `resolvePaymentEvent`
-- [payments.controller.ts](../../src/modules/payments/payments.controller.ts): `paymentWebhookHandler`, `checkoutAttemptHandler`
-- [payment-ingestion.service.ts](../../src/modules/payments/payment-ingestion.service.ts): `ingestPaymentTransaction`
-- [payment-reconcile.ts](../../src/modules/payments/payment-reconcile.ts): `classifyPaymentTransaction`
-- [payment-authority.ts](../../src/modules/payments/payment-authority.ts): `samePaymentAuthority`
-- [payment-maintenance.service.ts](../../src/modules/payments/payment-maintenance.service.ts): `runPaymentMaintenance`
-- [payment-checkpoint.service.ts](../../src/modules/payments/payment-checkpoint.service.ts): `claimReconciliationLease`, `completeReconciliationCycle`, `failReconciliationCycle`
-- [reconciliation.service.ts](../../src/modules/payments/reconciliation.service.ts): `reconcilePayments`, `purgeEncryptedPaymentPayloads`, `startPaymentWorker`
-- [payment-review.service.ts](../../src/modules/payments/payment-review.service.ts): `extendPaymentReviewCase`, `releasePaymentReviewCase`
-- [payment-status.ts](../../src/modules/payments/payment-status.ts): `PAYMENT_STATUS`, `PAYMENT_REVIEW_REASON`
-- [payment-reference.ts](../../src/modules/payments/payment-reference.ts): `createTransferCode`
-- [payment-crypto.ts](../../src/modules/payments/payment-crypto.ts): `encryptPayload`
-- [sepay-payment.provider.ts](../../src/modules/payments/providers/sepay-payment.provider.ts): `verifyWebhook`
-- [payment-worker.ts](../../src/workers/payment-worker.ts): worker
-- [env.ts](../../src/config/env.ts): biến môi trường thanh toán
+- [cart.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/cart/cart.service.ts): `addItem`, `updateItem`, `removeItem`, `getCart`, `outOfStock`, `productUnavailable`
+- [cart.schema.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/cart/cart.schema.ts): `addItemBody`
+- [orders.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.service.ts): `placeOrder`, `changeStatus`, `cancelMyOrder`
+- [orders.controller.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.controller.ts): `placeOrderHandler`
+- [orders.schema.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.schema.ts): `placeOrderBody`
+- [order-status.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-status.ts): `ORDER_STATUS`, `TRANSITIONS`, `canTransition`
+- [order-cancellation.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-cancellation.service.ts): `cancelOrder`
+- [order-locks.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-locks.ts): `lockProductRows`
+- [order-warranty.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-warranty.ts): `warrantySnapshotForCompletion`
+- [promotions.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/promotions/promotions.service.ts): `quoteOrder`
+- [payments.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payments.service.ts): `getMyPayment`, `getCheckoutAttempt`, `listPaymentMethods`, `resolvePaymentEvent`
+- [payments.controller.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payments.controller.ts): `paymentWebhookHandler`, `checkoutAttemptHandler`
+- [payment-ingestion.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-ingestion.service.ts): `ingestPaymentTransaction`
+- [payment-reconcile.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-reconcile.ts): `classifyPaymentTransaction`
+- [payment-authority.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-authority.ts): `samePaymentAuthority`
+- [payment-maintenance.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-maintenance.service.ts): `runPaymentMaintenance`
+- [payment-checkpoint.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-checkpoint.service.ts): `claimReconciliationLease`, `completeReconciliationCycle`, `failReconciliationCycle`
+- [reconciliation.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/reconciliation.service.ts): `reconcilePayments`, `purgeEncryptedPaymentPayloads`, `startPaymentWorker`
+- [payment-review.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-review.service.ts): `extendPaymentReviewCase`, `releasePaymentReviewCase`
+- [payment-status.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-status.ts): `PAYMENT_STATUS`, `PAYMENT_REVIEW_REASON`
+- [payment-reference.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-reference.ts): `createTransferCode`
+- [payment-crypto.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-crypto.ts): `encryptPayload`
+- [sepay-payment.provider.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/providers/sepay-payment.provider.ts): `verifyWebhook`
+- [payment-worker.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/workers/payment-worker.ts): worker
+- [env.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/env.ts): biến môi trường thanh toán

@@ -366,9 +366,9 @@ Các cột sau là chuỗi, không có ràng buộc ở mức database; tập gi
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../prisma/schema.prisma): các khối `enum`
-- [src/modules/orders/order-status.ts](../../src/modules/orders/order-status.ts)
-- [src/modules/payments/payment-status.ts](../../src/modules/payments/payment-status.ts)
-- [src/modules/inventory/inventory.schema.ts](../../src/modules/inventory/inventory.schema.ts)
-- [src/modules/after-sales/after-sales.status.ts](../../src/modules/after-sales/after-sales.status.ts)
-- [src/config/constant.ts](../../src/config/constant.ts)
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): các khối `enum`
+- [src/modules/orders/order-status.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-status.ts)
+- [src/modules/payments/payment-status.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-status.ts)
+- [src/modules/inventory/inventory.schema.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.schema.ts)
+- [src/modules/after-sales/after-sales.status.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/after-sales/after-sales.status.ts)
+- [src/config/constant.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/constant.ts)

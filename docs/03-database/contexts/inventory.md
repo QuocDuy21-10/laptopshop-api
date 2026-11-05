@@ -120,9 +120,9 @@ erDiagram
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../../prisma/schema.prisma): `StockMovement`, `StockReceipt`, `StockReceiptItem`
-- [src/modules/inventory/inventory.service.ts](../../../src/modules/inventory/inventory.service.ts): `moveStock`, `adjustStock`
-- [src/modules/inventory/inventory-receipts.service.ts](../../../src/modules/inventory/inventory-receipts.service.ts): `postReceipt`
-- [src/modules/inventory/inventory.reconciliation.ts](../../../src/modules/inventory/inventory.reconciliation.ts): `findLedgerMismatches`
-- [src/modules/inventory/inventory.schema.ts](../../../src/modules/inventory/inventory.schema.ts): `STOCK_REASON`
-- [src/scripts/verify-stock-ledger.ts](../../../src/scripts/verify-stock-ledger.ts)
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `StockMovement`, `StockReceipt`, `StockReceiptItem`
+- [src/modules/inventory/inventory.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.service.ts): `moveStock`, `adjustStock`
+- [src/modules/inventory/inventory-receipts.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory-receipts.service.ts): `postReceipt`
+- [src/modules/inventory/inventory.reconciliation.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.reconciliation.ts): `findLedgerMismatches`
+- [src/modules/inventory/inventory.schema.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.schema.ts): `STOCK_REASON`
+- [src/scripts/verify-stock-ledger.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/scripts/verify-stock-ledger.ts)

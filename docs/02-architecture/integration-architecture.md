@@ -78,16 +78,16 @@ Chỉ tên biến môi trường được ghi ở đây, không có giá trị. 
 
 ## Nguồn
 
-- [src/config/env.ts](../../src/config/env.ts): `env`
-- [.env.example](../../.env.example)
-- [src/server.ts](../../src/server.ts): `readyChecks`, `ADVISOR_AI_ENABLED`
-- [src/instrument.ts](../../src/instrument.ts)
-- [src/modules/payments/payment-provider.factory.ts](../../src/modules/payments/payment-provider.factory.ts): `paymentProvider`
-- [src/modules/payments/payments.controller.ts](../../src/modules/payments/payments.controller.ts): `paymentWebhookHandler`
-- [src/modules/orders/orders.service.ts](../../src/modules/orders/orders.service.ts)
-- [src/modules/advisor/advisor.service.ts](../../src/modules/advisor/advisor.service.ts): `createAdvisorService`
-- [src/modules/advisor/advisor.explanation.ts](../../src/modules/advisor/advisor.explanation.ts): `buildRuleBasedRecommendation`
-- [src/lib/storage/s3-object-storage.ts](../../src/lib/storage/s3-object-storage.ts): `createS3ObjectStorage`
-- [src/modules/reviews/review-images.service.ts](../../src/modules/reviews/review-images.service.ts)
-- [src/workers/notification-worker.ts](../../src/workers/notification-worker.ts)
-- [src/modules/notifications/notification-delivery.service.ts](../../src/modules/notifications/notification-delivery.service.ts)
+- [src/config/env.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/env.ts): `env`
+- [.env.example](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/.env.example)
+- [src/server.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/server.ts): `readyChecks`, `ADVISOR_AI_ENABLED`
+- [src/instrument.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/instrument.ts)
+- [src/modules/payments/payment-provider.factory.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-provider.factory.ts): `paymentProvider`
+- [src/modules/payments/payments.controller.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payments.controller.ts): `paymentWebhookHandler`
+- [src/modules/orders/orders.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.service.ts)
+- [src/modules/advisor/advisor.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/advisor/advisor.service.ts): `createAdvisorService`
+- [src/modules/advisor/advisor.explanation.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/advisor/advisor.explanation.ts): `buildRuleBasedRecommendation`
+- [src/lib/storage/s3-object-storage.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/storage/s3-object-storage.ts): `createS3ObjectStorage`
+- [src/modules/reviews/review-images.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/reviews/review-images.service.ts)
+- [src/workers/notification-worker.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/workers/notification-worker.ts)
+- [src/modules/notifications/notification-delivery.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/notifications/notification-delivery.service.ts)

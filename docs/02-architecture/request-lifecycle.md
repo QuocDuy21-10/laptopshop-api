@@ -6,7 +6,7 @@ Tài liệu này trả lời: một request đi qua những middleware nào, the
 
 ## Thứ tự xử lý
 
-Thứ tự dưới đây là thứ tự đăng ký trong `createApp` ([src/app.ts](../../src/app.ts)). Express chạy chúng từ trên xuống dưới.
+Thứ tự dưới đây là thứ tự đăng ký trong `createApp` ([src/app.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/app.ts)). Express chạy chúng từ trên xuống dưới.
 
 | # | Bước | Vì sao ở vị trí này |
 | --- | --- | --- |
@@ -101,21 +101,21 @@ Do route này đứng trước các bước 8 đến 13, nó không đi qua JSON
 
 Lỗi 5xx được ghi log bằng pino.
 
-API contract chi tiết (endpoint, request, response) nằm ở OpenAPI: [src/docs/openapi.ts](../../src/docs/openapi.ts).
+API contract chi tiết (endpoint, request, response) nằm ở OpenAPI: [src/docs/openapi.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/docs/openapi.ts).
 
 ## Nguồn
 
-- [src/app.ts](../../src/app.ts): `createApp`
-- [src/server.ts](../../src/server.ts): `createRedisLimitStore`, `registerExtras`
-- [src/routes/index.ts](../../src/routes/index.ts): `createApiV1Router`
-- [src/routes/health.ts](../../src/routes/health.ts): `registerHealthRoutes`
-- [src/middlewares/security.ts](../../src/middlewares/security.ts): `applySecurity`
-- [src/middlewares/rate-limit.ts](../../src/middlewares/rate-limit.ts): `createLimiters`
-- [src/middlewares/origin-check.ts](../../src/middlewares/origin-check.ts): `originCheck`
-- [src/middlewares/authenticate.ts](../../src/middlewares/authenticate.ts): `authenticate`
-- [src/middlewares/require-role.ts](../../src/middlewares/require-role.ts): `requireRole`
-- [src/middlewares/validate.ts](../../src/middlewares/validate.ts): `validate`
-- [src/middlewares/error.middleware.ts](../../src/middlewares/error.middleware.ts): `errorHandler`, `notFoundHandler`
-- [src/modules/payments/payments.routes.ts](../../src/modules/payments/payments.routes.ts): `paymentWebhookRoutes`
-- [src/modules/payments/payments.controller.ts](../../src/modules/payments/payments.controller.ts): `paymentWebhookHandler`
-- [src/lib/errors.ts](../../src/lib/errors.ts): `AppError`
+- [src/app.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/app.ts): `createApp`
+- [src/server.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/server.ts): `createRedisLimitStore`, `registerExtras`
+- [src/routes/index.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/routes/index.ts): `createApiV1Router`
+- [src/routes/health.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/routes/health.ts): `registerHealthRoutes`
+- [src/middlewares/security.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/security.ts): `applySecurity`
+- [src/middlewares/rate-limit.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/rate-limit.ts): `createLimiters`
+- [src/middlewares/origin-check.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/origin-check.ts): `originCheck`
+- [src/middlewares/authenticate.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/authenticate.ts): `authenticate`
+- [src/middlewares/require-role.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/require-role.ts): `requireRole`
+- [src/middlewares/validate.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/validate.ts): `validate`
+- [src/middlewares/error.middleware.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/middlewares/error.middleware.ts): `errorHandler`, `notFoundHandler`
+- [src/modules/payments/payments.routes.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payments.routes.ts): `paymentWebhookRoutes`
+- [src/modules/payments/payments.controller.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payments.controller.ts): `paymentWebhookHandler`
+- [src/lib/errors.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/errors.ts): `AppError`

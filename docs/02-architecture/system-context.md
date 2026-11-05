@@ -53,10 +53,10 @@ Mỗi tích hợp ngoài đều được cấu hình qua biến môi trường t
 
 ## Nguồn
 
-- [src/config/env.ts](../../src/config/env.ts): `env`
-- [src/instrument.ts](../../src/instrument.ts)
-- [src/modules/payments/payments.routes.ts](../../src/modules/payments/payments.routes.ts): `paymentWebhookRoutes`
-- [src/modules/payments/payment-provider.factory.ts](../../src/modules/payments/payment-provider.factory.ts)
-- [src/modules/advisor/providers/groq-advisor.provider.ts](../../src/modules/advisor/providers/groq-advisor.provider.ts): `GroqAdvisorProvider`
-- [src/lib/storage/s3-object-storage.ts](../../src/lib/storage/s3-object-storage.ts): `createS3ObjectStorage`
-- [src/modules/notifications/web-push.controller.ts](../../src/modules/notifications/web-push.controller.ts)
+- [src/config/env.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/config/env.ts): `env`
+- [src/instrument.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/instrument.ts)
+- [src/modules/payments/payments.routes.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payments.routes.ts): `paymentWebhookRoutes`
+- [src/modules/payments/payment-provider.factory.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/payments/payment-provider.factory.ts)
+- [src/modules/advisor/providers/groq-advisor.provider.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/advisor/providers/groq-advisor.provider.ts): `GroqAdvisorProvider`
+- [src/lib/storage/s3-object-storage.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/storage/s3-object-storage.ts): `createS3ObjectStorage`
+- [src/modules/notifications/web-push.controller.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/notifications/web-push.controller.ts)

@@ -340,15 +340,15 @@ erDiagram
 
 ## Nguồn
 
-- [prisma/schema.prisma](../../../prisma/schema.prisma): `Notification`, `NotificationPreference`, `PushSubscription`, `NotificationDelivery`, `NotificationDeliveryAudit`, `OutboxEvent`, `WorkerHeartbeat`, `WorkerCheckpoint`, `WishlistItem`, `NewsletterSubscriber`
-- [src/modules/notifications/notification-publish.service.ts](../../../src/modules/notifications/notification-publish.service.ts)
-- [src/modules/notifications/notification-delivery.service.ts](../../../src/modules/notifications/notification-delivery.service.ts): `processNotificationDelivery`
-- [src/modules/notifications/notification-retention.service.ts](../../../src/modules/notifications/notification-retention.service.ts): `applyNotificationRetention`
-- [src/modules/notifications/admin-notifications.service.ts](../../../src/modules/notifications/admin-notifications.service.ts)
-- [src/modules/notifications/web-push.service.ts](../../../src/modules/notifications/web-push.service.ts)
-- [src/modules/outbox/outbox.repository.ts](../../../src/modules/outbox/outbox.repository.ts)
-- [src/modules/workers/worker-heartbeat.service.ts](../../../src/modules/workers/worker-heartbeat.service.ts): `recordWorkerHeartbeat`
-- [src/modules/price-alerts/price-alert.checkpoint.ts](../../../src/modules/price-alerts/price-alert.checkpoint.ts)
-- [src/modules/price-alerts/price-alert.service.ts](../../../src/modules/price-alerts/price-alert.service.ts): `commitPriceAlertCandidate`
-- [src/modules/wishlist/wishlist.service.ts](../../../src/modules/wishlist/wishlist.service.ts)
-- [src/modules/newsletter/newsletter.service.ts](../../../src/modules/newsletter/newsletter.service.ts)
+- [prisma/schema.prisma](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/prisma/schema.prisma): `Notification`, `NotificationPreference`, `PushSubscription`, `NotificationDelivery`, `NotificationDeliveryAudit`, `OutboxEvent`, `WorkerHeartbeat`, `WorkerCheckpoint`, `WishlistItem`, `NewsletterSubscriber`
+- [src/modules/notifications/notification-publish.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/notifications/notification-publish.service.ts)
+- [src/modules/notifications/notification-delivery.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/notifications/notification-delivery.service.ts): `processNotificationDelivery`
+- [src/modules/notifications/notification-retention.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/notifications/notification-retention.service.ts): `applyNotificationRetention`
+- [src/modules/notifications/admin-notifications.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/notifications/admin-notifications.service.ts)
+- [src/modules/notifications/web-push.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/notifications/web-push.service.ts)
+- [src/modules/outbox/outbox.repository.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/outbox/outbox.repository.ts)
+- [src/modules/workers/worker-heartbeat.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/workers/worker-heartbeat.service.ts): `recordWorkerHeartbeat`
+- [src/modules/price-alerts/price-alert.checkpoint.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/price-alerts/price-alert.checkpoint.ts)
+- [src/modules/price-alerts/price-alert.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/price-alerts/price-alert.service.ts): `commitPriceAlertCandidate`
+- [src/modules/wishlist/wishlist.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/wishlist/wishlist.service.ts)
+- [src/modules/newsletter/newsletter.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/newsletter/newsletter.service.ts)

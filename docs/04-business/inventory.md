@@ -189,15 +189,15 @@ Mỗi cạnh được xác nhận trong code: tạo phiếu đặt `DRAFT` (`cre
 
 ## Nguồn
 
-- [inventory.service.ts](../../src/modules/inventory/inventory.service.ts): `moveStock`, `adjustStock`, `exportMovements`
-- [inventory.schema.ts](../../src/modules/inventory/inventory.schema.ts): `STOCK_REASON`, `adjustmentBody`
-- [inventory.controller.ts](../../src/modules/inventory/inventory.controller.ts): `adjustStockHandler`
-- [inventory.routes.ts](../../src/modules/inventory/inventory.routes.ts): `adminInventoryRoutes`
-- [inventory-receipts.service.ts](../../src/modules/inventory/inventory-receipts.service.ts): `createReceipt`, `updateReceipt`, `postReceipt`, `claimFailure`, `assertProductsAvailable`
-- [inventory-receipts.schema.ts](../../src/modules/inventory/inventory-receipts.schema.ts): `RECEIPT_STATUS`, `createReceiptBody`, `generateReceiptCode`
-- [inventory.reconciliation.ts](../../src/modules/inventory/inventory.reconciliation.ts): `findLedgerMismatches`
-- [verify-stock-ledger.ts](../../src/scripts/verify-stock-ledger.ts): script đối soát
-- [products.service.ts](../../src/modules/products/products.service.ts): `createProduct`, `deleteProduct`
-- [csv.ts](../../src/lib/csv.ts): `assertExportSize`, `EXPORT_LIMIT`
-- [orders.service.ts](../../src/modules/orders/orders.service.ts): `placeOrder` (trừ kho)
-- [order-cancellation.service.ts](../../src/modules/orders/order-cancellation.service.ts): hoàn kho khi huỷ đơn
+- [inventory.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.service.ts): `moveStock`, `adjustStock`, `exportMovements`
+- [inventory.schema.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.schema.ts): `STOCK_REASON`, `adjustmentBody`
+- [inventory.controller.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.controller.ts): `adjustStockHandler`
+- [inventory.routes.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.routes.ts): `adminInventoryRoutes`
+- [inventory-receipts.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory-receipts.service.ts): `createReceipt`, `updateReceipt`, `postReceipt`, `claimFailure`, `assertProductsAvailable`
+- [inventory-receipts.schema.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory-receipts.schema.ts): `RECEIPT_STATUS`, `createReceiptBody`, `generateReceiptCode`
+- [inventory.reconciliation.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/inventory/inventory.reconciliation.ts): `findLedgerMismatches`
+- [verify-stock-ledger.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/scripts/verify-stock-ledger.ts): script đối soát
+- [products.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/products/products.service.ts): `createProduct`, `deleteProduct`
+- [csv.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/lib/csv.ts): `assertExportSize`, `EXPORT_LIMIT`
+- [orders.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/orders.service.ts): `placeOrder` (trừ kho)
+- [order-cancellation.service.ts](https://github.com/QuocDuy21-10/laptopshop-api/blob/main/src/modules/orders/order-cancellation.service.ts): hoàn kho khi huỷ đơn
