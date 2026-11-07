@@ -29,6 +29,7 @@ describe("docs routes", () => {
     const res = await request(buildApp("true")).get("/api-docs/");
     expect(res.status).toBe(200);
     expect(res.text).toContain("swagger");
+    expect(res.text).toContain("#166534"); // brand green customCss
   });
 
   it("is not mounted when ENABLE_DOCS=false", async () => {
