@@ -3053,6 +3053,16 @@ export const buildOpenApiDocument = () =>
     info: { title: "Laptop Shop API", version: "1.0.0" },
   });
 
+// Brand green, same as laptopshop-web. Only chrome is recoloured, not the GET/POST/DELETE method colours.
+const SWAGGER_BRAND_CSS = `
+  .swagger-ui .topbar { border-bottom: 3px solid #166534; }
+  .swagger-ui .btn.authorize { color: #166534; border-color: #166534; }
+  .swagger-ui .btn.authorize svg { fill: #166534; }
+  .swagger-ui .btn.execute { background-color: #166534; border-color: #166534; }
+  .swagger-ui .info a { color: #166534; }
+  .swagger-ui .info .title small.version-stamp { background-color: #166534; }
+`;
+
 export const registerDocs = (app: Express) => {
   if (!env.ENABLE_DOCS) return;
   const doc = buildOpenApiDocument();
@@ -3071,6 +3081,6 @@ export const registerDocs = (app: Express) => {
       },
     }),
     swaggerUi.serve,
-    swaggerUi.setup(doc),
+    swaggerUi.setup(doc, { customCss: SWAGGER_BRAND_CSS }),
   );
 };
