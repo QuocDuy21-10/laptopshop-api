@@ -12,7 +12,7 @@ ON `stock_receipts`;
 
 -- AlterTable
 ALTER TABLE `payment_webhook_events`
-MODIFY `paymentId` VARCHAR(191) NULL;
+MODIFY `paymentId` CHAR(36) NULL;
 
 -- AddForeignKey
 ALTER TABLE `payment_webhook_events`
