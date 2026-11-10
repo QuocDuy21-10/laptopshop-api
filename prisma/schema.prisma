@@ -1201,7 +1201,7 @@ model PaymentWebhookEvent {
   source                 String    @db.VarChar(20)
   providerEventId        String    @db.VarChar(150)
   providerTransactionKey String    @db.VarChar(150)
-  paymentId              String?
+  paymentId              String?   @db.Char(36)
   direction              String    @db.VarChar(10)
   amount                 Int
   currency               String    @default("VND") @db.Char(3)
