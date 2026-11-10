@@ -10,8 +10,11 @@ UPDATE `payments`
 SET `reviewAfter` = DATE_ADD(`expiresAt`, INTERVAL 60 MINUTE)
 WHERE `reviewAfter` IS NULL;
 
+-- TiDB cannot modify a column and index it in one ALTER TABLE, so split.
 ALTER TABLE `payments`
-  MODIFY COLUMN `reviewAfter` DATETIME(3) NOT NULL,
+  MODIFY COLUMN `reviewAfter` DATETIME(3) NOT NULL;
+
+ALTER TABLE `payments`
   ADD INDEX `payments_status_reviewAfter_idx`(`status`, `reviewAfter`);
 
 ALTER TABLE `payment_webhook_events`
