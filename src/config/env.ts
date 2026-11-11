@@ -62,6 +62,7 @@ const schema = z
       .transform((v) => v === "true"),
     SMTP_USER: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     SMTP_PASSWORD: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    RESEND_API_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
     EMAIL_OTP_ENCRYPTION_KEY: z.preprocess(emptyToUndefined, z.string().length(64).optional()),
     EMAIL_OTP_KEY_VERSION: z.string().min(1).default("v1"),
     CORS_ORIGINS: z
@@ -249,11 +250,11 @@ const schema = z
           message: "EMAIL_OTP_ENCRYPTION_KEY is required when EMAIL_ENABLED=true",
         });
       }
-      if (e.NODE_ENV === "production" && e.EMAIL_PROVIDER === "smtp") {
+      if (e.EMAIL_PROVIDER === "http" && !e.RESEND_API_KEY) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["EMAIL_PROVIDER"],
-          message: "SMTP Email provider is not enabled for production",
+          path: ["RESEND_API_KEY"],
+          message: "RESEND_API_KEY is required when EMAIL_PROVIDER=http",
         });
       }
     }

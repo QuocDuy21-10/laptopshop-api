@@ -4,19 +4,9 @@ import { prisma } from "config/client";
 import { createOutboxEvent } from "modules/outbox/outbox.repository";
 import { createEmailOtp, verifyEmailOtp } from "modules/email-verification/email-otp.crypto";
 import type { EmailProvider, EmailSendInput } from "modules/notifications/providers/email.provider";
-import { createSmtpEmailProvider } from "modules/notifications/providers/smtp-email.provider";
+import { createEmailProviderFromEnv } from "modules/notifications/providers/email-provider.factory";
 
-let emailProvider: EmailProvider | null =
-  env.EMAIL_ENABLED && env.EMAIL_PROVIDER === "smtp"
-    ? createSmtpEmailProvider({
-        host: env.SMTP_HOST,
-        port: env.SMTP_PORT,
-        secure: env.SMTP_SECURE,
-        user: env.SMTP_USER,
-        password: env.SMTP_PASSWORD,
-        from: env.EMAIL_FROM,
-      })
-    : null;
+let emailProvider: EmailProvider | null = createEmailProviderFromEnv();
 
 export const setEmailProvider = (provider: EmailProvider | null) => {
   emailProvider = provider;
