@@ -178,17 +178,16 @@ describe("parseEnv", () => {
     expect(e.WEB_PUSH_ENABLED).toBe(true);
   });
 
-  it("requires OTP encryption and rejects SMTP Email in production", () => {
+  it("requires OTP encryption and RESEND_API_KEY for the http email provider", () => {
     expect(() => parseEnv({ ...base, EMAIL_ENABLED: "true" })).toThrow(/EMAIL_OTP_ENCRYPTION_KEY/);
-    expect(() =>
-      parseEnv({
-        ...base,
-        NODE_ENV: "production",
-        ADMIN_PASSWORD: "a-long-password-1",
-        EMAIL_ENABLED: "true",
-        EMAIL_OTP_ENCRYPTION_KEY: "a".repeat(64),
-      }),
-    ).toThrow(/EMAIL_PROVIDER/);
+    const http = {
+      ...base,
+      EMAIL_ENABLED: "true",
+      EMAIL_PROVIDER: "http",
+      EMAIL_OTP_ENCRYPTION_KEY: "a".repeat(64),
+    };
+    expect(() => parseEnv(http)).toThrow(/RESEND_API_KEY/);
+    expect(parseEnv({ ...http, RESEND_API_KEY: "re_test" }).RESEND_API_KEY).toBe("re_test");
   });
 
   it("rejects fake provider in production and missing live secrets", () => {
