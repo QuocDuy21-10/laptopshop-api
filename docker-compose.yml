@@ -1,23 +1,63 @@
+# Local/self-hosted stack. Secrets come from .env (copy .env.example); required ones fail fast with ${VAR:?}.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+# the app process needs no Linux capabilities (it listens on 8080 as the unprivileged node user)
+x-hardening: &hardening
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
+x-database-url: &database-url mysql://${MYSQL_USER:?set MYSQL_USER in .env}:${MYSQL_PASSWORD:?set MYSQL_PASSWORD in .env}@mysql:3306/${MYSQL_DATABASE:?set MYSQL_DATABASE in .env}
+
+x-worker-env: &worker-env
+  NODE_ENV: production
+  RUN_MIGRATIONS: "false"
+  DATABASE_URL: *database-url
+  REDIS_URL: redis://redis:6379
+
+# workers reuse the image built by `app` instead of building it six more times
+x-worker: &worker
+  <<: [*logging, *hardening]
+  image: laptopshop-api:local
+  env_file: .env
+  depends_on:
+    app:
+      condition: service_healthy
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
+  healthcheck:
+    disable: true
+
 services:
   app:
+    <<: [*logging, *hardening]
+    image: laptopshop-api:local
     build:
       context: .
     env_file: .env
     environment:
       NODE_ENV: production
       PORT: "8080"
-      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-e2e-admin-password}
-      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      DATABASE_URL: *database-url
       REDIS_URL: redis://redis:6379
       AFTER_SALES_IMAGES_ENABLED: ${AFTER_SALES_IMAGES_ENABLED:-true}
       AFTER_SALES_IMAGE_S3_ENDPOINT: ${AFTER_SALES_IMAGE_S3_ENDPOINT:-http://rustfs:9000}
       AFTER_SALES_IMAGE_S3_REGION: ${AFTER_SALES_IMAGE_S3_REGION:-us-east-1}
       AFTER_SALES_IMAGE_S3_BUCKET: ${AFTER_SALES_IMAGE_S3_BUCKET:-laptopshop-after-sales-images}
-      AFTER_SALES_IMAGE_S3_ACCESS_KEY_ID: ${AFTER_SALES_IMAGE_S3_ACCESS_KEY_ID:-rustfs-local}
-      AFTER_SALES_IMAGE_S3_SECRET_ACCESS_KEY: ${AFTER_SALES_IMAGE_S3_SECRET_ACCESS_KEY:-rustfs-local-secret}
+      AFTER_SALES_IMAGE_S3_ACCESS_KEY_ID: ${AFTER_SALES_IMAGE_S3_ACCESS_KEY_ID:-${RUSTFS_ACCESS_KEY}}
+      AFTER_SALES_IMAGE_S3_SECRET_ACCESS_KEY: ${AFTER_SALES_IMAGE_S3_SECRET_ACCESS_KEY:-${RUSTFS_SECRET_KEY}}
       AFTER_SALES_IMAGE_S3_FORCE_PATH_STYLE: ${AFTER_SALES_IMAGE_S3_FORCE_PATH_STYLE:-true}
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8080}:8080"
     depends_on:
       mysql:
         condition: service_healthy
@@ -31,159 +71,71 @@ services:
       - uploads:/app/public/images
 
   payment-worker:
-    build:
-      context: .
-    env_file: .env
+    <<: *worker
     environment:
-      NODE_ENV: production
-      RUN_MIGRATIONS: "false"
-      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      app:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
+      <<: *worker-env
     command: ["node", "dist/workers/payment-worker.js"]
-    healthcheck:
-      disable: true
 
   price-alert-worker:
-    build:
-      context: .
-    env_file: .env
+    <<: *worker
     environment:
-      NODE_ENV: production
-      RUN_MIGRATIONS: "false"
-      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
-      REDIS_URL: redis://redis:6379
+      <<: *worker-env
       PRICE_ALERT_ITEM_BATCH_SIZE: ${PRICE_ALERT_ITEM_BATCH_SIZE:-500}
-    depends_on:
-      app:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
     command: ["node", "dist/workers/price-alert-worker.js"]
-    healthcheck:
-      disable: true
 
   after-sales-worker:
-    build:
-      context: .
-    env_file: .env
+    <<: *worker
     environment:
-      NODE_ENV: production
-      RUN_MIGRATIONS: "false"
+      <<: *worker-env
       AFTER_SALES_WORKER_ENABLED: "true"
-      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      app:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
     command: ["node", "dist/workers/after-sales-worker.js"]
-    healthcheck:
-      disable: true
 
   outbox-dispatcher:
-    build:
-      context: .
-    env_file: .env
+    <<: *worker
     environment:
-      NODE_ENV: production
-      RUN_MIGRATIONS: "false"
+      <<: *worker-env
       NOTIFICATION_OUTBOX_ENABLED: "true"
-      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      app:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
     command: ["node", "dist/workers/outbox-dispatcher.js"]
-    healthcheck:
-      disable: true
 
   notification-worker:
-    build:
-      context: .
-    env_file: .env
+    <<: *worker
     environment:
-      NODE_ENV: production
-      RUN_MIGRATIONS: "false"
+      <<: *worker-env
       NOTIFICATION_WORKER_ENABLED: "true"
-      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      app:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
     command: ["node", "dist/workers/notification-worker.js"]
-    healthcheck:
-      disable: true
 
   notification-maintenance-worker:
-    build:
-      context: .
-    env_file: .env
+    <<: *worker
     environment:
-      NODE_ENV: production
-      RUN_MIGRATIONS: "false"
+      <<: *worker-env
       NOTIFICATION_WORKER_ENABLED: "true"
-      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      app:
-        condition: service_healthy
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    restart: unless-stopped
     command: ["node", "dist/workers/notification-maintenance-worker.js"]
-    healthcheck:
-      disable: true
 
   mysql:
+    <<: *logging
     image: mysql:8.4
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD in .env}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
-      - "3308:3306"
+      - "127.0.0.1:3308:3306"
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p\"$$MYSQL_ROOT_PASSWORD\""]
       interval: 10s
       timeout: 5s
       retries: 10
     restart: unless-stopped
 
   redis:
+    <<: *logging
     image: redis:7-alpine
     command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -194,6 +146,7 @@ services:
     restart: unless-stopped
 
   mailpit:
+    <<: *logging
     image: axllent/mailpit:v1.27.4
     ports:
       - "127.0.0.1:1025:1025"
@@ -201,19 +154,20 @@ services:
     restart: unless-stopped
 
   rustfs:
-    image: rustfs/rustfs:latest
+    <<: *logging
+    image: rustfs/rustfs:1.0.5
     command: ["/data"]
     environment:
       RUSTFS_VOLUMES: /data/rustfs{0..3}
       RUSTFS_ADDRESS: 0.0.0.0:9000
       RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
       RUSTFS_CONSOLE_ENABLE: "true"
-      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:-rustfs-local}
-      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:-rustfs-local-secret}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY:?set RUSTFS_ACCESS_KEY in .env}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY:?set RUSTFS_SECRET_KEY in .env}
       RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - rustfs-data-0:/data/rustfs0
       - rustfs-data-1:/data/rustfs1
@@ -227,13 +181,14 @@ services:
     restart: unless-stopped
 
   rustfs-init:
-    image: amazon/aws-cli:latest
+    <<: *logging
+    image: amazon/aws-cli:2.40.3
     depends_on:
       rustfs:
         condition: service_healthy
     environment:
-      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfs-local}
-      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfs-local-secret}
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
       AWS_DEFAULT_REGION: us-east-1
       STORAGE_ENDPOINT: http://rustfs:9000
       STORAGE_BUCKET: laptopshop-review-images
@@ -243,59 +198,17 @@ services:
       - ./docker/rustfs-init.sh:/init/rustfs-init.sh:ro
     restart: "no"
 
+  # throwaway database for `prisma migrate dev` (see AGENTS.md); never holds real data
   mysql-test:
     image: mysql:8.4
     profiles: ["test"]
     environment:
-      MYSQL_ROOT_PASSWORD: test
+      MYSQL_ROOT_PASSWORD: ${MYSQL_TEST_ROOT_PASSWORD:-test}
       MYSQL_DATABASE: laptopshop_test
     ports:
-      - "3307:3306"
+      - "127.0.0.1:3307:3306"
     tmpfs:
       - /var/lib/mysql
-
-  rustfs-test:
-    image: rustfs/rustfs:latest
-    profiles: ["test"]
-    command: ["/data"]
-    environment:
-      RUSTFS_VOLUMES: /data/rustfs{0..3}
-      RUSTFS_ADDRESS: 0.0.0.0:9000
-      RUSTFS_CONSOLE_ADDRESS: 0.0.0.0:9001
-      RUSTFS_CONSOLE_ENABLE: "true"
-      RUSTFS_ACCESS_KEY: rustfs-test
-      RUSTFS_SECRET_KEY: rustfs-test-secret
-      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
-    ports:
-      - "9002:9000"
-      - "9003:9001"
-    tmpfs:
-      - /data/rustfs0
-      - /data/rustfs1
-      - /data/rustfs2
-      - /data/rustfs3
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/health >/dev/null"]
-      interval: 5s
-      timeout: 5s
-      retries: 12
-
-  rustfs-test-init:
-    image: amazon/aws-cli:latest
-    profiles: ["test"]
-    depends_on:
-      rustfs-test:
-        condition: service_healthy
-    environment:
-      AWS_ACCESS_KEY_ID: rustfs-test
-      AWS_SECRET_ACCESS_KEY: rustfs-test-secret
-      AWS_DEFAULT_REGION: us-east-1
-      STORAGE_ENDPOINT: http://rustfs-test:9000
-      STORAGE_BUCKET: laptopshop-review-images-test
-    entrypoint: ["/bin/sh", "/init/rustfs-init.sh"]
-    volumes:
-      - ./docker/rustfs-init.sh:/init/rustfs-init.sh:ro
-    restart: "no"
 
 volumes:
   mysql-data:
