@@ -105,7 +105,7 @@ export const deleteHomeBanner = async (id: number) => {
   await removeBannerImageFile(existing.imagePath);
 };
 
-// the file already sits on disk (upload middleware runs first); the controller deletes it if this throws
+// the image is already stored (upload middleware runs first); discardFailedUpload removes it if this throws
 export const setHomeBannerImage = async (
   id: number,
   filename: string,

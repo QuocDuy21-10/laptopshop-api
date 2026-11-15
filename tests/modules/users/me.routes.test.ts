@@ -67,7 +67,7 @@ describe("PATCH /api/v1/users/me", () => {
       .field("fullName", "With Avatar")
       .attach("avatar", PNG, { filename: "a.png", contentType: "image/png" });
     expect(res.status).toBe(200);
-    expect(res.body.data.avatar).toMatch(/^\/images\/.+\.png$/);
+    expect(res.body.data.avatar).toMatch(/^\/images\/.+\.webp$/);
     fs.unlinkSync(path.join("public", res.body.data.avatar));
   });
 
@@ -104,7 +104,7 @@ describe("PATCH /api/v1/users/me", () => {
       .set("Cookie", cookieFor(USER))
       .attach("avatar", PNG, { filename: "../../a.png.php", contentType: "image/png" });
     expect(res.status).toBe(200);
-    expect(res.body.data.avatar).toMatch(/^\/images\/[0-9a-f-]{36}\.png$/);
+    expect(res.body.data.avatar).toMatch(/^\/images\/[0-9a-f-]{36}\.webp$/);
     fs.unlinkSync(path.join("public", res.body.data.avatar));
   });
 });

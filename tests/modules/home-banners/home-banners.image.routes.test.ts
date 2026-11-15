@@ -57,7 +57,7 @@ describe("POST /api/v1/admin/home-banners/:id/image", () => {
       .attach("image", PNG, { filename: "hero.png", contentType: "image/png" });
 
     expect(res.status).toBe(200);
-    expect(res.body.data.imageUrl).toMatch(/^\/images\/banner\/[0-9a-f-]{36}\.png$/);
+    expect(res.body.data.imageUrl).toMatch(/^\/images\/banner\/[0-9a-f-]{36}\.webp$/);
     expect(res.body.data.imageAlt).toBe("Laptop gaming");
     const name = path.basename(res.body.data.imageUrl);
     cleanup.push(name);
