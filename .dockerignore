@@ -1,10 +1,21 @@
+# only package files, prisma, src, public and docker/ are copied; keep the build context small and secret-free
 node_modules
 dist
+coverage
 .git
 .github
-.env
 .husky
+.vscode
+.claude
+.codex
+.superpowers
 docs
+docs-local
+website
 tests
-coverage
+eslint-rules
+.env
+.env.*
+!.env.example
+*.md
 **/.DS_Store
