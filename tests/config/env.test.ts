@@ -294,6 +294,45 @@ describe("parseEnv", () => {
     expect(() => parseEnv({ ...base, ...values })).toThrow();
   });
 
+  it("keeps uploaded media on disk by default", () => {
+    const e = parseEnv(base);
+    expect(e.MEDIA_IMAGES_ENABLED).toBe(false);
+    expect(e.MEDIA_S3_FORCE_PATH_STYLE).toBe(false);
+  });
+
+  it("requires media bucket and region when media storage is enabled", () => {
+    expect(() => parseEnv({ ...base, MEDIA_IMAGES_ENABLED: "true" })).toThrow(
+      /MEDIA_S3_REGION|MEDIA_S3_BUCKET/,
+    );
+  });
+
+  it("parses R2 media configuration", () => {
+    const e = parseEnv({
+      ...base,
+      MEDIA_IMAGES_ENABLED: "true",
+      MEDIA_S3_ENDPOINT: "https://account.r2.cloudflarestorage.com",
+      MEDIA_S3_REGION: "auto",
+      MEDIA_S3_BUCKET: "laptopshop-media",
+      MEDIA_S3_ACCESS_KEY_ID: "key",
+      MEDIA_S3_SECRET_ACCESS_KEY: "secret",
+    });
+    expect(e).toMatchObject({
+      MEDIA_IMAGES_ENABLED: true,
+      MEDIA_S3_ENDPOINT: "https://account.r2.cloudflarestorage.com",
+      MEDIA_S3_REGION: "auto",
+      MEDIA_S3_BUCKET: "laptopshop-media",
+      MEDIA_S3_ACCESS_KEY_ID: "key",
+      MEDIA_S3_FORCE_PATH_STYLE: false,
+    });
+  });
+
+  it.each([
+    ["only access key", { MEDIA_S3_ACCESS_KEY_ID: "key" }],
+    ["only secret", { MEDIA_S3_SECRET_ACCESS_KEY: "secret" }],
+  ])("rejects unpaired media credentials: %s", (_label, values) => {
+    expect(() => parseEnv({ ...base, ...values })).toThrow(/Media image S3 access key/);
+  });
+
   it.each([
     ["ADVISOR_AI_TIMEOUT_MS", "999"],
     ["ADVISOR_AI_TIMEOUT_MS", "30001"],
