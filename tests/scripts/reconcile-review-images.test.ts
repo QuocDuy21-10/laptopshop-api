@@ -14,6 +14,7 @@ const storage = () => ({
   deleteObject: jest.fn().mockResolvedValue(undefined),
   objectExists: jest.fn().mockResolvedValue(true),
   getSignedReadUrl: jest.fn(),
+  getObject: jest.fn(),
 });
 
 const row = (overrides: Record<string, unknown> = {}) => ({

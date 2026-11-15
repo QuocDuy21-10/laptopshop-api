@@ -4,6 +4,7 @@ import request from "supertest";
 import { prismaError, prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { ADMIN, USER, cookieFor } from "../../helpers/auth";
+import { PNG_1PX, UPLOADED_NAME, fakeMediaStorage } from "../../helpers/media-storage";
 
 const product = {
   id: 1,
@@ -299,6 +300,7 @@ describe("DELETE /api/v1/admin/products/:id", () => {
     prismaMock.orderDetail.count.mockResolvedValue(0);
     prismaMock.stockMovement.count.mockResolvedValue(0);
     prismaMock.stockReceiptItem.count.mockResolvedValue(0);
+    prismaMock.product.delete.mockResolvedValue(product);
     const res = await asAdmin(request(buildApp()).delete("/api/v1/admin/products/1"));
     expect(res.status).toBe(204);
     expect(prismaMock.cartDetail.deleteMany).toHaveBeenCalledWith({ where: { productId: 1 } });
@@ -326,5 +328,59 @@ describe("DELETE /api/v1/admin/products/:id", () => {
     expect(res.body.error.message).toBe("Product has order or stock history; hide it instead");
     expect(prismaMock.stockMovement.deleteMany).not.toHaveBeenCalled();
     expect(prismaMock.product.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("product image replacement with object storage", () => {
+  const patchWithImage = (storage: ReturnType<typeof fakeMediaStorage>) =>
+    asAdmin(request(buildApp({ mediaImages: storage })).patch("/api/v1/admin/products/1")).attach(
+      "image",
+      PNG_1PX,
+      { filename: "p.png", contentType: "image/png" },
+    );
+  const echoUpdate = () =>
+    prismaMock.product.update.mockImplementation(async ({ data }: any) => ({
+      ...product,
+      image: data.image,
+    }));
+
+  it("deletes the previous uploaded image after the update", async () => {
+    const storage = fakeMediaStorage();
+    prismaMock.product.findUnique.mockResolvedValue({ image: UPLOADED_NAME });
+    echoUpdate();
+    const res = await patchWithImage(storage);
+    expect(res.status).toBe(200);
+    expect(res.body.data.image).toMatch(/^\/images\/product\/[0-9a-f-]{36}\.webp$/);
+    expect(storage.deleteObject).toHaveBeenCalledWith(`images/product/${UPLOADED_NAME}`);
+  });
+
+  it("keeps a bundled seed image", async () => {
+    const storage = fakeMediaStorage();
+    prismaMock.product.findUnique.mockResolvedValue({ image: "1711078092373-asus-01.png" });
+    echoUpdate();
+    const res = await patchWithImage(storage);
+    expect(res.status).toBe(200);
+    expect(storage.deleteObject).not.toHaveBeenCalled();
+  });
+
+  it("still succeeds when deleting the previous image fails", async () => {
+    const storage = fakeMediaStorage();
+    storage.deleteObject.mockRejectedValue(new Error("r2 down"));
+    prismaMock.product.findUnique.mockResolvedValue({ image: UPLOADED_NAME });
+    echoUpdate();
+    expect((await patchWithImage(storage)).status).toBe(200);
+  });
+
+  it("deletes the image of a deleted product", async () => {
+    const storage = fakeMediaStorage();
+    prismaMock.orderDetail.count.mockResolvedValue(0);
+    prismaMock.stockMovement.count.mockResolvedValue(0);
+    prismaMock.stockReceiptItem.count.mockResolvedValue(0);
+    prismaMock.product.delete.mockResolvedValue({ ...product, image: UPLOADED_NAME });
+    const res = await asAdmin(
+      request(buildApp({ mediaImages: storage })).delete("/api/v1/admin/products/1"),
+    );
+    expect(res.status).toBe(204);
+    expect(storage.deleteObject).toHaveBeenCalledWith(`images/product/${UPLOADED_NAME}`);
   });
 });

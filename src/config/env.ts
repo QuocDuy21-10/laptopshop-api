@@ -221,6 +221,19 @@ const schema = z
       .default("false")
       .transform((v) => v === "true"),
     AFTER_SALES_QUEUE_PREFIX: z.string().default("bull"),
+    MEDIA_IMAGES_ENABLED: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
+    MEDIA_S3_ENDPOINT: z.preprocess(emptyToUndefined, z.string().url().optional()),
+    MEDIA_S3_REGION: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    MEDIA_S3_BUCKET: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    MEDIA_S3_ACCESS_KEY_ID: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    MEDIA_S3_SECRET_ACCESS_KEY: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
+    MEDIA_S3_FORCE_PATH_STYLE: z
+      .enum(["true", "false"])
+      .default("false")
+      .transform((v) => v === "true"),
     GIT_SHA: z.preprocess(emptyToUndefined, z.string().optional()),
   })
   .superRefine((e, ctx) => {
@@ -381,6 +394,26 @@ const schema = z
         code: z.ZodIssueCode.custom,
         path: ["AFTER_SALES_IMAGE_S3_ACCESS_KEY_ID"],
         message: "After-sales image S3 access key and secret must be configured together",
+      });
+    if (e.MEDIA_IMAGES_ENABLED) {
+      if (!e.MEDIA_S3_REGION)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["MEDIA_S3_REGION"],
+          message: "MEDIA_S3_REGION is required when MEDIA_IMAGES_ENABLED=true",
+        });
+      if (!e.MEDIA_S3_BUCKET)
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["MEDIA_S3_BUCKET"],
+          message: "MEDIA_S3_BUCKET is required when MEDIA_IMAGES_ENABLED=true",
+        });
+    }
+    if (Boolean(e.MEDIA_S3_ACCESS_KEY_ID) !== Boolean(e.MEDIA_S3_SECRET_ACCESS_KEY))
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["MEDIA_S3_ACCESS_KEY_ID"],
+        message: "Media image S3 access key and secret must be configured together",
       });
   })
   .transform((e) => ({ ...e, ADMIN_PASSWORD: e.ADMIN_PASSWORD ?? "123456" }));

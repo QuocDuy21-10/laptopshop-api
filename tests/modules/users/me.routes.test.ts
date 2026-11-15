@@ -6,6 +6,7 @@ import request from "supertest";
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { USER, cookieFor } from "../../helpers/auth";
+import { UPLOADED_NAME, fakeMediaStorage } from "../../helpers/media-storage";
 
 const row = {
   id: 1,
@@ -41,6 +42,30 @@ describe("GET /api/v1/users/me", () => {
 });
 
 describe("PATCH /api/v1/users/me", () => {
+  const patchAvatar = (storage: ReturnType<typeof fakeMediaStorage>, previous: string) => {
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: previous });
+    prismaMock.user.update.mockImplementation(async (args: any) => ({
+      ...row,
+      avatar: args.data.avatar,
+    }));
+    return request(buildApp({ mediaImages: storage }))
+      .patch("/api/v1/users/me")
+      .set("Cookie", cookieFor(USER))
+      .attach("avatar", PNG, { filename: "a.png", contentType: "image/png" });
+  };
+
+  it("deletes the previous uploaded avatar from object storage", async () => {
+    const storage = fakeMediaStorage();
+    expect((await patchAvatar(storage, UPLOADED_NAME)).status).toBe(200);
+    expect(storage.deleteObject).toHaveBeenCalledWith(`images/${UPLOADED_NAME}`);
+  });
+
+  it("keeps the bundled default avatar", async () => {
+    const storage = fakeMediaStorage();
+    expect((await patchAvatar(storage, "noAvatar.jpg")).status).toBe(200);
+    expect(storage.deleteObject).not.toHaveBeenCalled();
+  });
+
   it("updates profile fields from JSON", async () => {
     prismaMock.user.update.mockResolvedValue({ ...row, fullName: "New" });
     const res = await request(buildApp())
@@ -67,7 +92,7 @@ describe("PATCH /api/v1/users/me", () => {
       .field("fullName", "With Avatar")
       .attach("avatar", PNG, { filename: "a.png", contentType: "image/png" });
     expect(res.status).toBe(200);
-    expect(res.body.data.avatar).toMatch(/^\/images\/.+\.png$/);
+    expect(res.body.data.avatar).toMatch(/^\/images\/.+\.webp$/);
     fs.unlinkSync(path.join("public", res.body.data.avatar));
   });
 
@@ -104,7 +129,7 @@ describe("PATCH /api/v1/users/me", () => {
       .set("Cookie", cookieFor(USER))
       .attach("avatar", PNG, { filename: "../../a.png.php", contentType: "image/png" });
     expect(res.status).toBe(200);
-    expect(res.body.data.avatar).toMatch(/^\/images\/[0-9a-f-]{36}\.png$/);
+    expect(res.body.data.avatar).toMatch(/^\/images\/[0-9a-f-]{36}\.webp$/);
     fs.unlinkSync(path.join("public", res.body.data.avatar));
   });
 });

@@ -28,6 +28,7 @@ const storage = {
   deleteObject: jest.fn(),
   objectExists: jest.fn(),
   getSignedReadUrl: jest.fn(),
+  getObject: jest.fn(),
 };
 let png: Buffer;
 beforeAll(async () => {
@@ -49,15 +50,13 @@ describe.each(["post", "put"] as const)("review image %s multipart size boundary
         [method](`/api/v1/reviews/18/images${method === "put" ? "/sync" : ""}`)
         .set("Cookie", cookieFor(USER));
       if (method === "put")
-        upload
-          .set("Idempotency-Key", "boundary")
-          .field(
-            "manifest",
-            JSON.stringify({
-              expectedVersion: 0,
-              items: [{ kind: "new", clientId: "one", fileIndex: 0 }],
-            }),
-          );
+        upload.set("Idempotency-Key", "boundary").field(
+          "manifest",
+          JSON.stringify({
+            expectedVersion: 0,
+            items: [{ kind: "new", clientId: "one", fileIndex: 0 }],
+          }),
+        );
       const response = await upload.attach(
         method === "put" ? "files" : "images",
         Buffer.concat([png, Buffer.alloc(size - png.length)]),

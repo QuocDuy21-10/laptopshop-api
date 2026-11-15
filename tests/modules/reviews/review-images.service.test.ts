@@ -44,6 +44,7 @@ const storage = (): ReviewImageDeps => ({
     deleteObject: jest.fn().mockResolvedValue(undefined),
     objectExists: jest.fn().mockResolvedValue(true),
     getSignedReadUrl: jest.fn().mockResolvedValue("https://signed.example/image.webp"),
+    getObject: jest.fn(),
   },
   now: () => new Date("2026-10-21T01:00:00.000Z"),
 });

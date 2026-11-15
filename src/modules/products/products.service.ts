@@ -5,6 +5,7 @@ import { pageArgs, pageMeta } from "lib/http";
 import { env } from "config/env";
 import { AppError, isNotFound, notFound } from "lib/errors";
 import { prisma } from "config/client";
+import { MEDIA_DIRS, removeMediaImage } from "lib/storage/media-images";
 import { productWhere } from "modules/products/products.filter";
 import { toCatalogProductDto, toProductDto } from "modules/products/products.mapper";
 import {
@@ -291,6 +292,9 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
       }
       if ("panelType" in input) data = { ...data, panelType: specs.panelType };
     }
+    const previous = image
+      ? await prisma.product.findUnique({ where: { id }, select: { image: true } })
+      : null;
     const product = await prisma.$transaction(async (tx) => {
       const updated = await tx.product.update({
         where: { id },
@@ -305,6 +309,7 @@ export const updateProduct = async (id: number, input: ProductPatchBody, image?:
       }
       return updated;
     });
+    if (image) await removeMediaImage(MEDIA_DIRS.product, previous?.image);
     return toProductDto(product);
   } catch (e) {
     if (isNotFound(e)) throw notFound("Product");
@@ -326,10 +331,11 @@ export const deleteProduct = async (id: number) => {
     );
   }
   try {
-    await prisma.$transaction([
+    const [, deleted] = await prisma.$transaction([
       prisma.cartDetail.deleteMany({ where: { productId: id } }),
       prisma.product.delete({ where: { id } }),
     ]);
+    await removeMediaImage(MEDIA_DIRS.product, deleted.image);
   } catch (e) {
     if (isNotFound(e)) throw notFound("Product");
     throw e;

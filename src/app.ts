@@ -11,8 +11,12 @@ import { env } from "config/env";
 import { logger } from "lib/logger";
 import { createApiV1Router } from "routes/index";
 import { registerHealthRoutes } from "routes/health";
+import { discardFailedUpload } from "middlewares/multer";
+import { registerMediaRoutes } from "routes/media-images";
 import { applySecurity } from "middlewares/security";
 import { createLimiters } from "middlewares/rate-limit";
+import { configureMediaStorage } from "lib/storage/media-images";
+import type { ObjectStorage } from "lib/storage/object-storage";
 import { errorHandler, notFoundHandler } from "middlewares/error.middleware";
 import { createS3ObjectStorage } from "lib/storage/s3-object-storage";
 import {
@@ -39,6 +43,8 @@ export interface AppDeps {
   advisor?: { service: AdvisorService; identitySecret: string };
   reviewImages?: ReviewImageDeps | null;
   afterSalesAttachments?: AttachmentDeps | null;
+  // undefined builds it from MEDIA_* env; null keeps uploads under public/
+  mediaImages?: ObjectStorage | null;
   readyChecks?: Array<() => Promise<unknown>>;
   // hook for optional features that must register before the final 404/error handlers
   registerExtras?: (app: Express) => void;
@@ -52,9 +58,25 @@ export const createApp = (deps: AppDeps = {}): Express => {
   applySecurity(app);
   app.use(cors({ origin: env.CORS_ORIGINS, credentials: true }));
 
+  const mediaImages =
+    deps.mediaImages !== undefined
+      ? deps.mediaImages
+      : createS3ObjectStorage({
+          enabled: env.MEDIA_IMAGES_ENABLED,
+          endpoint: env.MEDIA_S3_ENDPOINT,
+          region: env.MEDIA_S3_REGION,
+          bucket: env.MEDIA_S3_BUCKET,
+          accessKeyId: env.MEDIA_S3_ACCESS_KEY_ID,
+          secretAccessKey: env.MEDIA_S3_SECRET_ACCESS_KEY,
+          forcePathStyle: env.MEDIA_S3_FORCE_PATH_STYLE,
+        });
+  // the upload middleware and services are module-level, so they read the storage chosen here
+  configureMediaStorage(mediaImages);
+
   // health + uploaded images before the limiter so they do not hit Redis
   registerHealthRoutes(app, deps.readyChecks ?? []);
   app.use(express.static("public"));
+  if (mediaImages) registerMediaRoutes(app);
 
   // Provider signatures are calculated over raw bytes; this route must precede express.json().
   app.use("/api/v1/webhooks/payments", paymentWebhookRoutes);
@@ -141,6 +163,7 @@ export const createApp = (deps: AppDeps = {}): Express => {
   deps.registerExtras?.(app);
 
   app.use(notFoundHandler);
+  app.use(discardFailedUpload);
   app.use(errorHandler);
   return app;
 };
