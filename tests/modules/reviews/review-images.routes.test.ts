@@ -30,6 +30,7 @@ const storage = {
   deleteObject: jest.fn(),
   objectExists: jest.fn(),
   getSignedReadUrl: jest.fn(),
+  getObject: jest.fn(),
 };
 
 beforeEach(() => {

@@ -39,6 +39,7 @@ it("does not let a delayed storage DELETE acknowledgement retire a later sync up
     putObject: jest.fn(),
     objectExists: jest.fn(),
     getSignedReadUrl: jest.fn(),
+    getObject: jest.fn(),
     deleteObject: jest.fn(async (key: string) => {
       objects.delete(key);
       if (key === "pending") {

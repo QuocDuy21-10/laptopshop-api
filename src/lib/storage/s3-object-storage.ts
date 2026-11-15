@@ -1,3 +1,4 @@
+import { Readable } from "stream";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -6,6 +7,7 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
 import type { ObjectStorage, PutObjectInput } from "lib/storage/object-storage";
 
 type S3ObjectStorageConfig = {
@@ -77,6 +79,21 @@ export const createS3ObjectStorage = (config: S3ObjectStorageConfig): ObjectStor
       return getSignedUrl(client, new GetObjectCommand({ Bucket: bucket, Key: keyFor(key) }), {
         expiresIn: ttlSeconds,
       });
+    },
+    async getObject(key: string) {
+      try {
+        const out = await client.send(new GetObjectCommand({ Bucket: bucket, Key: keyFor(key) }));
+        if (!(out.Body instanceof Readable)) throw new Error("S3 returned a non-stream body");
+        return {
+          body: out.Body,
+          contentType: out.ContentType,
+          contentLength: out.ContentLength,
+          etag: out.ETag,
+        };
+      } catch (error) {
+        if (missing(error)) return null;
+        throw error;
+      }
     },
   };
 };
