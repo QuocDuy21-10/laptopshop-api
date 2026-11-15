@@ -12,6 +12,7 @@ import { logger } from "lib/logger";
 import { createApiV1Router } from "routes/index";
 import { registerHealthRoutes } from "routes/health";
 import { discardFailedUpload } from "middlewares/multer";
+import { registerMediaRoutes } from "routes/media-images";
 import { applySecurity } from "middlewares/security";
 import { createLimiters } from "middlewares/rate-limit";
 import { configureMediaStorage } from "lib/storage/media-images";
@@ -75,6 +76,7 @@ export const createApp = (deps: AppDeps = {}): Express => {
   // health + uploaded images before the limiter so they do not hit Redis
   registerHealthRoutes(app, deps.readyChecks ?? []);
   app.use(express.static("public"));
+  if (mediaImages) registerMediaRoutes(app);
 
   // Provider signatures are calculated over raw bytes; this route must precede express.json().
   app.use("/api/v1/webhooks/payments", paymentWebhookRoutes);
