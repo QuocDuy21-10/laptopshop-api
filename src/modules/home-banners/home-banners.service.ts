@@ -2,7 +2,7 @@ import { type HomeBanner, type Prisma } from "@prisma/client";
 
 import { AppError, notFound } from "lib/errors";
 import { prisma } from "config/client";
-import { removeBannerImageFile } from "modules/home-banners/home-banners.files";
+import { MEDIA_DIRS, removeMediaImage } from "lib/storage/media-images";
 import {
   toAdminHomeBannerDto,
   toBadges,
@@ -102,7 +102,7 @@ export const updateHomeBanner = async (id: number, body: PatchHomeBannerBody) =>
 export const deleteHomeBanner = async (id: number) => {
   const existing = await findHomeBannerOrThrow(id);
   await prisma.homeBanner.delete({ where: { id } });
-  await removeBannerImageFile(existing.imagePath);
+  await removeMediaImage(MEDIA_DIRS.banner, existing.imagePath);
 };
 
 // the image is already stored (upload middleware runs first); discardFailedUpload removes it if this throws
@@ -121,7 +121,7 @@ export const setHomeBannerImage = async (
     where: { id },
     data: { imagePath: filename, imageAlt: alt },
   });
-  await removeBannerImageFile(existing.imagePath);
+  await removeMediaImage(MEDIA_DIRS.banner, existing.imagePath);
   return toAdminHomeBannerDto(row, new Date());
 };
 
@@ -131,6 +131,6 @@ export const clearHomeBannerImage = async (id: number) => {
     where: { id },
     data: { imagePath: null, imageAlt: null },
   });
-  await removeBannerImageFile(existing.imagePath);
+  await removeMediaImage(MEDIA_DIRS.banner, existing.imagePath);
   return toAdminHomeBannerDto(row, new Date());
 };

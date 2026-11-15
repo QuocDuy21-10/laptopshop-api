@@ -6,6 +6,7 @@ import request from "supertest";
 import { prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { ADMIN, cookieFor } from "../../helpers/auth";
+import { UPLOADED_NAME } from "../../helpers/media-storage";
 
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
@@ -66,9 +67,9 @@ describe("POST /api/v1/admin/home-banners/:id/image", () => {
 
   it("removes the previous file when the image is replaced", async () => {
     fs.mkdirSync(DIR, { recursive: true });
-    fs.writeFileSync(path.join(DIR, "old-test.png"), PNG);
+    fs.writeFileSync(path.join(DIR, UPLOADED_NAME), PNG);
     prismaMock.homeBanner.findUnique.mockResolvedValue(
-      row({ imagePath: "old-test.png", imageAlt: "Cũ" }),
+      row({ imagePath: UPLOADED_NAME, imageAlt: "Cũ" }),
     );
     prismaMock.homeBanner.update.mockImplementation(async ({ data }: any) =>
       row({ imagePath: data.imagePath, imageAlt: data.imageAlt }),
@@ -81,8 +82,28 @@ describe("POST /api/v1/admin/home-banners/:id/image", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data.imageAlt).toBe("Cũ");
-    cleanup.push(path.basename(res.body.data.imageUrl), "old-test.png");
-    expect(files()).not.toContain("old-test.png");
+    cleanup.push(path.basename(res.body.data.imageUrl), UPLOADED_NAME);
+    expect(files()).not.toContain(UPLOADED_NAME);
+  });
+
+  it("keeps a bundled image that the upload middleware did not create", async () => {
+    fs.mkdirSync(DIR, { recursive: true });
+    fs.writeFileSync(path.join(DIR, "seed-test.png"), PNG);
+    prismaMock.homeBanner.findUnique.mockResolvedValue(
+      row({ imagePath: "seed-test.png", imageAlt: "Cũ" }),
+    );
+    prismaMock.homeBanner.update.mockImplementation(async ({ data }: any) =>
+      row({ imagePath: data.imagePath, imageAlt: data.imageAlt }),
+    );
+
+    const res = await request(buildApp())
+      .post("/api/v1/admin/home-banners/1/image")
+      .set(admin)
+      .attach("image", PNG, { filename: "hero.png", contentType: "image/png" });
+
+    expect(res.status).toBe(200);
+    cleanup.push(path.basename(res.body.data.imageUrl), "seed-test.png");
+    expect(files()).toContain("seed-test.png");
   });
 
   it("rejects an upload without alt text and stores nothing", async () => {
@@ -137,7 +158,7 @@ describe("POST /api/v1/admin/home-banners/:id/image", () => {
 
   it("does not fail when cleaning up the old file fails", async () => {
     prismaMock.homeBanner.findUnique.mockResolvedValue(
-      row({ imagePath: "missing-old.png", imageAlt: "Cũ" }),
+      row({ imagePath: "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d.webp", imageAlt: "Cũ" }),
     );
     prismaMock.homeBanner.update.mockImplementation(async ({ data }: any) =>
       row({ imagePath: data.imagePath, imageAlt: data.imageAlt }),
@@ -154,9 +175,9 @@ describe("POST /api/v1/admin/home-banners/:id/image", () => {
 describe("DELETE /api/v1/admin/home-banners/:id/image", () => {
   it("clears the image and alt, and removes the file", async () => {
     fs.mkdirSync(DIR, { recursive: true });
-    fs.writeFileSync(path.join(DIR, "to-clear-test.png"), PNG);
+    fs.writeFileSync(path.join(DIR, UPLOADED_NAME), PNG);
     prismaMock.homeBanner.findUnique.mockResolvedValue(
-      row({ imagePath: "to-clear-test.png", imageAlt: "Cũ" }),
+      row({ imagePath: UPLOADED_NAME, imageAlt: "Cũ" }),
     );
     prismaMock.homeBanner.update.mockImplementation(async ({ data }: any) => row(data));
 
@@ -168,8 +189,8 @@ describe("DELETE /api/v1/admin/home-banners/:id/image", () => {
       where: { id: 1 },
       data: { imagePath: null, imageAlt: null },
     });
-    cleanup.push("to-clear-test.png");
-    expect(files()).not.toContain("to-clear-test.png");
+    cleanup.push(UPLOADED_NAME);
+    expect(files()).not.toContain(UPLOADED_NAME);
   });
 
   it("returns 404 for an unknown banner", async () => {

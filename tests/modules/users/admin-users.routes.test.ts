@@ -5,6 +5,7 @@ import request from "supertest";
 import { prismaError, prismaMock, resetPrisma } from "../../helpers/prisma";
 import { buildApp } from "../../helpers/app";
 import { ADMIN, cookieFor } from "../../helpers/auth";
+import { PNG_1PX, UPLOADED_NAME, fakeMediaStorage } from "../../helpers/media-storage";
 
 const row = {
   id: 5,
@@ -155,5 +156,23 @@ describe("GET /api/v1/admin/roles", () => {
     const res = await asAdmin(request(buildApp()).get("/api/v1/admin/roles"));
     expect(res.status).toBe(200);
     expect(res.body.data[0].name).toBe("ADMIN");
+  });
+});
+
+describe("admin avatar replacement with object storage", () => {
+  it("deletes the previous uploaded avatar", async () => {
+    const storage = fakeMediaStorage();
+    prismaMock.user.findUnique.mockResolvedValue({ avatar: UPLOADED_NAME });
+    prismaMock.user.update.mockImplementation(async (args: any) => ({
+      ...row,
+      avatar: args.data.avatar,
+    }));
+    const res = await asAdmin(
+      request(buildApp({ mediaImages: storage })).patch("/api/v1/admin/users/5"),
+    )
+      .field("fullName", "U")
+      .attach("avatar", PNG_1PX, { filename: "a.png", contentType: "image/png" });
+    expect(res.status).toBe(200);
+    expect(storage.deleteObject).toHaveBeenCalledWith(`images/${UPLOADED_NAME}`);
   });
 });

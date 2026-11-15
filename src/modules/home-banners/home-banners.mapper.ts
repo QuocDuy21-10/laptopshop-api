@@ -1,11 +1,11 @@
 import type { HomeBanner, Prisma } from "@prisma/client";
 
-import { BANNER_IMAGE_DIR } from "modules/home-banners/home-banners.files";
+import { MEDIA_DIRS } from "lib/storage/media-images";
 
 export type HomeBannerStatus = "ACTIVE" | "SCHEDULED" | "EXPIRED" | "INACTIVE";
 
 export const homeBannerImageUrl = (imagePath: string | null) =>
-  imagePath ? `/${BANNER_IMAGE_DIR}/${imagePath}` : null;
+  imagePath ? `/${MEDIA_DIRS.banner}/${imagePath}` : null;
 
 export const toBadges = (value: Prisma.JsonValue): string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];

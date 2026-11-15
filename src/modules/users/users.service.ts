@@ -1,17 +1,19 @@
-import { Prisma } from "@prisma/client";
+import { type Prisma } from "@prisma/client";
+
+import { pageArgs, pageMeta } from "lib/http";
+import { AppError, isNotFound, isUniqueViolation, notFound } from "lib/errors";
+import { hashPassword } from "lib/password";
 import { prisma } from "config/client";
 import { ACCOUNT_TYPE } from "config/constant";
-import { AppError, isNotFound, isUniqueViolation, notFound } from "lib/errors";
-import { pageArgs, pageMeta } from "lib/http";
-import { hashPassword } from "lib/password";
+import { MEDIA_DIRS, removeMediaImage } from "lib/storage/media-images";
 import { toUserDto, userSelect } from "modules/users/users.mapper";
-import { invalidateEmailIdentity } from "modules/notifications/notification-preferences.service";
 import {
-  AdminCreateUserBody,
-  AdminListUsersQuery,
-  AdminUpdateUserBody,
-  UpdateMeBody,
+  type AdminCreateUserBody,
+  type AdminListUsersQuery,
+  type AdminUpdateUserBody,
+  type UpdateMeBody,
 } from "modules/users/users.schema";
+import { invalidateEmailIdentity } from "modules/notifications/notification-preferences.service";
 
 export const getMe = async (userId: number) => {
   const [user, cart] = await Promise.all([
@@ -23,11 +25,15 @@ export const getMe = async (userId: number) => {
 };
 
 export const updateMe = async (userId: number, input: UpdateMeBody, avatar?: string) => {
+  const previous = avatar
+    ? await prisma.user.findUnique({ where: { id: userId }, select: { avatar: true } })
+    : null;
   const user = await prisma.user.update({
     where: { id: userId },
     data: { ...input, ...(avatar ? { avatar } : {}) },
     select: userSelect,
   });
+  if (avatar) await removeMediaImage(MEDIA_DIRS.avatar, previous?.avatar);
   return toUserDto(user);
 };
 
@@ -113,6 +119,9 @@ export const updateUser = async (
   if (roleChanged && actorId === id) {
     throw new AppError("You cannot change your own role", 409, "CANNOT_CHANGE_OWN_ROLE");
   }
+  const previous = avatar
+    ? await prisma.user.findUnique({ where: { id }, select: { avatar: true } })
+    : null;
   try {
     const user = await prisma.$transaction(async (tx) => {
       const updated = await tx.user.update({
@@ -130,6 +139,7 @@ export const updateUser = async (
       if (emailChanged) await invalidateEmailIdentity(tx, id, previousEmail);
       return updated;
     });
+    if (avatar) await removeMediaImage(MEDIA_DIRS.avatar, previous?.avatar);
     return toUserDto(user);
   } catch (e) {
     if (isNotFound(e)) throw notFound("User");

@@ -9,9 +9,9 @@ import { prisma } from "config/client";
 import { buildDemoDataset } from "scripts/demo-seed/build";
 import { assertDemoSeedAllowed } from "scripts/demo-seed/guard";
 import { resetDatabase } from "scripts/demo-seed/reset";
+import { MEDIA_DIRS } from "lib/storage/media-images";
 import { verifyDemoData } from "scripts/demo-seed/verify";
 import { persistDemoDataset } from "scripts/demo-seed/persist";
-import { BANNER_IMAGE_DIR } from "modules/home-banners/home-banners.files";
 import { refreshCatalogPriceWindows } from "modules/pricing/catalog-price-projection.repository";
 
 const DEMO_SEED = 20261102;
@@ -44,7 +44,7 @@ const main = async () => {
     passwordHash,
   });
 
-  const bannerDir = path.join("public", BANNER_IMAGE_DIR);
+  const bannerDir = path.join("public", MEDIA_DIRS.banner);
   await mkdir(bannerDir, { recursive: true });
   await Promise.all(
     dataset.bannerImages.map(({ from, to }) =>
